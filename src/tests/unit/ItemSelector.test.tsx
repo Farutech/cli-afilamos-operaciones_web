@@ -1,6 +1,6 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+﻿import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ItemSelector } from './ItemSelector'
+import { ItemSelector } from '../../features/catalogos/ItemSelector'
 import { catalogosApi } from '../../services/catalogosApi'
 import type { ItemCatalogo } from '../../types/catalogos'
 

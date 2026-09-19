@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { FichaCliente } from './FichaCliente';
+import { FichaCliente } from '../../features/clientes/FichaCliente';
 import { catalogosApi } from '../../services/catalogosApi';
 import type { Cliente, ClienteHistorico } from '../../types/catalogos';
 

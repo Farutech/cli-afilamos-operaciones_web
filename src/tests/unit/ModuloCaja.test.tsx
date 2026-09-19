@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { ModuloCaja } from './ModuloCaja';
+import { ModuloCaja } from '../../features/caja/ModuloCaja';
 import * as cajaApi from '../../services/cajaApi';
 import type { TurnoDto, DetalleSupervisorCierreDto } from '../../types/caja';
 

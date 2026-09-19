@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { ModuloReportes } from './ModuloReportes';
+import { ModuloReportes } from '../../features/reportes/ModuloReportes';
 import { reportesApi } from '../../services/reportesApi';
 import type { ReporteConsolidadoDto, ReporteCierreZDto } from '../../types/reportes';
 

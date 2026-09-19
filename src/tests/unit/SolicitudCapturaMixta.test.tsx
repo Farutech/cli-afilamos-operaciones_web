@@ -1,9 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { SolicitudCapturaMixta } from './SolicitudCapturaMixta'
+import { SolicitudCapturaMixta } from '../../features/solicitudes/SolicitudCapturaMixta'
 import type { CanalOrigen, TipoDocumentoIdentidad, Cliente } from '../../types/catalogos'
 
-vi.mock('../catalogos/ItemSelector', () => ({
+vi.mock('../../features/catalogos/ItemSelector', () => ({
   ItemSelector: ({ onSelectItem }: { onSelectItem: (item: unknown) => void }) => (
     <div data-testid="mock-item-selector">
       <button

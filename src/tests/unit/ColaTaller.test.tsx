@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { ColaTaller } from './ColaTaller';
+import { ColaTaller } from '../../features/taller/ColaTaller';
 import { tallerApi } from '../../services/tallerApi';
 import type { ItemTaller } from '../../types/taller';
 
