@@ -96,3 +96,32 @@ export interface Cliente {
   telefono: string;
   activo: boolean;
 }
+
+export interface DocumentoResumenCliente {
+  uuid: string;
+  numeroDocumentoVisible: string;
+  tipoDocumentoBase: string;
+  subtipoCodigo: string;
+  estado: string;
+  fechaEmision: string;
+  montoTotal: number;
+  saldoPendiente: number;
+  cantidadItems: number;
+  canalOrigen?: string | null;
+}
+
+export interface ClienteHistorico {
+  uuid: string;
+  tipoDocumento?: TipoDocumentoIdentidad;
+  numeroDocumento: string;
+  nombreRazonSocial: string;
+  telefono: string;
+  activo: boolean;
+  creadoEn: string;
+  totalHistoricoGastado: number;
+  totalSolicitudes: number;
+  solicitudesActivas: number;
+  otsEnProceso: number;
+  documentos: DocumentoResumenCliente[];
+}
+

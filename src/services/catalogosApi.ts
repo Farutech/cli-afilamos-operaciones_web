@@ -10,6 +10,7 @@ import type {
   MedioPagoCategoria,
   MedioPagoInstrumento,
   Cliente,
+  ClienteHistorico,
 } from '../types/catalogos';
 
 export const catalogosApi = {
@@ -59,5 +60,9 @@ export const catalogosApi = {
   async getClientes(q?: string): Promise<{ clientes: Cliente[]; total: number }> {
     const qs = q ? `?q=${encodeURIComponent(q)}` : '';
     return api.get<{ clientes: Cliente[]; total: number }>(`/catalogos/clientes${qs}`);
+  },
+
+  async getClienteHistorico(uuid: string): Promise<ClienteHistorico> {
+    return api.get<ClienteHistorico>(`/catalogos/clientes/${uuid}/historico`);
   },
 };

@@ -1,19 +1,30 @@
 import { useState, useEffect } from 'react'
 import { LoginForm } from './features/auth/LoginForm'
-import { Card } from './components/ui/Card'
 import { Badge } from './components/ui/Badge'
 import { Button } from './components/ui/Button'
 import { ColaTaller } from './features/taller/ColaTaller'
 import { SolicitudCapturaMixta } from './features/solicitudes/SolicitudCapturaMixta'
 import { ModuloEntregas } from './features/entregas/ModuloEntregas'
 import { ModuloCaja } from './features/caja/ModuloCaja'
+import { FichaCliente } from './features/clientes/FichaCliente'
+import { DashboardOperativo } from './features/dashboard/DashboardOperativo'
+import { ModuloReportes } from './features/reportes/ModuloReportes'
+import { ModuloAdmin } from './features/admin/ModuloAdmin'
+import { useBarcodeScanner } from './hooks/useBarcodeScanner'
 import { catalogosApi } from './services/catalogosApi'
 import type { UsuarioSesion } from './types/auth'
 import type { CanalOrigen, TipoDocumentoIdentidad, Cliente, MedioPagoInstrumento } from './types/catalogos'
 
 export function App() {
   const [sesion, setSesion] = useState<UsuarioSesion | null>(null)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'caja' | 'solicitudes' | 'taller' | 'entregas'>('caja')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'caja' | 'solicitudes' | 'taller' | 'entregas' | 'clientes' | 'reportes' | 'admin'>('dashboard')
+
+  // Lector de código de barras USB/HID (RF-11.2)
+  useBarcodeScanner((code) => {
+    if (code.startsWith('SOL-') || code.startsWith('OT-') || code.startsWith('REM-')) {
+      setActiveTab('entregas');
+    }
+  });
 
   // Catálogos para captura de solicitudes y entregas
   const [canales, setCanales] = useState<CanalOrigen[]>([])
@@ -83,27 +94,13 @@ export function App() {
       </header>
 
       {sesion && (
-        <nav style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px' }}>
+        <nav style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px', flexWrap: 'wrap' }}>
           <Button
-            variant={activeTab === 'caja' ? 'primary' : 'ghost'}
+            variant={activeTab === 'dashboard' ? 'primary' : 'ghost'}
             size="sm"
-            onClick={() => setActiveTab('caja')}
+            onClick={() => setActiveTab('dashboard')}
           >
-            💰 Caja & Turnos
-          </Button>
-          <Button
-            variant={activeTab === 'entregas' ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => setActiveTab('entregas')}
-          >
-            📦 Entregas & Despacho
-          </Button>
-          <Button
-            variant={activeTab === 'taller' ? 'primary' : 'ghost'}
-            size="sm"
-            onClick={() => setActiveTab('taller')}
-          >
-            🛠️ Cola de Taller (OT)
+            📊 Dashboard
           </Button>
           <Button
             variant={activeTab === 'solicitudes' ? 'primary' : 'ghost'}
@@ -113,18 +110,66 @@ export function App() {
             📝 Nueva Solicitud (POS)
           </Button>
           <Button
-            variant={activeTab === 'dashboard' ? 'primary' : 'ghost'}
+            variant={activeTab === 'taller' ? 'primary' : 'ghost'}
             size="sm"
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => setActiveTab('taller')}
           >
-            📊 Panel General
+            🛠️ Cola de Taller (OT)
           </Button>
+          <Button
+            variant={activeTab === 'entregas' ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('entregas')}
+          >
+            📦 Entregas & Despacho
+          </Button>
+          <Button
+            variant={activeTab === 'caja' ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('caja')}
+          >
+            💰 Caja & Turnos
+          </Button>
+          <Button
+            variant={activeTab === 'clientes' ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('clientes')}
+          >
+            👥 Clientes
+          </Button>
+          <Button
+            variant={activeTab === 'reportes' ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('reportes')}
+          >
+            📈 Reportes
+          </Button>
+          {sesion.rol.toLowerCase().includes('admin') && (
+            <Button
+              variant={activeTab === 'admin' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveTab('admin')}
+            >
+              ⚙️ Administración
+            </Button>
+          )}
         </nav>
       )}
 
       <main>
         {!sesion ? (
           <LoginForm onLoginSuccess={(s) => setSesion(s)} />
+        ) : activeTab === 'dashboard' ? (
+          <DashboardOperativo
+            token={sesion.token}
+            onNavigateTab={(t) => setActiveTab(t as 'dashboard' | 'caja' | 'solicitudes' | 'taller' | 'entregas' | 'clientes' | 'reportes' | 'admin')}
+          />
+        ) : activeTab === 'clientes' ? (
+          <FichaCliente onIniciarSolicitud={() => setActiveTab('solicitudes')} />
+        ) : activeTab === 'reportes' ? (
+          <ModuloReportes token={sesion.token} />
+        ) : activeTab === 'admin' ? (
+          <ModuloAdmin token={sesion.token} />
         ) : activeTab === 'caja' ? (
           <ModuloCaja userRole={sesion.rol} />
         ) : activeTab === 'entregas' ? (
@@ -138,7 +183,7 @@ export function App() {
             token={sesion.token}
             usuarioActual={{ publicId: sesion.publicId, codigo: sesion.codigo, rol: sesion.rol }}
           />
-        ) : activeTab === 'solicitudes' ? (
+        ) : (
           <SolicitudCapturaMixta
             canales={canales}
             tiposDocumento={tiposDoc}
@@ -147,53 +192,6 @@ export function App() {
               setActiveTab('taller')
             }}
           />
-        ) : (
-          <Card>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Panel Operativo de Control</h2>
-              <Badge variant="success">Fases A, B, B2, C, D y E Operativas</Badge>
-            </div>
-            <p style={{ color: 'var(--color-text-muted)', marginBottom: '24px' }}>
-              Bienvenido, {sesion.nombreCompleto}. Ha ingresado con el rol <strong>{sesion.rol}</strong>.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-              <Card style={{ padding: '16px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '8px' }}>Módulo de Catálogos & Maestros</h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '12px' }}>
-                  Ítems, Unidades, Medios de pago en árbol, Cajas y Subtipos documentales con UUID y borrado lógico.
-                </p>
-                <Badge variant="success">Completado</Badge>
-              </Card>
-              <Card style={{ padding: '16px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '8px' }}>Motor Documental</h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '12px' }}>
-                  Borrador, Asentado con folio atómico por subtipo, Dependencias y Anulación.
-                </p>
-                <Badge variant="success">Completado</Badge>
-              </Card>
-              <Card style={{ padding: '16px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '8px' }}>Solicitudes & Anticipos</h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '12px' }}>
-                  Captura mixta, Invariantes #1 (100% inventario) y #2 (anticipo servicios), VoBo con Anti-Autoautorización.
-                </p>
-                <Badge variant="success">Completado</Badge>
-              </Card>
-              <Card style={{ padding: '16px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '8px' }}>Taller & Órdenes de Trabajo</h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '12px' }}>
-                  OT satélite automática, Cola de taller, Recepción rápida, Actividades y Cierre automático (Invariante #5).
-                </p>
-                <Badge variant="success">Completado</Badge>
-              </Card>
-              <Card style={{ padding: '16px' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '8px' }}>Entregas & Despacho</h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '12px' }}>
-                  1 Solicitud por Remisión (RF-5.1), Invariante #3 (bloqueo si saldo {'>'} 0), Registro de Receptor y Despacho.
-                </p>
-                <Badge variant="success">Completado</Badge>
-              </Card>
-            </div>
-          </Card>
         )}
       </main>
     </div>
@@ -201,4 +199,5 @@ export function App() {
 }
 
 export default App
+
 
