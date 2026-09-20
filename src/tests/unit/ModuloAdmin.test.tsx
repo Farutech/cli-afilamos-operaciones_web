@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { ModuloAdmin } from '../../features/admin/ModuloAdmin';
@@ -117,6 +117,13 @@ describe('ModuloAdmin Component', () => {
 
     render(<ModuloAdmin />);
 
+    // Roles tab is first
+    expect((await screen.findAllByText(/Administrador/i)).length).toBeGreaterThan(0);
+
+    // Switch to Usuarios subtab
+    const btnSubUsuarios = screen.getByRole('button', { name: /Usuarios, Cajeros & Operarios/i });
+    fireEvent.click(btnSubUsuarios);
+
     expect(await screen.findByText(/Administrador Principal/i)).toBeInTheDocument();
     expect(screen.getByText(/Juan Cajero/i)).toBeInTheDocument();
     expect(screen.getByText('ADMIN')).toBeInTheDocument();
@@ -139,15 +146,19 @@ describe('ModuloAdmin Component', () => {
 
     render(<ModuloAdmin />);
 
-    const btnCrear = await screen.findByRole('button', { name: /\+ Crear Nuevo Usuario/i });
+    // Switch to Usuarios subtab
+    const btnSubUsuarios = await screen.findByRole('button', { name: /Usuarios, Cajeros & Operarios/i });
+    fireEvent.click(btnSubUsuarios);
+
+    const btnCrear = await screen.findByRole('button', { name: /\+ Nuevo Usuario/i });
     fireEvent.click(btnCrear);
 
-    expect(screen.getByRole('heading', { name: /Crear Nuevo Usuario/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Nuevo Usuario/i })).toBeInTheDocument();
 
-    const inputCodigo = screen.getByPlaceholderText(/Ej. OPERARIO_02/i);
-    const inputNombre = screen.getByPlaceholderText(/Ej. Carlos Martinez/i);
-    const inputEmail = screen.getByPlaceholderText(/carlos@afilamos.com/i);
-    const inputPass = screen.getByPlaceholderText(/Mínimo 6 caracteres/i);
+    const inputCodigo = screen.getByPlaceholderText(/Ej: CAJERO_02/i);
+    const inputNombre = screen.getByPlaceholderText(/Ej: Carlos Gómez/i);
+    const inputEmail = screen.getByPlaceholderText(/Ej: cajero2@afilamos.com/i);
+    const inputPass = screen.getByPlaceholderText(/••••••••/i);
 
     fireEvent.change(inputCodigo, { target: { value: 'OPERARIO_01' } });
     fireEvent.change(inputNombre, { target: { value: 'Pedro Operario' } });
@@ -173,8 +184,13 @@ describe('ModuloAdmin Component', () => {
 
     render(<ModuloAdmin />);
 
-    const tabBanco = await screen.findByRole('button', { name: /🏦 Cuenta Bancaria/i });
-    fireEvent.click(tabBanco);
+    // Click Macro Tab: Caja & Tesorería
+    const macroCaja = await screen.findByRole('button', { name: /Caja & Tesorería/i });
+    fireEvent.click(macroCaja);
+
+    // Click Sub Tab: Cuentas de Recaudo
+    const subCuentas = await screen.findByRole('button', { name: /Cuentas de Recaudo/i });
+    fireEvent.click(subCuentas);
 
     expect(await screen.findByDisplayValue('Bancolombia')).toBeInTheDocument();
     expect(screen.getByDisplayValue('123456789')).toBeInTheDocument();
@@ -182,7 +198,7 @@ describe('ModuloAdmin Component', () => {
     const inputBanco = screen.getByDisplayValue('Bancolombia');
     fireEvent.change(inputBanco, { target: { value: 'Davivienda' } });
 
-    const btnGuardar = screen.getByRole('button', { name: /💾 Guardar Parámetros Bancarios/i });
+    const btnGuardar = screen.getByRole('button', { name: /Guardar Datos de Recaudo/i });
     fireEvent.click(btnGuardar);
 
     await waitFor(() => {
@@ -197,12 +213,17 @@ describe('ModuloAdmin Component', () => {
 
     render(<ModuloAdmin />);
 
-    const tabWf = await screen.findByRole('button', { name: /🔄 Workflows/i });
-    fireEvent.click(tabWf);
+    // Click Macro Tab: Productos & Servicios
+    const macroProd = await screen.findByRole('button', { name: /Productos & Servicios/i });
+    fireEvent.click(macroProd);
+
+    // Click Sub Tab: Workflows de Taller
+    const subWf = await screen.findByRole('button', { name: /Workflows de Taller/i });
+    fireEvent.click(subWf);
 
     expect((await screen.findAllByText(/TALLER-ESTANDAR/i)).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Plantilla Estándar de Taller/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/#1 Recepción Mostrador/i)).toBeInTheDocument();
-    expect(screen.getByText(/#2 Listo para Entrega/i)).toBeInTheDocument();
+    expect(screen.getByText(/Recepción Mostrador/i)).toBeInTheDocument();
+    expect(screen.getByText(/Listo para Entrega/i)).toBeInTheDocument();
   });
 });

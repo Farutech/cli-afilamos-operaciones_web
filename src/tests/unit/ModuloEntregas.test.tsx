@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { ModuloEntregas } from '../../features/entregas/ModuloEntregas';
@@ -127,7 +127,7 @@ describe('ModuloEntregas Component', () => {
     });
 
     // El botón de despacho final debe estar deshabilitado
-    const botonDespacho = screen.getByText('🚀 Asentar y Despachar al Cliente');
+    const botonDespacho = screen.getByRole('button', { name: /Asentar y Despachar al Cliente/i });
     expect(botonDespacho).toBeDisabled();
   });
 

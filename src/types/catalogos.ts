@@ -18,6 +18,9 @@ export interface ItemCatalogo {
   precioBase: number;
   stockReferencial: number | null;
   activo: boolean;
+  workflowDefinicionUuid?: string;
+  workflowDefinicionCodigo?: string;
+  workflowDefinicionNombre?: string;
 }
 
 export interface ItemsResponse {
@@ -125,3 +128,10 @@ export interface ClienteHistorico {
   documentos: DocumentoResumenCliente[];
 }
 
+export interface ParametroSistema {
+  uuid: string;
+  clave: string;
+  valorJson: string;
+  descripcion: string;
+  categoria: string;
+}

@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import { Badge } from '../../components/ui/Badge'
+import { api } from '../../services/api'
 import type { UsuarioSesion } from '../../types/auth'
 
 export interface LoginFormProps {
@@ -26,30 +27,23 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
 
     setCargando(true)
     try {
-      // Simulación / llamada a endpoint
-      const res = await fetch('http://localhost:5000/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo, password }),
-      })
-
-      if (!res.ok) {
-        throw new Error('Credenciales inválidas o usuario inactivo.')
-      }
-
-      const sesion: UsuarioSesion = await res.json()
+      const sesion = await api.post<UsuarioSesion>('/auth/login', { codigo, password })
+      // Persistir token para servicios que requieren acceso sin prop drilling (ej. cajaApi)
+      localStorage.setItem('ordeon_token', sesion.token)
       if (onLoginSuccess) {
         onLoginSuccess(sesion)
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
-        setError(err.message)
+        // Strip [status] prefix if present for clean UI display
+        setError(err.message.replace(/^\[\d+\]\s*/, ''))
       } else {
         setError('Ocurrió un error inesperado.')
       }
     } finally {
       setCargando(false)
     }
+
   }
 
   return (

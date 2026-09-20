@@ -8,15 +8,18 @@ import {
   obtenerDetalleSupervisor,
   procesarVoBo
 } from '../../services/cajaApi';
+import { Badge, Button, Card, Input } from '../../components/ui';
 
 interface ModuloCajaProps {
   codigoCajaDefault?: string;
   userRole?: string;
+  token?: string;
 }
 
 export const ModuloCaja: React.FC<ModuloCajaProps> = ({
   codigoCajaDefault = 'CAJA-01',
-  userRole = 'Cajero'
+  userRole = 'Cajero',
+  token,
 }) => {
   const [turno, setTurno] = useState<TurnoDto | null>(null);
   const [cargando, setCargando] = useState<boolean>(true);
@@ -51,12 +54,12 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     setCargando(true);
     setErrorMsg(null);
     try {
-      const data = await obtenerTurnoActivo(codigoCajaDefault);
+      const data = await obtenerTurnoActivo(codigoCajaDefault, token);
       setTurno(data);
 
       if (data && data.estado === 'PENDIENTE_VOBO') {
         try {
-          const det = await obtenerDetalleSupervisor(data.id);
+          const det = await obtenerDetalleSupervisor(data.id, token);
           setDetalleSupervisor(det);
         } catch {
           // El usuario actual puede no ser supervisor aún
@@ -71,18 +74,18 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     } finally {
       setCargando(false);
     }
-  }, [codigoCajaDefault]);
+  }, [codigoCajaDefault, token]);
 
   useEffect(() => {
     let activo = true;
     const init = async () => {
       try {
-        const t = await obtenerTurnoActivo(codigoCajaDefault);
+        const t = await obtenerTurnoActivo(codigoCajaDefault, token);
         if (!activo) return;
         setTurno(t);
         if (t && t.estado === 'PENDIENTE_VOBO') {
           try {
-            const det = await obtenerDetalleSupervisor(t.id);
+            const det = await obtenerDetalleSupervisor(t.id, token);
             if (activo) setDetalleSupervisor(det);
           } catch {
             if (activo) setDetalleSupervisor(null);
@@ -103,7 +106,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     return () => {
       activo = false;
     };
-  }, [codigoCajaDefault]);
+  }, [codigoCajaDefault, token]);
 
   const handleAbrirTurno = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +124,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
       const nuevoTurno = await abrirTurno({
         codigoCaja: codigoCajaDefault,
         baseInicial: monto
-      });
+      }, token);
       setTurno(nuevoTurno);
       setSuccessMsg(`Turno ${nuevoTurno.codigo} abierto exitosamente con base de $${monto.toLocaleString('es-CO')}`);
     } catch (err: unknown) {
@@ -153,7 +156,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
       const res = await registrarEgreso(turno.id, {
         monto,
         motivo: egresoMotivo.trim()
-      });
+      }, token);
       setSuccessMsg(`Egreso ${res.consecutivo} registrado por $${monto.toLocaleString('es-CO')}`);
       setMostrarModalEgreso(false);
       setEgresoMonto('');
@@ -205,7 +208,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     setCargandoDetalle(true);
     setErrorMsg(null);
     try {
-      const det = await obtenerDetalleSupervisor(turno.id);
+      const det = await obtenerDetalleSupervisor(turno.id, token);
       setDetalleSupervisor(det);
     } catch (err: unknown) {
       const e = err as Error;
@@ -230,7 +233,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
         pin: pinSupervisor.trim(),
         decision,
         observacion: observacionVoBo.trim()
-      });
+      }, token);
       setSuccessMsg(`Turno ${res.codigo} procesado como ${res.estado} exitosamente.`);
       setPinSupervisor('');
       setObservacionVoBo('');
@@ -309,7 +312,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
         <div className="p-12 text-center text-slate-400">Cargando estado de la caja...</div>
       ) : !turno || turno.estado === 'CERRADO' ? (
         /* Panel Apertura */
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <Card>
           <div className="max-w-md mx-auto text-center space-y-4">
             <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl">
               💵
@@ -320,43 +323,34 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
             </p>
 
             <form onSubmit={handleAbrirTurno} className="space-y-4 text-left pt-2">
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                  Caja Física
-                </label>
-                <input
-                  type="text"
-                  value={codigoCajaDefault}
-                  disabled
-                  className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-600 font-medium"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                  Base Inicial en Efectivo (COP) *
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  required
-                  value={baseInicial}
-                  onChange={(e) => setBaseInicial(e.target.value)}
-                  placeholder="100000"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none font-bold text-slate-800"
-                />
-                <span className="text-xs text-slate-400">Monto físico entregado al cajero para dar cambio.</span>
-              </div>
-              <button
+              <Input
+                label="Caja Física"
+                type="text"
+                value={codigoCajaDefault}
+                disabled
+              />
+              <Input
+                label="Base Inicial en Efectivo (COP) *"
+                type="number"
+                min="0"
+                step="1000"
+                required
+                value={baseInicial}
+                onChange={(e) => setBaseInicial(e.target.value)}
+                placeholder="100000"
+                helperText="Monto físico entregado al cajero para dar cambio."
+              />
+              <Button
                 type="submit"
                 disabled={abriendoTurno}
-                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow transition-colors flex items-center justify-center gap-2"
+                variant="primary"
+                fullWidth
               >
                 {abriendoTurno ? 'Inicializando turno...' : '✨ Abrir Turno de Caja'}
-              </button>
+              </Button>
             </form>
           </div>
-        </div>
+        </Card>
       ) : turno.estado === 'ABIERTO' ? (
         /* Panel Turno Abierto */
         <div className="space-y-6">
@@ -392,18 +386,21 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
           {/* Acciones Rápidas */}
           <div className="flex flex-wrap gap-3">
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setMostrarModalEgreso(true)}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-sm font-semibold border border-slate-300 transition-colors flex items-center gap-1.5"
             >
               <span>💸</span> Registrar Egreso Menor (Caja Menor)
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              style={{ backgroundColor: '#d97706' }}
               onClick={() => setMostrarModalArqueo(true)}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold shadow transition-colors flex items-center gap-1.5"
             >
               <span>🔒</span> Cerrar Turno (Arqueo Ciego)
-            </button>
+            </Button>
           </div>
 
           {/* Tabla de Movimientos del Turno */}
@@ -442,17 +439,18 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                           </td>
                           <td className="px-6 py-3 font-mono text-xs text-slate-500">{m.codigo}</td>
                           <td className="px-6 py-3">
-                            <span
-                              className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                            <Badge
+                              variant={
                                 m.tipoMovimiento === 'BASE_INICIAL'
-                                  ? 'bg-blue-100 text-blue-800'
+                                  ? 'primary'
                                   : esEgreso
-                                  ? 'bg-rose-100 text-rose-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}
+                                  ? 'danger'
+                                  : 'success'
+                              }
+                              size="sm"
                             >
                               {m.tipoMovimiento}
-                            </span>
+                            </Badge>
                           </td>
                           <td className="px-6 py-3 font-medium text-slate-800">{m.concepto}</td>
                           <td
@@ -631,21 +629,16 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
             </p>
 
             <form onSubmit={handleRegistrarEgreso} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                  Monto a Retirar (COP) *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  step="100"
-                  required
-                  value={egresoMonto}
-                  onChange={(e) => setEgresoMonto(e.target.value)}
-                  placeholder="15000"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold text-slate-800"
-                />
-              </div>
+              <Input
+                label="Monto a Retirar (COP) *"
+                type="number"
+                min="1"
+                step="100"
+                required
+                value={egresoMonto}
+                onChange={(e) => setEgresoMonto(e.target.value)}
+                placeholder="15000"
+              />
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
                   Motivo / Justificación *
@@ -660,20 +653,22 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                 />
               </div>
               <div className="flex gap-2 justify-end pt-2">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setMostrarModalEgreso(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm hover:bg-slate-50"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="sm"
                   disabled={guardandoEgreso}
-                  className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800"
                 >
                   {guardandoEgreso ? 'Guardando...' : 'Emitir Comprobante'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -692,67 +687,55 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
             </div>
 
             <form onSubmit={handleDeclararArqueoCiego} className="space-y-4">
-              <div>
-                <label htmlFor="arqueo-efectivo" className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                  Efectivo Contado Físicamente (COP) *
-                </label>
-                <input
-                  id="arqueo-efectivo"
-                  type="number"
-                  min="0"
-                  step="100"
-                  required
-                  value={declEfectivo}
-                  onChange={(e) => setDeclEfectivo(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold text-slate-800"
-                />
-              </div>
-              <div>
-                <label htmlFor="arqueo-tarjeta" className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                  Vouchers de Tarjeta / Datáfono (COP) *
-                </label>
-                <input
-                  id="arqueo-tarjeta"
-                  type="number"
-                  min="0"
-                  step="100"
-                  required
-                  value={declTarjeta}
-                  onChange={(e) => setDeclTarjeta(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold text-slate-800"
-                />
-              </div>
-              <div>
-                <label htmlFor="arqueo-transferencia" className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                  Transferencias Bancarias Confirmadas (COP) *
-                </label>
-                <input
-                  id="arqueo-transferencia"
-                  type="number"
-                  min="0"
-                  step="100"
-                  required
-                  value={declTransferencia}
-                  onChange={(e) => setDeclTransferencia(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold text-slate-800"
-                />
-              </div>
+              <Input
+                id="arqueo-efectivo"
+                label="Efectivo Contado Físicamente (COP) *"
+                type="number"
+                min="0"
+                step="100"
+                required
+                value={declEfectivo}
+                onChange={(e) => setDeclEfectivo(e.target.value)}
+              />
+              <Input
+                id="arqueo-tarjeta"
+                label="Vouchers de Tarjeta / Datáfono (COP) *"
+                type="number"
+                min="0"
+                step="100"
+                required
+                value={declTarjeta}
+                onChange={(e) => setDeclTarjeta(e.target.value)}
+              />
+              <Input
+                id="arqueo-transferencia"
+                label="Transferencias Bancarias Confirmadas (COP) *"
+                type="number"
+                min="0"
+                step="100"
+                required
+                value={declTransferencia}
+                onChange={(e) => setDeclTransferencia(e.target.value)}
+              />
 
               <div className="flex gap-2 justify-end pt-2">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setMostrarModalArqueo(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg text-sm hover:bg-slate-50"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="sm"
+                  style={{ backgroundColor: '#d97706' }}
                   disabled={guardandoArqueo}
-                  className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-semibold hover:bg-amber-700 shadow"
                 >
                   {guardandoArqueo ? 'Registrando...' : 'Declarar y Enviar a VoBo'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

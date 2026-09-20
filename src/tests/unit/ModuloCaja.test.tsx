@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { ModuloCaja } from '../../features/caja/ModuloCaja';
@@ -102,10 +102,13 @@ describe('ModuloCaja Component', () => {
     fireEvent.click(btnAbrir);
 
     await waitFor(() => {
-      expect(cajaApi.abrirTurno).toHaveBeenCalledWith({
-        codigoCaja: 'CAJA-01',
-        baseInicial: 150000,
-      });
+      expect(cajaApi.abrirTurno).toHaveBeenCalledWith(
+        {
+          codigoCaja: 'CAJA-01',
+          baseInicial: 150000,
+        },
+        undefined
+      );
     });
   });
 
@@ -148,10 +151,14 @@ describe('ModuloCaja Component', () => {
     fireEvent.click(btnConfirmar);
 
     await waitFor(() => {
-      expect(cajaApi.registrarEgreso).toHaveBeenCalledWith(1, {
-        monto: 12000,
-        motivo: 'Compra de papel de lija',
-      });
+      expect(cajaApi.registrarEgreso).toHaveBeenCalledWith(
+        1,
+        {
+          monto: 12000,
+          motivo: 'Compra de papel de lija',
+        },
+        undefined
+      );
     });
   });
 
@@ -212,11 +219,15 @@ describe('ModuloCaja Component', () => {
     fireEvent.click(btnAprobar);
 
     await waitFor(() => {
-      expect(cajaApi.procesarVoBo).toHaveBeenCalledWith(1, {
-        pin: '9999',
-        decision: 'APROBADO',
-        observacion: '',
-      });
+      expect(cajaApi.procesarVoBo).toHaveBeenCalledWith(
+        1,
+        {
+          pin: '9999',
+          decision: 'APROBADO',
+          observacion: '',
+        },
+        undefined
+      );
     });
   });
 });
