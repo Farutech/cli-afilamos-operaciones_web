@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { catalogosApi } from '../../services/catalogosApi';
 import type { Cliente, ClienteHistorico } from '../../types/catalogos';
-import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
+import { Card, Badge, Button } from '@farutech/design-system';
 
 interface FichaClienteProps {
   onIniciarSolicitud?: (cliente: Cliente) => void;

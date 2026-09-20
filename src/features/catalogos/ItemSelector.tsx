@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ItemCatalogo } from '../../types/catalogos';
 import { catalogosApi } from '../../services/catalogosApi';
-import { Badge } from '../../components/ui/Badge';
+import { Badge } from '@farutech/design-system';
 
 export interface ItemSelectorProps {
   onSelectItem: (item: ItemCatalogo) => void;

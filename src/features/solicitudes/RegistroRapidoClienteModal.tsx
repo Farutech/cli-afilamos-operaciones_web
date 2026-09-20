@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { Button, Input } from '@farutech/design-system';
 import { solicitudesApi } from '../../services/solicitudesApi';
 import type { TipoDocumentoIdentidad, Cliente } from '../../types/catalogos';
 

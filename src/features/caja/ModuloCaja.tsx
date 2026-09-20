@@ -8,7 +8,7 @@ import {
   obtenerDetalleSupervisor,
   procesarVoBo
 } from '../../services/cajaApi';
-import { Badge, Button, Card, Input } from '../../components/ui';
+import { Badge, Button, Card, Input } from '@farutech/design-system';
 
 interface ModuloCajaProps {
   codigoCajaDefault?: string;

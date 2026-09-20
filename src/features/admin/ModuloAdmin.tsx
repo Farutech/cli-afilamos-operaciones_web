@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
   Button,
@@ -8,7 +8,8 @@ import {
   Modal,
   Alert,
   EmptyState,
-} from '../../components/ui';
+  CRUDTable,
+} from '@farutech/design-system';
 import { adminApi } from '../../services/adminApi';
 import { catalogosApi } from '../../services/catalogosApi';
 import type {
@@ -24,6 +25,7 @@ import type {
   TipoDocumentoIdentidad,
   CanalOrigen,
   TipoDocumentoBase,
+  SubtipoDocumento,
   Caja,
   MedioPagoCategoria,
   MedioPagoInstrumento,
@@ -115,8 +117,6 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
   const [usuarios, setUsuarios] = useState<UsuarioAdminDto[]>([]);
   const [roles, setRoles] = useState<string[]>(Object.keys(ROLES_SISTEMA));
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
-  const [busquedaUsuario, setBusquedaUsuario] = useState('');
-  const [rolFiltro, setRolFiltro] = useState<string>('');
   const [mostrarModalUsuario, setMostrarModalUsuario] = useState(false);
   const [nuevoUsuario, setNuevoUsuario] = useState<CrearUsuarioDto>({
     codigo: '',
@@ -132,7 +132,6 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
   // --- CLIENTES & CANALES ---
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(false);
-  const [busquedaCliente, setBusquedaCliente] = useState('');
   const [mostrarModalCliente, setMostrarModalCliente] = useState(false);
   const [nuevoCliente, setNuevoCliente] = useState({
     numeroDocumento: '',
@@ -156,8 +155,6 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
   // --- PRODUCTOS & SERVICIOS ---
   const [items, setItems] = useState<ItemCatalogo[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
-  const [busquedaItem, setBusquedaItem] = useState('');
-  const [naturalezaFiltro, setNaturalezaFiltro] = useState<'' | 'INVENTARIO' | 'SERVICIO'>('');
   const [mostrarModalItem, setMostrarModalItem] = useState(false);
   const [nuevoItem, setNuevoItem] = useState({
     codigoReferencia: '',
@@ -228,6 +225,19 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
   const [loadingParametros, setLoadingParametros] = useState(false);
   const [parametroTarget, setParametroTarget] = useState<ParametroSistema | null>(null);
   const [nuevoValorParametro, setNuevoValorParametro] = useState('');
+
+  type SubtipoConTipoBase = SubtipoDocumento & { tipoBaseCodigo: string; tipoBaseNombre: string; tipoBaseUuid: string };
+
+  const todosSubtipos = useMemo<SubtipoConTipoBase[]>(() => {
+    return tiposDocBase.flatMap((tb) =>
+      (tb.subtipos || []).map((st) => ({
+        ...st,
+        tipoBaseCodigo: tb.codigoBase,
+        tipoBaseNombre: tb.nombre,
+        tipoBaseUuid: tb.uuid,
+      }))
+    );
+  }, [tiposDocBase]);
 
   // ==========================================
   // CARGA AUTOMÁTICA SEGÚN SUB-CATÁLOGO
@@ -711,36 +721,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
     }
   };
 
-  // ==========================================
-  // FILTRADO Y RENDERIZADO
-  // ==========================================
 
-  const usuariosFiltrados = usuarios.filter((u) => {
-    const matchQ =
-      u.codigo.toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
-      u.nombreCompleto.toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
-      u.email.toLowerCase().includes(busquedaUsuario.toLowerCase());
-    const matchRol = rolFiltro ? u.rol === rolFiltro : true;
-    return matchQ && matchRol;
-  });
-
-  const itemsFiltrados = items.filter((it) => {
-    const matchQ =
-      it.codigoReferencia.toLowerCase().includes(busquedaItem.toLowerCase()) ||
-      it.nombre.toLowerCase().includes(busquedaItem.toLowerCase()) ||
-      it.descripcion.toLowerCase().includes(busquedaItem.toLowerCase());
-    const matchNat = naturalezaFiltro ? it.naturaleza === naturalezaFiltro : true;
-    return matchQ && matchNat;
-  });
-
-  const clientesFiltrados = clientes.filter((c) => {
-    const q = busquedaCliente.toLowerCase();
-    return (
-      c.numeroDocumento.toLowerCase().includes(q) ||
-      c.nombreRazonSocial.toLowerCase().includes(q) ||
-      (c.telefono && c.telefono.toLowerCase().includes(q))
-    );
-  });
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -1053,406 +1034,398 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
       {/* 1.2 USUARIOS / CAJEROS / OPERARIOS */}
       {subCat === 'usuarios' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="flex flex-1 gap-2 w-full">
-              <input
-                type="text"
-                placeholder="Buscar por código, nombre o email..."
-                value={busquedaUsuario}
-                onChange={(e) => setBusquedaUsuario(e.target.value)}
-                className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white w-full max-w-sm"
-              />
-              <select
-                value={rolFiltro}
-                onChange={(e) => setRolFiltro(e.target.value)}
-                className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-              >
-                <option value="">Todos los Roles</option>
-                {roles.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-            <Button variant="primary" onClick={() => setMostrarModalUsuario(true)}>
-              + Nuevo Usuario / Cajero
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingUsuarios ? (
-              <div className="p-8 text-center text-gray-400">Cargando directorio de usuarios...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Código</th>
-                    <th className="p-3">Nombre Completo</th>
-                    <th className="p-3">Email</th>
-                    <th className="p-3">Rol del Sistema</th>
-                    <th className="p-3">PIN</th>
-                    <th className="p-3">Estado</th>
-                    <th className="p-3 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {usuariosFiltrados.map((u) => (
-                    <tr key={u.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-mono font-bold text-white">{u.codigo}</td>
-                      <td className="p-3">{u.nombreCompleto}</td>
-                      <td className="p-3 text-gray-400">{u.email}</td>
-                      <td className="p-3">
-                        <Badge variant={ROLES_SISTEMA[u.rol]?.badge ?? 'neutral'}>{u.rol}</Badge>
-                      </td>
-                      <td className="p-3">
-                        {u.tienePin ? (
-                          <span className="text-emerald-400 text-xs">✓ Configurado</span>
-                        ) : (
-                          <span className="text-gray-500 text-xs">Sin PIN</span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={u.activo ? 'success' : 'neutral'}>
-                          {u.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-right space-x-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => {
-                            setUsuarioPinTarget(u);
-                            setNuevoPin('');
-                          }}
-                        >
-                          Reset PIN
-                        </Button>
-                        <Button
-                          variant={u.activo ? 'danger' : 'secondary'}
-                          size="sm"
-                          onClick={() => handleToggleUsuario(u)}
-                        >
-                          {u.activo ? 'Desactivar' : 'Activar'}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {usuariosFiltrados.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="p-6 text-center text-gray-500">
-                        No se encontraron usuarios que coincidan con la búsqueda.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable
+            data={usuarios}
+            columns={[
+              {
+                key: 'codigo',
+                label: 'Código',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+              },
+              { key: 'nombreCompleto', label: 'Nombre Completo', sortable: true },
+              { key: 'email', label: 'Email', sortable: true, render: (v) => <span className="text-gray-400">{v}</span> },
+              {
+                key: 'rol',
+                label: 'Rol del Sistema',
+                sortable: true,
+                render: (v) => <Badge variant={ROLES_SISTEMA[v]?.badge ?? 'neutral'}>{v}</Badge>,
+              },
+              {
+                key: 'tienePin',
+                label: 'PIN',
+                render: (_, u) =>
+                  u.tienePin ? (
+                    <span className="text-emerald-400 text-xs font-semibold">✓ Configurado</span>
+                  ) : (
+                    <span className="text-gray-500 text-xs">Sin PIN</span>
+                  ),
+              },
+              {
+                key: 'activo',
+                label: 'Estado',
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'acciones',
+                label: 'Acciones',
+                align: 'right',
+                render: (_, u) => (
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setUsuarioPinTarget(u);
+                        setNuevoPin('');
+                      }}
+                    >
+                      Reset PIN
+                    </Button>
+                    <Button
+                      variant={u.activo ? 'danger' : 'secondary'}
+                      size="sm"
+                      onClick={() => handleToggleUsuario(u)}
+                    >
+                      {u.activo ? 'Desactivar' : 'Activar'}
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+            loading={loadingUsuarios}
+            onCreate={() => setMostrarModalUsuario(true)}
+            createLabel="+ Nuevo Usuario / Cajero"
+            searchable={true}
+            searchPlaceholder="Buscar por código, nombre o email..."
+            filters={[
+              {
+                key: 'rol',
+                label: 'Rol',
+                type: 'select',
+                options: roles.map((r) => ({ label: r, value: r })),
+              },
+            ]}
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron usuarios que coincidan con la búsqueda."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
       {/* 2.1 CLIENTES */}
       {subCat === 'clientes' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <input
-              type="text"
-              placeholder="Buscar por documento o nombre de cliente..."
-              value={busquedaCliente}
-              onChange={(e) => setBusquedaCliente(e.target.value)}
-              className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white w-full max-w-sm"
-            />
-            <Button variant="primary" onClick={() => setMostrarModalCliente(true)}>
-              + Nuevo Cliente
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingClientes ? (
-              <div className="p-8 text-center text-gray-400">Cargando directorio de clientes...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Tipo Doc</th>
-                    <th className="p-3">Número Documento</th>
-                    <th className="p-3">Nombre / Razón Social</th>
-                    <th className="p-3">Teléfono</th>
-                    <th className="p-3">Estado</th>
-                    <th className="p-3 text-right">Historial & Órdenes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {clientesFiltrados.map((c) => (
-                    <tr key={c.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-bold text-gray-400">{c.tipoDocumento?.codigo ?? 'CC'}</td>
-                      <td className="p-3 font-mono text-white font-bold">{c.numeroDocumento}</td>
-                      <td className="p-3 text-white">{c.nombreRazonSocial}</td>
-                      <td className="p-3 text-gray-400">{c.telefono || 'Sin teléfono'}</td>
-                      <td className="p-3">
-                        <Badge variant={c.activo ? 'success' : 'neutral'}>
-                          {c.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-right">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={loadingHistorico}
-                          onClick={() => handleVerHistoricoCliente(c.uuid)}
-                        >
-                          {loadingHistorico ? 'Cargando...' : '👁️ Ver Historial'}
-                        </Button>
-                      </td>
-
-                    </tr>
-                  ))}
-                  {clientesFiltrados.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="p-6 text-center text-gray-500">
-                        No se encontraron clientes registrados.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable
+            data={clientes}
+            columns={[
+              {
+                key: 'tipoDocumento',
+                label: 'Tipo Doc',
+                render: (_, c) => <span className="font-bold text-gray-400">{c.tipoDocumento?.codigo ?? 'CC'}</span>,
+              },
+              {
+                key: 'numeroDocumento',
+                label: 'Número Documento',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+              },
+              { key: 'nombreRazonSocial', label: 'Nombre / Razón Social', sortable: true },
+              { key: 'telefono', label: 'Teléfono', render: (v) => <span className="text-gray-400">{v || 'Sin teléfono'}</span> },
+              {
+                key: 'activo',
+                label: 'Estado',
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'acciones',
+                label: 'Historial & Órdenes',
+                align: 'right',
+                render: (_, c) => (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={loadingHistorico}
+                    onClick={() => handleVerHistoricoCliente(c.uuid)}
+                  >
+                    {loadingHistorico ? 'Cargando...' : '👁️ Ver Historial'}
+                  </Button>
+                ),
+              },
+            ]}
+            loading={loadingClientes}
+            onCreate={() => setMostrarModalCliente(true)}
+            createLabel="+ Nuevo Cliente"
+            searchable={true}
+            searchPlaceholder="Buscar por documento o nombre de cliente..."
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron clientes registrados."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
       {/* 2.2 CANALES DE ORIGEN */}
       {subCat === 'canales' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-400">Canales de captación comercial (Mostrador, WhatsApp, Telefónico, etc.).</p>
-            <Button variant="primary" onClick={() => setMostrarModalCanal(true)}>
-              + Nuevo Canal de Origen
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingCanales ? (
-              <div className="p-8 text-center text-gray-400">Cargando canales...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Código</th>
-                    <th className="p-3">Nombre del Canal</th>
-                    <th className="p-3">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {canales.map((c) => (
-                    <tr key={c.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-mono font-bold text-white">{c.codigo}</td>
-                      <td className="p-3 text-white">{c.nombre}</td>
-                      <td className="p-3">
-                        <Badge variant={c.activo ? 'success' : 'neutral'}>
-                          {c.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable
+            data={canales}
+            columns={[
+              {
+                key: 'codigo',
+                label: 'Código',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+              },
+              { key: 'nombre', label: 'Nombre del Canal', sortable: true },
+              {
+                key: 'activo',
+                label: 'Estado',
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                ),
+              },
+            ]}
+            loading={loadingCanales}
+            onCreate={() => setMostrarModalCanal(true)}
+            createLabel="+ Nuevo Canal de Origen"
+            searchable={true}
+            searchPlaceholder="Buscar canal..."
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron canales de origen."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
       {/* 2.3 TIPOS DE DOCUMENTO DE IDENTIDAD */}
       {subCat === 'tipos_doc' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-400">Documentos oficiales de identificación para personas naturales y jurídicas.</p>
-            <Button variant="primary" onClick={() => setMostrarModalTipoDocId(true)}>
-              + Nuevo Tipo de Documento
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingTiposDocId ? (
-              <div className="p-8 text-center text-gray-400">Cargando tipos de documento...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Código</th>
-                    <th className="p-3">Nombre</th>
-                    <th className="p-3">Aplica A</th>
-                    <th className="p-3">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {tiposDocId.map((t) => (
-                    <tr key={t.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-mono font-bold text-white">{t.codigo}</td>
-                      <td className="p-3 text-white">{t.nombre}</td>
-                      <td className="p-3">
-                        <span className="text-xs px-2 py-0.5 rounded bg-purple-900/30 text-purple-300 border border-purple-800/40">
-                          {t.aplicaPersona}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={t.activo ? 'success' : 'neutral'}>
-                          {t.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable
+            data={tiposDocId}
+            columns={[
+              {
+                key: 'codigo',
+                label: 'Código',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+              },
+              { key: 'nombre', label: 'Nombre', sortable: true },
+              {
+                key: 'aplicaPersona',
+                label: 'Aplica A',
+                render: (v) => (
+                  <span className="text-xs px-2 py-0.5 rounded bg-purple-900/30 text-purple-300 border border-purple-800/40">
+                    {v}
+                  </span>
+                ),
+              },
+              {
+                key: 'activo',
+                label: 'Estado',
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                ),
+              },
+            ]}
+            loading={loadingTiposDocId}
+            onCreate={() => setMostrarModalTipoDocId(true)}
+            createLabel="+ Nuevo Tipo de Documento"
+            searchable={true}
+            searchPlaceholder="Buscar tipo de documento..."
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron tipos de documento."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
       {/* 3.1 ITEMS & SERVICIOS */}
       {subCat === 'items' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="flex flex-1 gap-2 w-full">
-              <input
-                type="text"
-                placeholder="Buscar ítem o servicio..."
-                value={busquedaItem}
-                onChange={(e) => setBusquedaItem(e.target.value)}
-                className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white w-full max-w-sm"
-              />
-              <select
-                value={naturalezaFiltro}
-                onChange={(e) => setNaturalezaFiltro(e.target.value as any)}
-                className="bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-              >
-                <option value="">Todas las Naturalezas</option>
-                <option value="SERVICIO">Servicios de Taller</option>
-                <option value="INVENTARIO">Productos de Inventario</option>
-              </select>
-            </div>
-            <Button variant="primary" onClick={() => setMostrarModalItem(true)}>
-              + Nuevo Ítem / Servicio
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingItems ? (
-              <div className="p-8 text-center text-gray-400">Cargando catálogo...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Código</th>
-                    <th className="p-3">Nombre & Descripción</th>
-                    <th className="p-3">Naturaleza</th>
-                    <th className="p-3">Flujo de Trabajo (OT)</th>
-                    <th className="p-3">Unidad</th>
-                    <th className="p-3">Precio Base</th>
-                    <th className="p-3">Stock</th>
-                    <th className="p-3">Estado</th>
-                    <th className="p-3 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {itemsFiltrados.map((it) => (
-                    <tr key={it.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-mono font-bold text-white">{it.codigoReferencia}</td>
-                      <td className="p-3">
-                        <div className="font-semibold text-white">{it.nombre}</div>
-                        {it.descripcion && <div className="text-xs text-gray-400">{it.descripcion}</div>}
-                      </td>
-                      <td className="p-3">
-                        <span className={`text-xs px-2 py-0.5 rounded font-medium border ${
-                          it.naturaleza === 'SERVICIO'
-                            ? 'bg-blue-900/30 text-blue-300 border-blue-700/40'
-                            : 'bg-amber-900/30 text-amber-300 border-amber-700/40'
-                        }`}>
-                          {it.naturaleza}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        {it.naturaleza === 'SERVICIO' ? (
-                          it.workflowDefinicionCodigo ? (
-                            <span className="text-xs px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1 w-fit">
-                              🔄 {it.workflowDefinicionCodigo}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-500 italic">Por defecto</span>
-                          )
-                        ) : (
-                          <span className="text-xs text-gray-500">N/A (Inventario)</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-gray-400">{it.unidadPresentacion?.abreviatura || 'UNID'}</td>
-                      <td className="p-3 font-semibold text-white">
-                        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(it.precioBase)}
-                      </td>
-                      <td className="p-3 font-mono">
-                        {it.naturaleza === 'INVENTARIO' ? (it.stockReferencial ?? 0) : 'N/A'}
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={it.activo ? 'success' : 'neutral'}>
-                          {it.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-right">
-                        <Button
-                          variant={it.activo ? 'danger' : 'secondary'}
-                          size="sm"
-                          onClick={() => handleToggleItem(it)}
-                        >
-                          {it.activo ? 'Desactivar' : 'Activar'}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable
+            data={items}
+            columns={[
+              {
+                key: 'codigoReferencia',
+                label: 'Código Ref.',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+              },
+              {
+                key: 'nombre',
+                label: 'Nombre & Descripción',
+                sortable: true,
+                render: (_, it) => (
+                  <div>
+                    <div className="font-semibold text-white">{it.nombre}</div>
+                    {it.descripcion && <div className="text-xs text-gray-400">{it.descripcion}</div>}
+                  </div>
+                ),
+              },
+              {
+                key: 'naturaleza',
+                label: 'Naturaleza',
+                render: (v) => (
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded font-medium border ${
+                      v === 'SERVICIO'
+                        ? 'bg-blue-900/30 text-blue-300 border-blue-700/40'
+                        : 'bg-amber-900/30 text-amber-300 border-amber-700/40'
+                    }`}
+                  >
+                    {v}
+                  </span>
+                ),
+              },
+              {
+                key: 'workflowDefinicionCodigo',
+                label: 'Flujo de Trabajo (OT)',
+                render: (_, it) =>
+                  it.naturaleza === 'SERVICIO' ? (
+                    it.workflowDefinicionCodigo ? (
+                      <span className="text-xs px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1 w-fit">
+                        🔄 {it.workflowDefinicionCodigo}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-500 italic">Por defecto</span>
+                    )
+                  ) : (
+                    <span className="text-xs text-gray-500">N/A (Inventario)</span>
+                  ),
+              },
+              {
+                key: 'unidadPresentacion',
+                label: 'Unidad',
+                render: (_, it) => (
+                  <span className="text-gray-400">{it.unidadPresentacion?.abreviatura || 'UNID'}</span>
+                ),
+              },
+              {
+                key: 'precioBase',
+                label: 'Precio Base',
+                sortable: true,
+                render: (v) => (
+                  <span className="font-semibold text-white">
+                    {new Intl.NumberFormat('es-CO', {
+                      style: 'currency',
+                      currency: 'COP',
+                      maximumFractionDigits: 0,
+                    }).format(v)}
+                  </span>
+                ),
+              },
+              {
+                key: 'stockReferencial',
+                label: 'Stock',
+                render: (_, it) => (
+                  <span className="font-mono">
+                    {it.naturaleza === 'INVENTARIO' ? (it.stockReferencial ?? 0) : 'N/A'}
+                  </span>
+                ),
+              },
+              {
+                key: 'activo',
+                label: 'Estado',
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'acciones',
+                label: 'Acciones',
+                align: 'right',
+                render: (_, it) => (
+                  <Button
+                    variant={it.activo ? 'danger' : 'secondary'}
+                    size="sm"
+                    onClick={() => handleToggleItem(it)}
+                  >
+                    {it.activo ? 'Desactivar' : 'Activar'}
+                  </Button>
+                ),
+              },
+            ]}
+            loading={loadingItems}
+            onCreate={() => setMostrarModalItem(true)}
+            createLabel="+ Nuevo Ítem / Servicio"
+            searchable={true}
+            searchPlaceholder="Buscar ítem o servicio..."
+            filters={[
+              {
+                key: 'naturaleza',
+                label: 'Naturaleza',
+                type: 'select',
+                options: [
+                  { label: 'Servicios de Taller', value: 'SERVICIO' },
+                  { label: 'Productos de Inventario', value: 'INVENTARIO' },
+                ],
+              },
+            ]}
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron ítems o servicios."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
       {/* 3.2 UNIDADES DE MEDIDA */}
       {subCat === 'unidades' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-400">Unidades de medida para inventario y tasación de servicios (UNID, MT, KG, etc.).</p>
-            <Button variant="primary" onClick={() => setMostrarModalUnidad(true)}>
-              + Nueva Unidad de Medida
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingUnidades ? (
-              <div className="p-8 text-center text-gray-400">Cargando unidades...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Código</th>
-                    <th className="p-3">Nombre</th>
-                    <th className="p-3">Abreviatura</th>
-                    <th className="p-3">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {unidades.map((u) => (
-                    <tr key={u.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-mono font-bold text-white">{u.codigo}</td>
-                      <td className="p-3 text-white">{u.nombre}</td>
-                      <td className="p-3 font-bold text-blue-300">{u.abreviatura}</td>
-                      <td className="p-3">
-                        <Badge variant={u.activo ? 'success' : 'neutral'}>
-                          {u.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable
+            data={unidades}
+            columns={[
+              {
+                key: 'codigo',
+                label: 'Código',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+              },
+              { key: 'nombre', label: 'Nombre', sortable: true },
+              {
+                key: 'abreviatura',
+                label: 'Abreviatura',
+                render: (v) => <span className="font-bold text-blue-300">{v}</span>,
+              },
+              {
+                key: 'activo',
+                label: 'Estado',
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                ),
+              },
+            ]}
+            loading={loadingUnidades}
+            onCreate={() => setMostrarModalUnidad(true)}
+            createLabel="+ Nueva Unidad de Medida"
+            searchable={true}
+            searchPlaceholder="Buscar unidad de medida..."
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron unidades de medida."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
@@ -1560,114 +1533,111 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
       {/* 4.1 CAJAS FÍSICAS */}
       {subCat === 'cajas' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-400">Puntos de cobro y terminales físicas de mostrador para apertura de turnos.</p>
-            <Button variant="primary" onClick={() => setMostrarModalCaja(true)}>
-              + Nueva Caja de Mostrador
-            </Button>
-          </div>
-
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingCajas ? (
-              <div className="p-8 text-center text-gray-400">Cargando cajas...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Código de Caja</th>
-                    <th className="p-3">Nombre Descriptivo</th>
-                    <th className="p-3">Ubicación Física</th>
-                    <th className="p-3">Estado</th>
-                    <th className="p-3 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {cajas.map((c) => (
-                    <tr key={c.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-mono font-bold text-white">{c.codigoCaja}</td>
-                      <td className="p-3 text-white font-medium">{c.nombre}</td>
-                      <td className="p-3 text-gray-400">{c.ubicacion}</td>
-                      <td className="p-3">
-                        <Badge variant={c.activa ? 'success' : 'neutral'}>
-                          {c.activa ? 'Activa' : 'Inactiva'}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-right">
-                        <Button
-                          variant={c.activa ? 'danger' : 'secondary'}
-                          size="sm"
-                          onClick={() => handleToggleCaja(c)}
-                        >
-                          {c.activa ? 'Desactivar' : 'Activar'}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable
+            data={cajas}
+            columns={[
+              {
+                key: 'codigoCaja',
+                label: 'Código de Caja',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+              },
+              { key: 'nombre', label: 'Nombre Descriptivo', sortable: true },
+              { key: 'ubicacion', label: 'Ubicación Física', render: (v) => <span className="text-gray-400">{v}</span> },
+              {
+                key: 'activa',
+                label: 'Estado',
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activa' : 'Inactiva'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'acciones',
+                label: 'Acciones',
+                align: 'right',
+                render: (_, c) => (
+                  <Button
+                    variant={c.activa ? 'danger' : 'secondary'}
+                    size="sm"
+                    onClick={() => handleToggleCaja(c)}
+                  >
+                    {c.activa ? 'Desactivar' : 'Activar'}
+                  </Button>
+                ),
+              },
+            ]}
+            loading={loadingCajas}
+            onCreate={() => setMostrarModalCaja(true)}
+            createLabel="+ Nueva Caja de Mostrador"
+            searchable={true}
+            searchPlaceholder="Buscar caja..."
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron cajas registradas."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
       {/* 4.2 FORMAS & MEDIOS DE PAGO */}
       {subCat === 'medios_pago' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-400">Instrumentos y categorías de pago autorizadas para recaudo en caja.</p>
-            <Button variant="primary" onClick={() => setMostrarModalInstrumento(true)}>
-              + Nuevo Instrumento de Pago
-            </Button>
-          </div>
-
           {mediosPagoCategorias.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {mediosPagoCategorias.map((cat) => (
-                <span key={cat.uuid} className="text-xs px-2.5 py-1 rounded bg-gray-800/80 text-gray-300 border border-white/10 flex items-center gap-1.5 font-medium">
+                <span
+                  key={cat.uuid}
+                  className="text-xs px-2.5 py-1 rounded bg-gray-800/80 text-gray-300 border border-white/10 flex items-center gap-1.5 font-medium"
+                >
                   📁 {cat.nombre}
                 </span>
               ))}
             </div>
           )}
 
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingMediosPago ? (
-              <div className="p-8 text-center text-gray-400">Cargando medios de pago...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Código</th>
-                    <th className="p-3">Nombre del Instrumento</th>
-                    <th className="p-3">Categoría</th>
-                    <th className="p-3">Exige Referencia</th>
-                    <th className="p-3">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {mediosPagoInstrumentos.map((m) => (
-                    <tr key={m.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-mono font-bold text-white">{m.codigo}</td>
-                      <td className="p-3 text-white font-medium">{m.nombre}</td>
-                      <td className="p-3 text-gray-400">{m.categoria || 'GENERAL'}</td>
-                      <td className="p-3">
-                        {m.requiereReferencia ? (
-                          <span className="text-amber-400 text-xs">Requiere Ref. Transacción</span>
-                        ) : (
-                          <span className="text-gray-500 text-xs">Directo</span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={m.activo ? 'success' : 'neutral'}>
-                          {m.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable
+            data={mediosPagoInstrumentos}
+            columns={[
+              {
+                key: 'codigo',
+                label: 'Código',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+              },
+              { key: 'nombre', label: 'Nombre del Instrumento', sortable: true },
+              { key: 'categoria', label: 'Categoría', render: (v) => <span className="text-gray-400">{v || 'GENERAL'}</span> },
+              {
+                key: 'requiereReferencia',
+                label: 'Exige Referencia',
+                render: (v) =>
+                  v ? (
+                    <span className="text-amber-400 text-xs">Requiere Ref. Transacción</span>
+                  ) : (
+                    <span className="text-gray-500 text-xs">Directo</span>
+                  ),
+              },
+              {
+                key: 'activo',
+                label: 'Estado',
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                ),
+              },
+            ]}
+            loading={loadingMediosPago}
+            onCreate={() => setMostrarModalInstrumento(true)}
+            createLabel="+ Nuevo Instrumento de Pago"
+            searchable={true}
+            searchPlaceholder="Buscar medio de pago..."
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron medios de pago registrados."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
@@ -1686,76 +1656,55 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
           ) : (
             <form onSubmit={handleGuardarBanco} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Entidad Bancaria</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Bancolombia"
-                    value={cuentaBancaria.banco}
-                    onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, banco: e.target.value })}
-                    className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Número de Cuenta</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: 123-456789-01"
-                    value={cuentaBancaria.numeroCuenta}
-                    onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, numeroCuenta: e.target.value })}
-                    className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Tipo de Cuenta</label>
-                  <select
-                    value={cuentaBancaria.tipoCuenta}
-                    onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, tipoCuenta: e.target.value })}
-                    className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-                  >
-                    <option value="Ahorros">Ahorros</option>
-                    <option value="Corriente">Corriente</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Titular de la Cuenta</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Afilamos Hermanos S.A.S."
-                    value={cuentaBancaria.titular}
-                    onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, titular: e.target.value })}
-                    className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">NIT / Cédula Titular</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: 900.123.456-7"
-                    value={cuentaBancaria.nitTitular}
-                    onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, nitTitular: e.target.value })}
-                    className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Billetera Digital / Celular</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Nequi / Daviplata 3001234567"
-                    value={cuentaBancaria.billeteraDigital || ''}
-                    onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, billeteraDigital: e.target.value })}
-                    className="w-full bg-gray-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-                  />
-                </div>
+                <Input
+                  label="Entidad Bancaria"
+                  required
+                  placeholder="Ej: Bancolombia"
+                  value={cuentaBancaria.banco}
+                  onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, banco: e.target.value })}
+                  fullWidth
+                />
+                <Input
+                  label="Número de Cuenta"
+                  required
+                  placeholder="Ej: 123-456789-01"
+                  value={cuentaBancaria.numeroCuenta}
+                  onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, numeroCuenta: e.target.value })}
+                  fullWidth
+                />
+                <Select
+                  label="Tipo de Cuenta"
+                  value={cuentaBancaria.tipoCuenta}
+                  onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, tipoCuenta: e.target.value })}
+                  options={[
+                    { label: 'Ahorros', value: 'Ahorros' },
+                    { label: 'Corriente', value: 'Corriente' },
+                  ]}
+                  fullWidth
+                />
+                <Input
+                  label="Titular de la Cuenta"
+                  required
+                  placeholder="Ej: Afilamos Hermanos S.A.S."
+                  value={cuentaBancaria.titular}
+                  onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, titular: e.target.value })}
+                  fullWidth
+                />
+                <Input
+                  label="NIT / Cédula Titular"
+                  required
+                  placeholder="Ej: 900.123.456-7"
+                  value={cuentaBancaria.nitTitular}
+                  onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, nitTitular: e.target.value })}
+                  fullWidth
+                />
+                <Input
+                  label="Billetera Digital / Celular"
+                  placeholder="Ej: Nequi / Daviplata 3001234567"
+                  value={cuentaBancaria.billeteraDigital || ''}
+                  onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, billeteraDigital: e.target.value })}
+                  fullWidth
+                />
               </div>
 
               <div className="pt-4 flex justify-end">
@@ -1771,66 +1720,94 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
 
       {/* 5.1 TIPOS & SUBTIPOS DE DOCUMENTO */}
       {subCat === 'tipos_subtipos' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-400">Documentos base de operación y sus subtipos (prefijos, folios actuales y formato de papel).</p>
-            <Button variant="primary" onClick={() => setMostrarModalSubtipo(true)}>
-              + Nuevo Subtipo de Documento
-            </Button>
-          </div>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-400">Documentos base de operación y sus subtipos (prefijos, folios actuales y formato de papel).</p>
 
-          <div className="space-y-6">
-            {loadingTiposDocBase ? (
-              <div className="p-8 text-center text-gray-400">Cargando tipos de documento...</div>
-            ) : (
-              tiposDocBase.map((tb) => (
-                <Card key={tb.uuid} className="p-5 bg-gray-900/40 border border-white/10 space-y-3">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-blue-400">{tb.codigoBase}</span>
-                      <span className="text-white font-semibold">· {tb.nombre}</span>
-                    </div>
-                    <Badge variant={tb.disparaWorkflow ? 'warning' : 'neutral'}>
-                      {tb.disparaWorkflow ? 'Dispara Workflow' : 'Comercial Directo'}
-                    </Badge>
+          <CRUDTable<SubtipoConTipoBase>
+            data={todosSubtipos}
+            columns={[
+              {
+                key: 'tipoBaseCodigo',
+                label: 'Tipo Base',
+                sortable: true,
+                render: (_, row) => (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold text-blue-400">{row.tipoBaseCodigo}</span>
+                    <span className="text-gray-400 text-xs">· {row.tipoBaseNombre}</span>
                   </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-gray-300">
-                      <thead className="bg-black/30 text-gray-400 uppercase">
-                        <tr>
-                          <th className="p-2">Código Subtipo</th>
-                          <th className="p-2">Nombre</th>
-                          <th className="p-2">Prefijo</th>
-                          <th className="p-2">Folio Actual</th>
-                          <th className="p-2">Formato Papel</th>
-                          <th className="p-2">Imprime al Asentar</th>
-                          <th className="p-2">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {tb.subtipos.map((st) => (
-                          <tr key={st.uuid}>
-                            <td className="p-2 font-mono font-bold text-white">{st.codigoSubtipo}</td>
-                            <td className="p-2">{st.nombre}</td>
-                            <td className="p-2 font-mono text-amber-300">{st.prefijo}</td>
-                            <td className="p-2 font-mono font-bold text-emerald-400">{st.folioActual}</td>
-                            <td className="p-2 text-gray-400">{st.formatoPapel}</td>
-                            <td className="p-2">{st.imprimeAlAsentar ? '✓ Sí' : 'No'}</td>
-                            <td className="p-2">
-                              <Badge variant={st.activo ? 'success' : 'neutral'}>
-                                {st.activo ? 'Activo' : 'Inactivo'}
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              ))
-            )}
-          </div>
+                ),
+              },
+              {
+                key: 'codigoSubtipo',
+                label: 'Cód. Subtipo',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{String(v)}</span>,
+              },
+              {
+                key: 'nombre',
+                label: 'Nombre',
+                sortable: true,
+                render: (v) => <span className="text-white font-medium">{String(v)}</span>,
+              },
+              {
+                key: 'prefijo',
+                label: 'Prefijo',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-amber-300">{String(v || '-')}</span>,
+              },
+              {
+                key: 'folioActual',
+                label: 'Folio Actual',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-emerald-400">{Number(v || 0)}</span>,
+              },
+              {
+                key: 'formatoPapel',
+                label: 'Formato',
+                sortable: true,
+                render: (v) => <span className="text-gray-300 text-xs">{String(v)}</span>,
+              },
+              {
+                key: 'imprimeAlAsentar',
+                label: 'Imprime al Asentar',
+                render: (v) => (
+                  <Badge variant={v ? 'info' : 'neutral'}>
+                    {v ? 'Sí' : 'No'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'activo',
+                label: 'Estado',
+                sortable: true,
+                render: (v) => (
+                  <Badge variant={v ? 'success' : 'neutral'}>
+                    {v ? 'Activo' : 'Inactivo'}
+                  </Badge>
+                ),
+              },
+            ]}
+            loading={loadingTiposDocBase}
+            onCreate={() => setMostrarModalSubtipo(true)}
+            createLabel="+ Nuevo Subtipo de Documento"
+            searchable={true}
+            searchPlaceholder="Buscar subtipo por nombre, código o prefijo..."
+            filters={[
+              {
+                key: 'tipoBaseCodigo',
+                label: 'Tipo Base',
+                type: 'select',
+                options: tiposDocBase.map((tb) => ({
+                  label: `${tb.codigoBase} - ${tb.nombre}`,
+                  value: tb.codigoBase,
+                })),
+              },
+            ]}
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron subtipos de documento registrados."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
@@ -1839,49 +1816,72 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
         <div className="space-y-4">
           <p className="text-sm text-gray-400">Parámetros técnicos y reglas de negocio del sistema.</p>
 
-          <Card className="overflow-hidden bg-gray-900/40 border border-white/10">
-            {loadingParametros ? (
-              <div className="p-8 text-center text-gray-400">Cargando parámetros...</div>
-            ) : (
-              <table className="w-full text-left text-sm text-gray-300">
-                <thead className="bg-black/40 text-xs uppercase tracking-wider text-gray-400 border-b border-white/10">
-                  <tr>
-                    <th className="p-3">Clave</th>
-                    <th className="p-3">Categoría</th>
-                    <th className="p-3">Descripción</th>
-                    <th className="p-3">Valor Actual</th>
-                    <th className="p-3 text-right">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {parametros.map((p) => (
-                    <tr key={p.uuid} className="hover:bg-white/[0.02]">
-                      <td className="p-3 font-mono font-bold text-blue-300">{p.clave}</td>
-                      <td className="p-3">
-                        <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 font-mono">
-                          {p.categoria}
-                        </span>
-                      </td>
-                      <td className="p-3 text-gray-300 text-xs max-w-xs">{p.descripcion}</td>
-                      <td className="p-3 font-mono text-emerald-400 text-xs">{p.valorJson}</td>
-                      <td className="p-3 text-right">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => {
-                            setParametroTarget(p);
-                            setNuevoValorParametro(p.valorJson);
-                          }}
-                        >
-                          Editar Valor
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          <CRUDTable<ParametroSistema>
+            data={parametros}
+            columns={[
+              {
+                key: 'clave',
+                label: 'Clave',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-blue-300">{String(v)}</span>,
+              },
+              {
+                key: 'categoria',
+                label: 'Categoría',
+                sortable: true,
+                render: (v) => (
+                  <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 font-mono">
+                    {String(v)}
+                  </span>
+                ),
+              },
+              {
+                key: 'descripcion',
+                label: 'Descripción',
+                render: (v) => <span className="text-gray-300 text-xs max-w-xs">{String(v)}</span>,
+              },
+              {
+                key: 'valorJson',
+                label: 'Valor Actual',
+                render: (v) => <span className="font-mono text-emerald-400 text-xs">{String(v)}</span>,
+              },
+              {
+                key: 'uuid',
+                label: 'Acción',
+                align: 'right',
+                render: (_, row) => (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setParametroTarget(row);
+                      setNuevoValorParametro(row.valorJson);
+                    }}
+                  >
+                    Editar Valor
+                  </Button>
+                ),
+              },
+            ]}
+            loading={loadingParametros}
+            searchable={true}
+            searchPlaceholder="Buscar parámetro por clave o descripción..."
+            filters={[
+              {
+                key: 'categoria',
+                label: 'Categoría',
+                type: 'select',
+                options: Array.from(new Set(parametros.map((p) => p.categoria))).map((cat) => ({
+                  label: cat,
+                  value: cat,
+                })),
+              },
+            ]}
+            pagination={true}
+            pageSize={10}
+            emptyMessage="No se encontraron parámetros registrados."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 

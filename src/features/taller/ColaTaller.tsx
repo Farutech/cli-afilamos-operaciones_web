@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
-import { Input } from '../../components/ui/Input';
+import { Card, Button, Badge, Input } from '@farutech/design-system';
 import { tallerApi } from '../../services/tallerApi';
 import type {
   ItemTaller,

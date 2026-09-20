@@ -1,8 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
-import { Input } from '../../components/ui/Input';
+import { Card, Button, Badge, Input } from '@farutech/design-system';
 import { ItemSelector } from '../catalogos/ItemSelector';
 import { RegistroRapidoClienteModal } from './RegistroRapidoClienteModal';
 import type { ItemCatalogo, Cliente, CanalOrigen, TipoDocumentoIdentidad } from '../../types/catalogos';

@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react'
-import { DesignSystemProvider } from '@farutech/design-system'
-import { LoginForm } from './features/auth/LoginForm'
-import { Badge } from './components/ui/Badge'
-import { Button } from './components/ui/Button'
+import { DesignSystemProvider, Badge, Button } from '@farutech/design-system'
 import { ColaTaller } from './features/taller/ColaTaller'
 import { SolicitudCapturaMixta } from './features/solicitudes/SolicitudCapturaMixta'
 import { ModuloEntregas } from './features/entregas/ModuloEntregas'
@@ -11,6 +8,7 @@ import { FichaCliente } from './features/clientes/FichaCliente'
 import { DashboardOperativo } from './features/dashboard/DashboardOperativo'
 import { ModuloReportes } from './features/reportes/ModuloReportes'
 import { ModuloAdmin } from './features/admin/ModuloAdmin'
+import { LoginForm } from './features/auth/LoginForm'
 import { useBarcodeScanner } from './hooks/useBarcodeScanner'
 import { catalogosApi } from './services/catalogosApi'
 import type { UsuarioSesion } from './types/auth'
@@ -83,7 +81,7 @@ export function App() {
     return (
       <DesignSystemProvider colorMode="dark">
         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
-          <LoginForm onLoginSuccess={(s) => setSesion(s)} />
+          <LoginForm onLoginSuccess={(s: UsuarioSesion) => setSesion(s)} />
         </div>
       </DesignSystemProvider>
     )

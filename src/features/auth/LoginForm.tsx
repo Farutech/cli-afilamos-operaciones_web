@@ -1,8 +1,5 @@
 import React, { useState } from 'react'
-import { Button } from '../../components/ui/Button'
-import { Card } from '../../components/ui/Card'
-import { Input } from '../../components/ui/Input'
-import { Badge } from '../../components/ui/Badge'
+import { Button, Card, Input, Badge } from '@farutech/design-system'
 import { api } from '../../services/api'
 import type { UsuarioSesion } from '../../types/auth'
 

@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { reportesApi } from '../../services/reportesApi';
 import type { ReporteConsolidadoDto, ReporteCierreZDto } from '../../types/reportes';
-import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
+import { Card, Badge, Button } from '@farutech/design-system';
 
 interface ModuloReportesProps {
   token?: string;

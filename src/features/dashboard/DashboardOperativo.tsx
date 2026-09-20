@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { dashboardApi } from '../../services/dashboardApi';
 import type { DashboardMetricasDto } from '../../types/dashboard';
-import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
+import { Card, Badge, Button } from '@farutech/design-system';
 
 interface DashboardOperativoProps {
   token?: string;
