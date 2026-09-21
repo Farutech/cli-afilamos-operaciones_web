@@ -12,6 +12,8 @@ import type {
   Cliente,
   ClienteHistorico,
   ParametroSistema,
+  CategoriaItem,
+  ListaPrecio,
 } from '../types/catalogos';
 
 export const catalogosApi = {
@@ -45,9 +47,13 @@ export const catalogosApi = {
   async actualizarItem(uuid: string, dto: {
     nombre: string;
     descripcion: string;
+    naturaleza?: string;
     uuidUnidadPresentacion: string;
     precioBase: number;
+    stockReferencial?: number;
     workflowDefinicionUuid?: string;
+    categoriaUuid?: string | null;
+    listaPrecioUuid?: string | null;
   }): Promise<ItemCatalogo> {
     return api.put<ItemCatalogo>(`/catalogos/items/${uuid}`, dto);
   },
@@ -99,6 +105,34 @@ export const catalogosApi = {
 
   async setSubtipoActivo(uuid: string, activo: boolean): Promise<void> {
     await api.patch<void>(`/catalogos/tipos-documento/subtipos/${uuid}/activo`, { activo });
+  },
+
+  async actualizarSubtipoDocs(
+    uuid: string,
+    dto: {
+      nombre: string;
+      descripcion: string;
+      formatoPlantilla: string;
+      formatoPapel: string;
+      imprimeAlAsentar: boolean;
+    }
+  ): Promise<void> {
+    await api.put<void>(`/catalogos/tipos-documento/subtipos/${uuid}`, dto);
+  },
+
+  async eliminarSubtipoFisico(uuid: string): Promise<void> {
+    await api.delete<void>(`/catalogos/tipos-documento/subtipos/${uuid}`);
+  },
+
+  async cambiarCodigoSubtipo(
+    uuid: string,
+    nuevoCodigo: string,
+    justificacion: string
+  ): Promise<{ uuid: string; codigoAnterior: string; codigoNuevo: string }> {
+    return api.post<{ uuid: string; codigoAnterior: string; codigoNuevo: string }>(
+      `/catalogos/tipos-documento/subtipos/${uuid}/cambiar-codigo`,
+      { nuevoCodigo, justificacion }
+    );
   },
 
   async getCajas(): Promise<{ cajas: Caja[] }> {
@@ -165,6 +199,42 @@ export const catalogosApi = {
 
   async actualizarParametro(clave: string, valorJson: string): Promise<ParametroSistema> {
     return api.put<ParametroSistema>(`/catalogos/parametros/${clave}`, { valorJson });
+  },
+
+  // --- Categorías de Ítems (Árbol Multinivel) ---
+  async getCategoriasItem(): Promise<{ categorias: CategoriaItem[] }> {
+    return api.get<{ categorias: CategoriaItem[] }>('/catalogos/categorias-items/arbol');
+  },
+
+  async crearCategoriaItem(dto: {
+    codigo: string;
+    nombre: string;
+    categoriaPadreUuid?: string | null;
+  }): Promise<CategoriaItem> {
+    return api.post<CategoriaItem>('/catalogos/categorias-items', dto);
+  },
+
+  // --- Listas de Precios ---
+  async getListasPrecio(): Promise<{ listas: ListaPrecio[] }> {
+    return api.get<{ listas: ListaPrecio[] }>('/catalogos/listas-precio');
+  },
+
+  async crearListaPrecio(dto: {
+    codigo: string;
+    nombre: string;
+    porcentajeAjuste: number;
+    esPredeterminada?: boolean;
+  }): Promise<ListaPrecio> {
+    return api.post<ListaPrecio>('/catalogos/listas-precio', dto);
+  },
+
+  async aplicarAumentoListaPrecio(
+    uuid: string,
+    porcentajeAumento: number
+  ): Promise<ListaPrecio> {
+    return api.post<ListaPrecio>(`/catalogos/listas-precio/${uuid}/aumento`, {
+      porcentajeAumento,
+    });
   },
 };
 

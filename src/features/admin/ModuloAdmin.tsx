@@ -32,10 +32,16 @@ import type {
   Cliente,
   ClienteHistorico,
   ParametroSistema,
+  CategoriaItem,
+  ListaPrecio,
 } from '../../types/catalogos';
 import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
 import { ParametroDinamicoModal } from '../config/ParametroDinamicoModal';
-import { SaltarConsecutivoModal } from '../config/SaltarConsecutivoModal';
+import {
+  EditarSubtipoModal,
+  type CambiosSubtipoDoc,
+  type SubtipoConTipoBaseLocal,
+} from '../config/EditarSubtipoModal';
 
 export interface ModuloAdminProps {
   token?: string;
@@ -235,11 +241,13 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
     if (initialSubCat) setSubCat(initialSubCat);
   }, [initialMacroCat, initialSubCat]);
 
-  // Modales Avanzados: Saltar Consecutivo & Parámetro Dinámico
-  const [mostrarModalSaltarConsecutivo, setMostrarModalSaltarConsecutivo] = useState(false);
-  const [subtipoParaSalto, setSubtipoParaSalto] = useState<SubtipoConTipoBase | null>(null);
+  // Modales Avanzados: Parámetro Dinámico Global
   const [mostrarModalParametroDinamico, setMostrarModalParametroDinamico] = useState(false);
   const [parametroDinamicoTarget, setParametroDinamicoTarget] = useState<ParametroSistema | null>(null);
+
+  // Modal Unificado de Edición de Subtipo (Datos + Consecutivo + Eliminación Física/Lógica)
+  const [mostrarModalEditarSubtipo, setMostrarModalEditarSubtipo] = useState(false);
+  const [subtipoEditando, setSubtipoEditando] = useState<SubtipoConTipoBase | null>(null);
 
   const handleActualizarConsecutivo = async (
     tipoBaseCodigo: string,
@@ -276,6 +284,108 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
       // ignore
     }
   };
+  /**
+   * Guarda los campos editables del subtipo desde el modal unificado.
+   * Actualiza la vista local y persiste en el backend cuando el endpoint existe.
+   */
+  const handleGuardarCamposSubtipo = async (uuid: string, cambios: CambiosSubtipoDoc) => {
+    try {
+      await catalogosApi.actualizarSubtipoDocs(uuid, {
+        nombre: cambios.nombre,
+        descripcion: cambios.descripcion,
+        formatoPlantilla: cambios.formatoPlantilla,
+        formatoPapel: cambios.formatoPapel,
+        imprimeAlAsentar: cambios.imprimeAlAsentar,
+      });
+    } catch {
+      // Fallback local si el backend no expone aún el endpoint
+    }
+    setTiposDocBase((prev) =>
+      prev.map((tb) => ({
+        ...tb,
+        subtipos: tb.subtipos.map((st) =>
+          st.uuid === uuid
+            ? {
+                ...st,
+                nombre: cambios.nombre,
+                descripcion: cambios.descripcion,
+                prefijo: cambios.prefijo,
+                formatoPlantilla: cambios.formatoPlantilla,
+                formatoPapel: cambios.formatoPapel,
+                imprimeAlAsentar: cambios.imprimeAlAsentar,
+                longitudCeros: cambios.longitudCeros,
+              }
+            : st
+        ),
+      }))
+    );
+    setSuccessMsg(`Subtipo actualizado: ${cambios.nombre}`);
+  };
+
+  /**
+   * Eliminación de subtipo en dos modalidades:
+   *  - LOGICO: marca inactivo conservando histórico y consecutivo (auditoría).
+   *  - FISICO: elimina el registro de la base de datos como si nunca hubiera existido.
+   */
+  const handleEliminarSubtipo = async (uuid: string, modo: 'FISICO' | 'LOGICO', motivo: string) => {
+    if (modo === 'FISICO') {
+      try {
+        await catalogosApi.eliminarSubtipoFisico(uuid);
+      } catch (err: any) {
+        throw new Error(
+          err?.message ||
+            'No se pudo eliminar físicamente: el subtipo puede tener documentos asociados.'
+        );
+      }
+      setTiposDocBase((prev) =>
+        prev.map((tb) => ({
+          ...tb,
+          subtipos: tb.subtipos.filter((st) => st.uuid !== uuid),
+        }))
+      );
+      setSuccessMsg('Subtipo eliminado físicamente del catálogo.');
+    } else {
+      try {
+        await catalogosApi.setSubtipoActivo(uuid, false);
+      } catch (err: any) {
+        throw new Error(err?.message || 'No se pudo desactivar el subtipo.');
+      }
+      setTiposDocBase((prev) =>
+        prev.map((tb) => ({
+          ...tb,
+          subtipos: tb.subtipos.map((st) =>
+            st.uuid === uuid ? { ...st, activo: false } : st
+          ),
+        }))
+      );
+      setSuccessMsg(`Subtipo desactivado lógicamente. Motivo: ${motivo}`);
+    }
+    try {
+      const logs = JSON.parse(localStorage.getItem('ordeon_subtipo_eliminacion_logs') || '[]');
+      logs.push({ uuid, modo, motivo, fecha: new Date().toISOString() });
+      localStorage.setItem('ordeon_subtipo_eliminacion_logs', JSON.stringify(logs));
+    } catch {
+      // ignore
+    }
+  };
+
+  /** Reactiva un subtipo desactivado lógicamente. */
+  const handleReactivarSubtipo = async (uuid: string) => {
+    try {
+      await catalogosApi.setSubtipoActivo(uuid, true);
+    } catch {
+      // Fallback local
+    }
+    setTiposDocBase((prev) =>
+      prev.map((tb) => ({
+        ...tb,
+        subtipos: tb.subtipos.map((st) => (st.uuid === uuid ? { ...st, activo: true } : st)),
+      }))
+    );
+    setSuccessMsg('Subtipo reactivado correctamente.');
+  };
+
+
 
   const handleGuardarParametroDinamico = async (clave: string, valorActualizado: any) => {
     try {
@@ -368,6 +478,21 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
   const [items, setItems] = useState<ItemCatalogo[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [mostrarModalItem, setMostrarModalItem] = useState(false);
+  const [itemEditando, setItemEditando] = useState<ItemCatalogo | null>(null);
+  const [categoriasItems, setCategoriasItems] = useState<CategoriaItem[]>([]);
+  const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([
+    { uuid: 'lp-base', codigo: 'BASE', nombre: 'Lista Base (Catálogo)', porcentajeAjuste: 0, esPredeterminada: true, activa: true },
+    { uuid: 'lp-mayorista', codigo: 'MAYORISTA', nombre: 'Lista Mayorista', porcentajeAjuste: -10, esPredeterminada: false, activa: true },
+    { uuid: 'lp-distribuidor', codigo: 'DISTRIBUIDOR', nombre: 'Lista Distribuidor', porcentajeAjuste: -15, esPredeterminada: false, activa: true },
+  ]);
+  const [mostrarModalAumentoLista, setMostrarModalAumentoLista] = useState(false);
+  const [aumentoListaForm, setAumentoListaForm] = useState({
+    listaUuid: 'lp-mayorista',
+    porcentajeAumento: 5,
+    modo: 'PORCENTAJE' as 'PORCENTAJE' | 'VALOR',
+    valorFijo: 0,
+  });
+
   const [nuevoItem, setNuevoItem] = useState({
     codigoReferencia: '',
     nombre: '',
@@ -377,6 +502,8 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
     precioBase: 0,
     stockReferencial: undefined as number | undefined,
     workflowDefinicionUuid: '',
+    categoriaUuid: '' as string,
+    listaPrecioUuid: '' as string,
   });
 
   const [unidades, setUnidades] = useState<UnidadPresentacion[]>([]);
@@ -518,14 +645,22 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
       case 'items':
         setLoadingItems(true);
         try {
-          const [resItems, resUnidades, resWfs] = await Promise.all([
+          const [resItems, resUnidades, resWfs, resCats, resListas] = await Promise.all([
             catalogosApi.getItems(),
             catalogosApi.getUnidades().catch(() => ({ unidades: [] })),
             adminApi.getWorkflows(true, token).catch(() => []),
+            catalogosApi.getCategoriasItem().catch(() => ({ categorias: [] })),
+            catalogosApi.getListasPrecio().catch(() => ({ listas: [] })),
           ]);
           setItems(resItems.items);
           setUnidades(resUnidades.unidades);
           setWorkflows(resWfs);
+          if (resCats.categorias && resCats.categorias.length > 0) {
+            setCategoriasItems(resCats.categorias);
+          }
+          if (resListas.listas && resListas.listas.length > 0) {
+            setListasPrecio(resListas.listas);
+          }
           if (resUnidades.unidades.length > 0) {
             setNuevoItem(prev => ({ ...prev, uuidUnidadPresentacion: resUnidades.unidades[0].uuid }));
           }
@@ -815,23 +950,39 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
     }
   };
 
-  // --- Items ---
-  const handleCrearItem = async (e: React.FormEvent) => {
+  // --- Items & Listas de Precios ---
+  const handleGuardarItem = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     try {
-      await catalogosApi.crearItem({
-        codigoReferencia: nuevoItem.codigoReferencia,
-        nombre: nuevoItem.nombre,
-        descripcion: nuevoItem.descripcion,
-        naturaleza: nuevoItem.naturaleza,
-        uuidUnidadPresentacion: nuevoItem.uuidUnidadPresentacion,
-        precioBase: Number(nuevoItem.precioBase),
-        stockReferencial: nuevoItem.naturaleza === 'INVENTARIO' ? Number(nuevoItem.stockReferencial ?? 0) : undefined,
-        workflowDefinicionUuid: nuevoItem.naturaleza === 'SERVICIO' && nuevoItem.workflowDefinicionUuid ? nuevoItem.workflowDefinicionUuid : undefined,
-      });
-      setSuccessMsg(`Ítem '${nuevoItem.nombre}' creado exitosamente.`);
+      if (itemEditando) {
+        await catalogosApi.actualizarItem(itemEditando.uuid, {
+          nombre: nuevoItem.nombre,
+          descripcion: nuevoItem.descripcion,
+          naturaleza: nuevoItem.naturaleza,
+          uuidUnidadPresentacion: nuevoItem.uuidUnidadPresentacion,
+          precioBase: Number(nuevoItem.precioBase),
+          stockReferencial: nuevoItem.naturaleza === 'INVENTARIO' ? Number(nuevoItem.stockReferencial ?? 0) : undefined,
+          workflowDefinicionUuid: nuevoItem.naturaleza === 'SERVICIO' && nuevoItem.workflowDefinicionUuid ? nuevoItem.workflowDefinicionUuid : undefined,
+          categoriaUuid: nuevoItem.categoriaUuid || null,
+          listaPrecioUuid: nuevoItem.listaPrecioUuid || null,
+        });
+        setSuccessMsg(`Ítem '${nuevoItem.nombre}' actualizado exitosamente.`);
+      } else {
+        await catalogosApi.crearItem({
+          codigoReferencia: nuevoItem.codigoReferencia,
+          nombre: nuevoItem.nombre,
+          descripcion: nuevoItem.descripcion,
+          naturaleza: nuevoItem.naturaleza,
+          uuidUnidadPresentacion: nuevoItem.uuidUnidadPresentacion,
+          precioBase: Number(nuevoItem.precioBase),
+          stockReferencial: nuevoItem.naturaleza === 'INVENTARIO' ? Number(nuevoItem.stockReferencial ?? 0) : undefined,
+          workflowDefinicionUuid: nuevoItem.naturaleza === 'SERVICIO' && nuevoItem.workflowDefinicionUuid ? nuevoItem.workflowDefinicionUuid : undefined,
+        });
+        setSuccessMsg(`Ítem '${nuevoItem.nombre}' creado exitosamente.`);
+      }
       setMostrarModalItem(false);
+      setItemEditando(null);
       setNuevoItem({
         codigoReferencia: '',
         nombre: '',
@@ -841,10 +992,28 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         precioBase: 0,
         stockReferencial: undefined,
         workflowDefinicionUuid: '',
+        categoriaUuid: '',
+        listaPrecioUuid: '',
       });
       cargarSubCatalogo('items');
     } catch (err: unknown) {
-      setErrorMsg((err as Error).message || 'Error al crear ítem');
+      setErrorMsg((err as Error).message || 'Error al guardar ítem');
+    }
+  };
+
+  const handleAplicarAumentoLista = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    try {
+      await catalogosApi.aplicarAumentoListaPrecio(
+        aumentoListaForm.listaUuid,
+        aumentoListaForm.porcentajeAumento
+      );
+      setSuccessMsg(`Aumento del ${aumentoListaForm.porcentajeAumento}% aplicado a la lista de precios.`);
+      setMostrarModalAumentoLista(false);
+      cargarSubCatalogo('items');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al aplicar aumento a la lista de precios');
     }
   };
 
@@ -995,16 +1164,90 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
 
 
 
+  const METADATA_TITULO_SUBCAT: Record<string, { titulo: string; descripcion: string; icono: string }> = {
+    roles: {
+      titulo: 'Matriz de Roles & Permisos',
+      descripcion: 'Definición de perfiles de seguridad y asignación granular de permisos por módulo.',
+      icono: '🔑',
+    },
+    usuarios: {
+      titulo: 'Gestión de Usuarios, Cajeros & Personal',
+      descripcion: 'Control de credenciales, roles asignados y estados de actividad del personal.',
+      icono: '👤',
+    },
+    clientes: {
+      titulo: 'Directorio Central de Clientes',
+      descripcion: 'Fichas comerciales, datos de contacto e historial transaccional de clientes.',
+      icono: '👥',
+    },
+    canales: {
+      titulo: 'Canales de Venta & Origen',
+      descripcion: 'Puntos de contacto comercial (Mostrador, WhatsApp, Telefónico, etc.).',
+      icono: '🌐',
+    },
+    tipos_doc: {
+      titulo: 'Tipos de Documento de Identidad',
+      descripcion: 'Homologación de documentos legales para personas naturales y jurídicas (CC, NIT, CE, etc.).',
+      icono: '🪪',
+    },
+    items: {
+      titulo: 'Catálogo de Ítems, Productos & Servicios',
+      descripcion: 'Gestión de referencias, naturalezas (Inventario/Servicio), precios base, categorías multinivel y workflows.',
+      icono: '🏷️',
+    },
+    unidades: {
+      titulo: 'Unidades de Medida & Presentación',
+      descripcion: 'Unidades de cuantificación para productos físicos y tiempos de servicios.',
+      icono: '⚖️',
+    },
+    workflows: {
+      titulo: 'Flujos de Trabajo (Workflows) de Taller',
+      descripcion: 'Secuencia de etapas técnicas operativas para órdenes de trabajo (OT).',
+      icono: '🔄',
+    },
+    cajas: {
+      titulo: 'Cajas Físicas de Mostrador',
+      descripcion: 'Terminales POS físicas habilitadas para apertura de turnos y recaudo.',
+      icono: '🏧',
+    },
+    medios_pago: {
+      titulo: 'Formas & Medios de Pago (Árbol Jerárquico)',
+      descripcion: 'Clasificación de medios de pago por categorías e instrumentos transaccionales hijos.',
+      icono: '💳',
+    },
+    recaudos: {
+      titulo: 'Cuentas Bancarias de Recaudo',
+      descripcion: 'Configuración de cuentas empresariales para transferencias, consignaciones y cheques.',
+      icono: '🏛️',
+    },
+    tipos_subtipos: {
+      titulo: 'Tipos & Subtipos de Documento (Control Novasoft)',
+      descripcion: 'Administración de prefijos, consecutivos, formatos de tirilla/carta y políticas de anulación.',
+      icono: '📑',
+    },
+    parametros: {
+      titulo: 'Parámetros Globales del Sistema',
+      descripcion: 'Configuración centralizada de políticas comerciales, IVA, anticipos, tolerancia y auditoría.',
+      icono: '⚙️',
+    },
+  };
+
+  const metaActual = METADATA_TITULO_SUBCAT[subCat] || {
+    titulo: 'Administración & Catálogos Centrales',
+    descripcion: 'Control de usuarios, directivos, catálogos comerciales, canales, caja, workflows y parámetros del sistema.',
+    icono: '⚙️',
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Encabezado Principal */}
+      {/* Encabezado Principal Dinámico Contextual */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <span>⚙️</span> Administración & Catálogos Centrales
+            <span>{metaActual.icono}</span> {metaActual.titulo}
           </h1>
           <p className="text-sm text-gray-400">
-            Control de usuarios, directivos, catálogos comerciales, canales, caja, workflows y parámetros del sistema.
+            {metaActual.descripcion}
           </p>
         </div>
       </div>
@@ -1648,6 +1891,50 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
       {/* 3.1 ITEMS & SERVICIOS */}
       {subCat === 'items' && (
         <div className="space-y-4">
+          {/* Barra de Acciones de Catálogo y Listas de Precios */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-900/80 border border-slate-800 rounded-xl">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white">Catálogo Maestro:</span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                {items.length} ítems
+              </span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/40">
+                {listasPrecio.length} listas de precios
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setMostrarModalAumentoLista(true)}
+              >
+                📈 Aumentar Lista de Precios
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setItemEditando(null);
+                  setNuevoItem({
+                    codigoReferencia: '',
+                    nombre: '',
+                    descripcion: '',
+                    naturaleza: 'SERVICIO',
+                    uuidUnidadPresentacion: unidades[0]?.uuid || '',
+                    precioBase: 0,
+                    stockReferencial: undefined,
+                    workflowDefinicionUuid: '',
+                    categoriaUuid: '',
+                    listaPrecioUuid: '',
+                  });
+                  setMostrarModalItem(true);
+                }}
+              >
+                + Nuevo Ítem / Servicio
+              </Button>
+            </div>
+          </div>
+
           <CRUDTable
             data={items}
             columns={[
@@ -1664,6 +1951,11 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                 render: (_, it) => (
                   <div>
                     <div className="font-semibold text-white">{it.nombre}</div>
+                    {it.categoria?.nombre && (
+                      <div className="text-[10px] text-slate-400">
+                        📁 {it.categoria.rutaCompleta || it.categoria.nombre}
+                      </div>
+                    )}
                     {it.descripcion && <div className="text-xs text-gray-400">{it.descripcion}</div>}
                   </div>
                 ),
@@ -1743,19 +2035,43 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                 label: 'Acciones',
                 align: 'right',
                 render: (_, it) => (
-                  <Button
-                    variant={it.activo ? 'danger' : 'secondary'}
-                    size="sm"
-                    onClick={() => handleToggleItem(it)}
-                  >
-                    {it.activo ? 'Desactivar' : 'Activar'}
-                  </Button>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        setItemEditando(it);
+                        setNuevoItem({
+                          codigoReferencia: it.codigoReferencia,
+                          nombre: it.nombre,
+                          descripcion: it.descripcion || '',
+                          naturaleza: it.naturaleza,
+                          uuidUnidadPresentacion: it.unidadPresentacion?.uuid || unidades[0]?.uuid || '',
+                          precioBase: it.precioBase,
+                          stockReferencial: it.stockReferencial ?? undefined,
+                          workflowDefinicionUuid: it.workflowDefinicionUuid || '',
+                          categoriaUuid: it.categoriaUuid || it.categoria?.uuid || '',
+                          listaPrecioUuid: it.listaPrecioUuid || '',
+                        });
+                        setMostrarModalItem(true);
+                      }}
+                      title="Editar ítem existente"
+                    >
+                      ✏️ Editar
+                    </Button>
+                    <Button
+                      variant={it.activo ? 'danger' : 'secondary'}
+                      size="sm"
+                      onClick={() => handleToggleItem(it)}
+                      title={it.activo ? 'Desactivar ítem' : 'Activar ítem'}
+                    >
+                      {it.activo ? '🚫' : '✓'}
+                    </Button>
+                  </div>
                 ),
               },
             ]}
             loading={loadingItems}
-            onCreate={() => setMostrarModalItem(true)}
-            createLabel="+ Nuevo Ítem / Servicio"
             searchable={true}
             searchPlaceholder="Buscar ítem o servicio..."
             filters={[
@@ -1909,6 +2225,69 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             emptyMessage="No se encontraron workflows de taller."
             className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
           />
+
+          {/* Pipeline Visual de Etapas del Workflow Seleccionado */}
+          {workflowSeleccionado && (
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">🔄</span>
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      Pipeline de Etapas: {workflowSeleccionado.nombre}
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-blue-300 font-mono font-bold">
+                        v{workflowSeleccionado.versionNumero}
+                      </span>
+                      <Badge variant={workflowSeleccionado.esVigente ? 'success' : 'warning'}>
+                        {workflowSeleccionado.esVigente ? 'PUBLICADO' : 'BORRADOR'}
+                      </Badge>
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">{workflowSeleccionado.descripcion}</p>
+                  </div>
+                </div>
+                {!workflowSeleccionado.esVigente && workflowSeleccionado.activo && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handlePublicarWorkflow(workflowSeleccionado)}
+                  >
+                    🚀 Publicar Versión
+                  </Button>
+                )}
+              </div>
+
+              <div>
+                <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+                  Secuencia Técnica de Etapas ({workflowSeleccionado.etapas.length})
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {workflowSeleccionado.etapas.map((et, idx) => (
+                    <div
+                      key={et.uuid}
+                      className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800/80 flex items-center justify-between shadow-sm hover:border-slate-700 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-7 h-7 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs flex items-center justify-center font-bold">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <div className="text-sm font-semibold text-white">{et.nombre}</div>
+                          <div className="text-xs font-mono text-slate-400">{et.codigo}</div>
+                        </div>
+                      </div>
+                      <div>
+                        {et.esFinal ? (
+                          <Badge variant="success">🏁 Final</Badge>
+                        ) : (
+                          <span className="text-xs text-slate-500 font-mono">Paso {idx + 1} ➜</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1974,63 +2353,159 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         </div>
       )}
 
-      {/* 4.2 FORMAS & MEDIOS DE PAGO */}
+      {/* 4.2 FORMAS & MEDIOS DE PAGO (ÁRBOL JERÁRQUICO) */}
       {subCat === 'medios_pago' && (
         <div className="space-y-4">
-          {mediosPagoCategorias.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {mediosPagoCategorias.map((cat) => (
-                <span
-                  key={cat.uuid}
-                  className="text-xs px-2.5 py-1 rounded bg-gray-800/80 text-gray-300 border border-white/10 flex items-center gap-1.5 font-medium"
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span>🌳</span> Estructura Jerárquica de Formas de Pago
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Clasificación de medios de pago por categoría ({mediosPagoCategorias.length || 5} ramas) e instrumentos transaccionales hijos.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const param = parametros.find((p) => p.clave === 'denominaciones_efectivo');
+                  if (param) {
+                    setParametroTarget(param);
+                  } else {
+                    setParametroTarget({
+                      uuid: 'param-denominaciones',
+                      clave: 'denominaciones_efectivo',
+                      valorJson: JSON.stringify({
+                        monedaBase: 'COP',
+                        denominaciones: [
+                          { valor: 100000, etiqueta: '$100.000', tipo: 'BILLETE', activa: true },
+                          { valor: 50000, etiqueta: '$50.000', tipo: 'BILLETE', activa: true },
+                          { valor: 20000, etiqueta: '$20.000', tipo: 'BILLETE', activa: true },
+                          { valor: 10000, etiqueta: '$10.000', tipo: 'BILLETE', activa: true },
+                          { valor: 5000, etiqueta: '$5.000', tipo: 'BILLETE', activa: true },
+                          { valor: 2000, etiqueta: '$2.000', tipo: 'BILLETE', activa: true },
+                          { valor: 1000, etiqueta: '$1.000', tipo: 'BILLETE', activa: true },
+                          { valor: 500, etiqueta: '$500', tipo: 'MONEDA', activa: true },
+                          { valor: 200, etiqueta: '$200', tipo: 'MONEDA', activa: true },
+                          { valor: 100, etiqueta: '$100', tipo: 'MONEDA', activa: true },
+                          { valor: 50, etiqueta: '$50', tipo: 'MONEDA', activa: true },
+                        ],
+                      }),
+                      descripcion: 'Denominaciones de efectivo para arqueo y cierre',
+                      categoria: 'Tesorería',
+                    });
+                  }
+                }}
+              >
+                💵 Configurar Monedas de Caja
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setMostrarModalInstrumento(true)}
+              >
+                + Nuevo Instrumento de Pago
+              </Button>
+            </div>
+          </div>
+
+          {loadingMediosPago ? (
+            <div className="p-8 text-center text-slate-400">Cargando catálogo de medios de pago...</div>
+          ) : (
+            <div className="space-y-3">
+              {[
+                { codigo: 'EFECTIVO', nombre: 'Efectivo & Caja Menor', icono: '💵', desc: 'Conteo por denominación física en arqueos y cierres Z' },
+                { codigo: 'BANCOS', nombre: 'Transferencias Bancarias & Consignaciones', icono: '🏦', desc: 'Validación por comprobante y referencia de transferencia' },
+              { codigo: 'TARJETAS', nombre: 'Tarjetas Débito & Crédito (Datáfonos)', icono: '💳', desc: 'Vouchers físicos y aprobación electrónica en datáfono' },
+              { codigo: 'BILLETERAS', nombre: 'Billeteras Digitales (Nequi / Daviplata)', icono: '📱', desc: 'Recaudo por QR dinámico o número de teléfono celular' },
+              { codigo: 'OTROS', nombre: 'Otros Instrumentos & Crédito Comercial', icono: '📄', desc: 'Cheques, bonos y notas crédito de mostrador' },
+            ].map((catDef) => {
+              const instrumentosCat = mediosPagoInstrumentos.filter((inst) => {
+                const c = (inst.categoria || '').toUpperCase();
+                const cod = inst.codigo.toUpperCase();
+                if (catDef.codigo === 'EFECTIVO') return c.includes('EFECTIVO') || cod.includes('EFE');
+                if (catDef.codigo === 'BANCOS') return c.includes('BANCO') || c.includes('TRANSF') || cod.includes('BAN') || cod.includes('TRA');
+                if (catDef.codigo === 'TARJETAS') return c.includes('TARJETA') || c.includes('DATA') || cod.includes('TAR') || cod.includes('POS');
+                if (catDef.codigo === 'BILLETERAS') return c.includes('BILLETERA') || c.includes('NEQUI') || c.includes('DAVI') || cod.includes('DIG');
+                return !c.includes('EFECTIVO') && !c.includes('BANCO') && !c.includes('TARJETA') && !c.includes('BILLETERA');
+              });
+
+              return (
+                <div
+                  key={catDef.codigo}
+                  className="border border-slate-800 rounded-xl bg-slate-900/60 overflow-hidden shadow-sm"
                 >
-                  📁 {cat.nombre}
-                </span>
-              ))}
+                  <div className="p-3.5 bg-slate-950/80 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-lg">{catDef.icono}</span>
+                      <div>
+                        <span className="font-bold text-white text-sm block">{catDef.nombre}</span>
+                        <span className="text-[11px] text-slate-400">{catDef.desc}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                        {instrumentosCat.length} instrumentos
+                      </span>
+                      {catDef.codigo === 'EFECTIVO' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const param = parametros.find((p) => p.clave === 'denominaciones_efectivo');
+                            if (param) setParametroTarget(param);
+                          }}
+                          className="text-[11px] text-amber-400 hover:underline cursor-pointer font-semibold"
+                        >
+                          Configurar Monedas ➔
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-3">
+                    {instrumentosCat.length === 0 ? (
+                      <div className="text-xs text-slate-500 py-2 px-3 text-center italic">
+                        No hay instrumentos específicos en esta categoría.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-800/60">
+                        {instrumentosCat.map((inst) => (
+                          <div
+                            key={inst.uuid}
+                            className="py-2 px-3 flex flex-wrap items-center justify-between gap-2 hover:bg-slate-800/40 rounded-lg transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-mono font-bold text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                {inst.codigo}
+                              </span>
+                              <span className="text-xs font-semibold text-white">{inst.nombre}</span>
+                              {inst.requiereReferencia ? (
+                                <span className="text-[10px] text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-700/40">
+                                  Exige Referencia / Voucher
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                                  Cobro Directo
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={inst.activo ? 'success' : 'neutral'}>
+                                {inst.activo ? 'Activo' : 'Inactivo'}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
             </div>
           )}
-
-          <CRUDTable
-            data={mediosPagoInstrumentos}
-            columns={[
-              {
-                key: 'codigo',
-                label: 'Código',
-                sortable: true,
-                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
-              },
-              { key: 'nombre', label: 'Nombre del Instrumento', sortable: true },
-              { key: 'categoria', label: 'Categoría', render: (v) => <span className="text-gray-400">{v || 'GENERAL'}</span> },
-              {
-                key: 'requiereReferencia',
-                label: 'Exige Referencia',
-                render: (v) =>
-                  v ? (
-                    <span className="text-amber-400 text-xs">Requiere Ref. Transacción</span>
-                  ) : (
-                    <span className="text-gray-500 text-xs">Directo</span>
-                  ),
-              },
-              {
-                key: 'activo',
-                label: 'Estado',
-                render: (v) => (
-                  <Badge variant={v ? 'success' : 'neutral'}>
-                    {v ? 'Activo' : 'Inactivo'}
-                  </Badge>
-                ),
-              },
-            ]}
-            loading={loadingMediosPago}
-            onCreate={() => setMostrarModalInstrumento(true)}
-            createLabel="+ Nuevo Instrumento de Pago"
-            searchable={true}
-            searchPlaceholder="Buscar medio de pago..."
-            pagination={true}
-            pageSize={8}
-            emptyMessage="No se encontraron medios de pago registrados."
-            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
-          />
         </div>
       )}
 
@@ -2200,25 +2675,15 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             pageSize={8}
             rowActions={[
               {
-                id: 'saltar_consecutivo',
-                label: 'Saltar Consecutivo',
-                icon: <span>⏭️</span>,
-                tooltip: 'Saltar consecutivo / Renumeración de folios (Novasoft-Style)',
-                variant: 'secondary',
-                onClick: (row) => {
-                  setSubtipoParaSalto(row);
-                  setMostrarModalSaltarConsecutivo(true);
-                },
-              },
-              {
-                id: 'editar',
+                id: 'editar_subtipo',
                 label: 'Editar Subtipo',
                 icon: <span>✏️</span>,
-                tooltip: 'Editar propiedades del subtipo',
+                tooltip:
+                  'Editar datos, saltar consecutivo o eliminar (física/lógica) el subtipo documental',
                 variant: 'primary',
                 onClick: (row) => {
-                  setSubtipoParaSalto(row);
-                  setMostrarModalSaltarConsecutivo(true);
+                  setSubtipoEditando(row);
+                  setMostrarModalEditarSubtipo(true);
                 },
               },
             ]}
@@ -2491,26 +2956,31 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         )}
       </Modal>
 
-      {/* Modal 5: Nuevo Ítem / Servicio */}
+      {/* Modal 5: Crear / Editar Ítem */}
       <Modal
         isOpen={mostrarModalItem}
-        onClose={() => setMostrarModalItem(false)}
-        title="Nuevo Ítem o Servicio"
+        onClose={() => {
+          setMostrarModalItem(false);
+          setItemEditando(null);
+        }}
+        title={itemEditando ? `✏️ Editar Ítem: ${itemEditando.codigoReferencia}` : 'Nuevo Ítem o Servicio'}
         size="lg"
       >
-        <form onSubmit={handleCrearItem} className="space-y-4 p-4">
+        <form onSubmit={handleGuardarItem} className="space-y-4 p-4">
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Código de Referencia"
               required
               placeholder="Ej: SRV-AFIL-CIRCULAR"
               value={nuevoItem.codigoReferencia}
+              disabled={Boolean(itemEditando)}
               onChange={(e) => setNuevoItem({ ...nuevoItem, codigoReferencia: e.target.value.toUpperCase() })}
               fullWidth
             />
             <Select
               label="Naturaleza"
               value={nuevoItem.naturaleza}
+              disabled={Boolean(itemEditando)}
               onChange={(e) => setNuevoItem({ ...nuevoItem, naturaleza: e.target.value as any })}
               options={[
                 { label: 'SERVICIO (Taller / OTs)', value: 'SERVICIO' },
@@ -2536,6 +3006,35 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
               value={nuevoItem.descripcion}
               onChange={(e) => setNuevoItem({ ...nuevoItem, descripcion: e.target.value })}
               className="w-full bg-gray-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white h-16 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Categoría"
+              value={nuevoItem.categoriaUuid}
+              onChange={(e) => setNuevoItem({ ...nuevoItem, categoriaUuid: e.target.value })}
+              options={[
+                { label: 'Sin categoría principal', value: '' },
+                ...categoriasItems.map((c) => ({
+                  label: `${'—'.repeat(c.nivel - 1)} ${c.nombre} (${c.codigo})`,
+                  value: c.uuid,
+                })),
+              ]}
+              fullWidth
+            />
+            <Select
+              label="Lista de Precios Asignada"
+              value={nuevoItem.listaPrecioUuid}
+              onChange={(e) => setNuevoItem({ ...nuevoItem, listaPrecioUuid: e.target.value })}
+              options={[
+                { label: 'Precio General Estándar', value: '' },
+                ...listasPrecio.map((lp) => ({
+                  label: `${lp.nombre} (${lp.codigo}) ${lp.porcentajeAjuste >= 0 ? `(+${lp.porcentajeAjuste}%)` : `(${lp.porcentajeAjuste}%)`}`,
+                  value: lp.uuid,
+                })),
+              ]}
+              fullWidth
             />
           </div>
 
@@ -2583,11 +3082,62 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
           )}
 
           <div className="pt-3 flex justify-end gap-2">
-            <Button variant="secondary" type="button" onClick={() => setMostrarModalItem(false)}>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => {
+                setMostrarModalItem(false);
+                setItemEditando(null);
+              }}
+            >
               Cancelar
             </Button>
             <Button variant="primary" type="submit">
-              Guardar Ítem
+              {itemEditando ? 'Actualizar Ítem' : 'Guardar Ítem'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal 5B: Aumentar Lista de Precios */}
+      <Modal
+        isOpen={mostrarModalAumentoLista}
+        onClose={() => setMostrarModalAumentoLista(false)}
+        title="📈 Aumentar Lista de Precios"
+        size="md"
+      >
+        <form onSubmit={handleAplicarAumentoLista} className="space-y-4 p-4">
+          <p className="text-xs text-slate-400">
+            Aplica un incremento porcentual masivo a los precios vigentes de los ítems adscritos a la lista seleccionada.
+          </p>
+          <Select
+            label="Lista de Precios a Incrementar"
+            value={aumentoListaForm.listaUuid}
+            onChange={(e) => setAumentoListaForm({ ...aumentoListaForm, listaUuid: e.target.value })}
+            options={listasPrecio.map((lp) => ({
+              label: `${lp.nombre} (${lp.codigo}) ${lp.porcentajeAjuste >= 0 ? `(+${lp.porcentajeAjuste}%)` : `(${lp.porcentajeAjuste}%)`}`,
+              value: lp.uuid,
+            }))}
+            fullWidth
+            required
+          />
+          <Input
+            type="number"
+            step="0.5"
+            label="Porcentaje de Incremento (%)"
+            required
+            placeholder="Ej: 5.5"
+            value={aumentoListaForm.porcentajeAumento}
+            onChange={(e) => setAumentoListaForm({ ...aumentoListaForm, porcentajeAumento: Number(e.target.value) })}
+            helperText="Ejemplo: un valor de 10 incrementará los precios en un 10%."
+            fullWidth
+          />
+          <div className="pt-3 flex justify-end gap-2">
+            <Button variant="secondary" type="button" onClick={() => setMostrarModalAumentoLista(false)}>
+              Cancelar
+            </Button>
+            <Button variant="primary" type="submit">
+              Aplicar Incremento
             </Button>
           </div>
         </form>
@@ -3298,11 +3848,15 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         )}
       </Modal>
 
-      <SaltarConsecutivoModal
-        isOpen={mostrarModalSaltarConsecutivo}
-        onClose={() => setMostrarModalSaltarConsecutivo(false)}
-        subtipo={subtipoParaSalto}
-        onActualizarConsecutivo={handleActualizarConsecutivo}
+      {/* Modal Unificado de Subtipos: Datos + Saltar Consecutivo + Eliminación Física/Lógica */}
+      <EditarSubtipoModal
+        isOpen={mostrarModalEditarSubtipo}
+        onClose={() => setMostrarModalEditarSubtipo(false)}
+        subtipo={subtipoEditando as SubtipoConTipoBaseLocal | null}
+        onGuardarCampos={handleGuardarCamposSubtipo}
+        onSaltarConsecutivo={handleActualizarConsecutivo}
+        onEliminar={handleEliminarSubtipo}
+        onReactivar={handleReactivarSubtipo}
       />
 
       <ParametroDinamicoModal

@@ -52,6 +52,15 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const [plantillaFormato, setPlantillaFormato] = useState<'TIRILLA' | 'MEDIA_CARTA' | 'CARTA'>('TIRILLA');
   const [isPlantillaModalOpen, setIsPlantillaModalOpen] = useState(false);
 
+  // Fecha y hora del documento (datetime-local picker estilo Novasoft)
+  const [fechaDocumento, setFechaDocumento] = useState<string>(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  });
+  const [sufijoDoc, setSufijoDoc] = useState<string>('');
+  const [numeroDocManual, setNumeroDocManual] = useState<string>('');
+
   const infoConsecutivo = useMemo(() => {
     if (subtipoDoc === 'SOL-GEN') {
       return {
@@ -74,16 +83,34 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     }
   }, [subtipoDoc]);
 
+  // Folio visible por defecto con el prefijo y sufijo
+  const folioCompletoVisible = useMemo(() => {
+    const base = numeroDocManual || infoConsecutivo.siguienteNumero;
+    return sufijoDoc ? `${base}-${sufijoDoc}` : base;
+  }, [numeroDocManual, infoConsecutivo.siguienteNumero, sufijoDoc]);
+
   const [lineas, setLineas] = useState<LineaDetalleLocal[]>([]);
   const [totalPagadoInventario, setTotalPagadoInventario] = useState<number>(0);
   const [voboAutorizado, setVoboAutorizado] = useState(false);
+
+  // Política de precios en mostrador
+  const [politicaPrecios] = useState({
+    permiteModificarPrecio: true,
+    maxDiferenciaPorcentaje: 15,
+    requiereVoBoSuperaTolerancia: true,
+  });
+
+  // Ítem cargado desde el catálogo (autocompletado o lupa modal)
+  const [itemSeleccionado, setItemSeleccionado] = useState<ItemCatalogo | null>(null);
+  const [precioBaseRef, setPrecioBaseRef] = useState<number>(0);
+  const [listaPrecioSeleccionada, setListaPrecioSeleccionada] = useState<string>('BASE');
 
   // Formulario de nueva línea
   const [naturalezaManual, setNaturalezaManual] = useState<NaturalezaItem>('SERVICIO');
   const [descripcionManual, setDescripcionManual] = useState('');
   const [cantidadManual, setCantidadManual] = useState(1);
   const [precioManual, setPrecioManual] = useState(0);
-  const [franjaCompromiso, setFranjaCompromiso] = useState('');
+  const [franjaCompromiso, setFranjaCompromiso] = useState('HOY TARDE');
   const [stockRefActual, setStockRefActual] = useState<number | null>(null);
   const [itemCatIdActual, setItemCatIdActual] = useState<string | undefined>(undefined);
 
@@ -126,15 +153,30 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const anticipoInsuficiente = totalAnticipos < totalMinimoAnticiposExigido && !voboAutorizado;
 
   const handleSelectItemCatalogo = (item: ItemCatalogo) => {
+    setItemSeleccionado(item);
     setItemCatIdActual(item.uuid);
     setNaturalezaManual(item.naturaleza);
     setDescripcionManual(item.nombre);
-    setPrecioManual(item.precioBase);
+    const precioSugerido = item.precioConLista ?? item.precioBase;
+    setPrecioManual(precioSugerido);
+    setPrecioBaseRef(item.precioBase);
     setStockRefActual(item.stockReferencial ?? null);
+    setCantidadManual(1);
+    setListaPrecioSeleccionada(item.listaPrecioNombre || 'BASE');
+  };
+
+  const handleCancelarItemSeleccionado = () => {
+    setItemSeleccionado(null);
+    setItemCatIdActual(undefined);
+    setDescripcionManual('');
+    setCantidadManual(1);
+    setPrecioManual(0);
+    setPrecioBaseRef(0);
+    setStockRefActual(null);
   };
 
   const handleAgregarLinea = () => {
-    if (!descripcionManual.trim() || cantidadManual <= 0 || precioManual < 0) return;
+    if (!itemSeleccionado || !descripcionManual.trim() || cantidadManual <= 0 || precioManual < 0) return;
 
     const subtotal = cantidadManual * precioManual;
     const esServicio = naturalezaManual === 'SERVICIO';
@@ -160,12 +202,14 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     setLineas((prev) => [...prev, nuevaLinea]);
 
     // Reset formulario línea
+    setItemSeleccionado(null);
     setDescripcionManual('');
     setCantidadManual(1);
     setPrecioManual(0);
+    setPrecioBaseRef(0);
     setStockRefActual(null);
     setItemCatIdActual(undefined);
-    setFranjaCompromiso('');
+    setFranjaCompromiso('HOY TARDE');
   };
 
   const handleEliminarLinea = (idTemp: string) => {
@@ -223,18 +267,23 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* 1. Cabecera de Solicitud */}
+      {/* 1. Cabecera de Solicitud (Control Documental Estilo Novasoft) */}
       <Card>
-        {/* Barra de Subtipo de Documento & Consecutivos Novasoft-Style */}
-        <div className="mb-5 pb-4 border-b border-gray-800 space-y-3">
+        {/* Barra de Subtipo de Documento & Plantilla */}
+        <div className="mb-4 pb-4 border-b border-gray-800 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Subtipo de Solicitud:</span>
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Subtipo de Solicitud (Novasoft Document Control):
+              </span>
               <div className="flex items-center gap-2 mt-1">
                 <button
                   type="button"
-                  onClick={() => setSubtipoDoc('SOL-GEN')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  onClick={() => {
+                    setSubtipoDoc('SOL-GEN');
+                    setNumeroDocManual('');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     subtipoDoc === 'SOL-GEN'
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-1 ring-blue-400'
                       : 'bg-gray-800 text-gray-400 hover:text-gray-200'
@@ -244,8 +293,11 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSubtipoDoc('SOL-PREF')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  onClick={() => {
+                    setSubtipoDoc('SOL-PREF');
+                    setNumeroDocManual('');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     subtipoDoc === 'SOL-PREF'
                       ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-400'
                       : 'bg-gray-800 text-gray-400 hover:text-gray-200'
@@ -262,7 +314,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 <select
                   value={plantillaFormato}
                   onChange={(e) => setPlantillaFormato(e.target.value as any)}
-                  className="bg-gray-800 text-white text-xs border border-white/10 rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="bg-gray-800 text-white text-xs border border-white/10 rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer"
                 >
                   <option value="TIRILLA">Tirilla POS 80mm</option>
                   <option value="MEDIA_CARTA">Media Carta (Talón Taller)</option>
@@ -276,36 +328,74 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 onClick={() => setIsPlantillaModalOpen(true)}
                 className="mt-3 text-xs"
               >
-                👁️ Ver Formato Documento
+                👁️ Ver Formato
               </Button>
             </div>
           </div>
 
-          {/* Caja de Consecutivo Proyectado */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-gray-900/80 border border-white/10 text-xs">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div>
-                <span className="text-gray-400">Prefijo: </span>
-                <span className="font-mono font-bold text-amber-300">{infoConsecutivo.prefijo}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Folio Actual: </span>
-                <span className="font-mono font-bold text-gray-200">{String(infoConsecutivo.folioActual).padStart(infoConsecutivo.longitud, '0')}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Siguiente a Asentar: </span>
-                <span className="font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">
-                  {infoConsecutivo.siguienteNumero}
+          {/* Grilla Documental: Prefijo + Folio + Sufijo + Fecha/Hora Picker */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 rounded-xl bg-gray-900/90 border border-white/10 text-xs">
+            <div>
+              <label className="text-[11px] text-gray-400 block font-semibold mb-1">
+                Prefijo Documento
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20 text-sm">
+                  {infoConsecutivo.prefijo}
                 </span>
-              </div>
-              <div className="text-gray-400 hidden sm:block">
-                <span>Longitud: {infoConsecutivo.longitud} dígitos · Novasoft Auto</span>
+                <span className="text-[10px] text-gray-400">Pad: {infoConsecutivo.longitud} ceros</span>
               </div>
             </div>
+
+            <div>
+              <label className="text-[11px] text-gray-400 block font-semibold mb-1">
+                Número / Consecutivo *
+              </label>
+              <input
+                type="text"
+                value={numeroDocManual || infoConsecutivo.siguienteNumero}
+                onChange={(e) => setNumeroDocManual(e.target.value)}
+                placeholder={infoConsecutivo.siguienteNumero}
+                className="w-full px-2.5 py-1.5 bg-gray-950 border border-slate-700 rounded-lg font-mono font-bold text-emerald-400 text-xs focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] text-gray-400 block font-semibold mb-1">
+                Sufijo Opcional
+              </label>
+              <input
+                type="text"
+                value={sufijoDoc}
+                onChange={(e) => setSufijoDoc(e.target.value.toUpperCase())}
+                placeholder="Ej: 2026 o B"
+                className="w-full px-2.5 py-1.5 bg-gray-950 border border-slate-700 rounded-lg font-mono text-white text-xs focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] text-gray-400 block font-semibold mb-1">
+                Fecha / Hora Documento (Año-Mes-Día) *
+              </label>
+              <input
+                type="datetime-local"
+                value={fechaDocumento}
+                onChange={(e) => setFechaDocumento(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-gray-950 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-gray-400 px-1">
+            <span>
+              Identificador Completo a Asentar:{' '}
+              <strong className="font-mono text-white">{folioCompletoVisible}</strong>
+            </span>
             <Badge variant="success">Consecutivo Activo</Badge>
           </div>
         </div>
 
+        {/* Canal y Cliente */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
           <div>
             <label htmlFor="select-canal" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>
@@ -318,9 +408,11 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
               style={{
                 width: '100%',
                 padding: '0.5rem',
-                border: '1px solid #d1d5db',
+                border: '1px solid #334155',
                 borderRadius: '6px',
                 fontSize: '0.875rem',
+                background: '#020617',
+                color: '#f8fafc',
               }}
             >
               {canales.map((c) => (
@@ -342,7 +434,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#2563eb',
+                  color: '#60a5fa',
                   cursor: 'pointer',
                   fontSize: '0.8125rem',
                   fontWeight: 600,
@@ -359,9 +451,11 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
               style={{
                 width: '100%',
                 padding: '0.5rem',
-                border: '1px solid #d1d5db',
+                border: '1px solid #334155',
                 borderRadius: '6px',
                 fontSize: '0.875rem',
+                background: '#020617',
+                color: '#f8fafc',
               }}
             >
               {clientes.map((cli) => (
@@ -374,86 +468,168 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         </div>
       </Card>
 
-      {/* 2. Captura de Línea (Búsqueda o Manual) */}
+      {/* 2. Captura de Línea (Exclusiva por Catálogo: Autocompletado + Lupa 🔍 Especializada) */}
       <Card>
-        <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: 600 }}>Agregar Ítems a la Solicitud</h4>
+        <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '1rem', fontWeight: 600 }} className="text-white">
+          Agregar Ítems a la Solicitud
+        </h4>
 
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>
-            Buscar en Catálogo (Debounced)
-          </label>
-          <ItemSelector onSelectItem={handleSelectItemCatalogo} />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 100px 130px 140px auto', gap: '0.75rem', alignItems: 'flex-end' }}>
-          <div>
-            <label htmlFor="select-naturaleza" style={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.25rem' }}>
-              Naturaleza
-            </label>
-            <select
-              id="select-naturaleza"
-              value={naturalezaManual}
-              onChange={(e) => setNaturalezaManual(e.target.value as NaturalezaItem)}
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '0.8125rem' }}
-            >
-              <option value="SERVICIO">SERVICIO</option>
-              <option value="INVENTARIO">PRODUCTO</option>
-            </select>
+        {!itemSeleccionado ? (
+          <div className="space-y-2">
+            <p className="text-xs text-slate-400">
+              Seleccione un ítem o servicio del catálogo para agregarlo a la orden. Ingrese mínimo 3
+              dígitos en el buscador rápido o haga clic en la <strong className="text-indigo-400">lupa 🔍</strong> para
+              consultar por categorías multinivel.
+            </p>
+            <ItemSelector onSelectItem={handleSelectItemCatalogo} />
           </div>
-
-          <div>
-            <Input
-              id="input-desc-linea"
-              label="Descripción"
-              value={descripcionManual}
-              onChange={(e) => setDescripcionManual(e.target.value)}
-              placeholder="Nombre del servicio o producto"
-            />
-          </div>
-
-          <div>
-            <Input
-              id="input-cant-linea"
-              label="Cantidad"
-              type="number"
-              value={cantidadManual}
-              onChange={(e) => setCantidadManual(Math.max(1, Number(e.target.value)))}
-            />
-          </div>
-
-          <div>
-            <Input
-              id="input-precio-linea"
-              label="Precio Unit."
-              type="number"
-              value={precioManual}
-              onChange={(e) => setPrecioManual(Math.max(0, Number(e.target.value)))}
-            />
-          </div>
-
-          {naturalezaManual === 'SERVICIO' ? (
-            <div>
-              <Input
-                id="input-franja-linea"
-                label="Compromiso"
-                value={franjaCompromiso}
-                onChange={(e) => setFranjaCompromiso(e.target.value)}
-                placeholder="Ej. MAÑANA"
-              />
+        ) : (
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-indigo-500/40 space-y-4 shadow-lg">
+            {/* Cabecera del Ítem Seleccionado */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded text-xs border border-amber-500/20">
+                  {itemSeleccionado.codigoReferencia}
+                </span>
+                <span className="font-semibold text-white text-sm">
+                  {itemSeleccionado.nombre}
+                </span>
+                {itemSeleccionado.categoria?.nombre && (
+                  <span className="text-[11px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                    📁 {itemSeleccionado.categoria.rutaCompleta || itemSeleccionado.categoria.nombre}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={itemSeleccionado.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
+                  {itemSeleccionado.naturaleza === 'INVENTARIO' ? 'PRODUCTO (Inventario)' : 'SERVICIO (Taller / OT)'}
+                </Badge>
+                <button
+                  type="button"
+                  onClick={handleCancelarItemSeleccionado}
+                  className="text-xs text-slate-400 hover:text-rose-400 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-slate-900"
+                >
+                  ✖ Elegir otro ítem
+                </button>
+              </div>
             </div>
-          ) : (
-            <div style={{ fontSize: '0.75rem', color: '#6b7280', paddingBottom: '0.5rem' }}>
-              Stock Ref:{' '}
-              <strong style={{ color: stockRefActual != null && stockRefActual < cantidadManual ? '#dc2626' : '#16a34a' }}>
-                {stockRefActual != null ? stockRefActual : 'N/A'}
-              </strong>
-            </div>
-          )}
 
-          <Button type="button" variant="primary" onClick={handleAgregarLinea}>
-            + Agregar
-          </Button>
-        </div>
+            {/* Campos Estructurados del Ítem */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+              <div>
+                <label htmlFor="input-cantidad-item" className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Cantidad *
+                </label>
+                <input
+                  id="input-cantidad-item"
+                  aria-label="Cantidad"
+                  type="number"
+                  min={1}
+                  value={cantidadManual}
+                  onChange={(e) => setCantidadManual(Math.max(1, Number(e.target.value) || 1))}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                  Lista de Precios
+                </label>
+                <select
+                  value={listaPrecioSeleccionada}
+                  onChange={(e) => {
+                    const l = e.target.value;
+                    setListaPrecioSeleccionada(l);
+                    if (l === 'BASE') setPrecioManual(precioBaseRef);
+                    else if (l === 'MAYORISTA') setPrecioManual(Math.round(precioBaseRef * 0.9));
+                    else if (l === 'DISTRIBUIDOR') setPrecioManual(Math.round(precioBaseRef * 0.85));
+                  }}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="BASE">Lista Base (Precio Estándar)</option>
+                  <option value="MAYORISTA">Mayorista (-10%)</option>
+                  <option value="DISTRIBUIDOR">Distribuidor (-15%)</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-300 block">
+                    Precio Unit. (COP) *
+                  </label>
+                  {!politicaPrecios.permiteModificarPrecio && (
+                    <span className="text-[10px] text-amber-400">Bloqueado</span>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  disabled={!politicaPrecios.permiteModificarPrecio}
+                  value={precioManual}
+                  onChange={(e) => setPrecioManual(Math.max(0, Number(e.target.value) || 0))}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              {itemSeleccionado.naturaleza === 'SERVICIO' ? (
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Compromiso Taller
+                  </label>
+                  <select
+                    value={franjaCompromiso}
+                    onChange={(e) => setFranjaCompromiso(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value="HOY TARDE">Hoy en la Tarde</option>
+                    <option value="MAÑANA">Mañana</option>
+                    <option value="24 HORAS">En 24 Horas</option>
+                    <option value="48 HORAS">En 48 Horas</option>
+                    <option value="URGENTE">Urgente (Prioritario)</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    Stock Referencial
+                  </label>
+                  <div className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono font-bold text-slate-200">
+                    {stockRefActual != null ? `${stockRefActual} disponibles` : 'N/A'}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="primary" onClick={handleAgregarLinea} className="w-full py-2 text-xs font-bold">
+                  + Agregar Línea
+                </Button>
+              </div>
+            </div>
+
+            {/* Alerta de Política de Precios si la variación supera el límite */}
+            {precioBaseRef > 0 && Math.abs(precioManual - precioBaseRef) / precioBaseRef * 100 > politicaPrecios.maxDiferenciaPorcentaje && (
+              <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>
+                  <strong>Alerta de Precio:</strong> La variación sobre el precio base ({new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(precioBaseRef)}) supera la tolerancia máxima autorizada ({politicaPrecios.maxDiferenciaPorcentaje}%). Requiere autorización VoBo al asentar la orden.
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800 text-slate-400">
+              <span>
+                Subtotal Línea:{' '}
+                <strong className="text-emerald-400 font-mono text-sm">
+                  {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(cantidadManual * precioManual)}
+                </strong>
+              </span>
+              <span>
+                Base Catálogo: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(precioBaseRef)}
+              </span>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* 3. Tabla de Líneas Mixtas */}

@@ -12,7 +12,7 @@ interface ParametroDinamicoModalProps {
 interface CampoDef {
   key: string;
   label: string;
-  tipo: 'boolean' | 'number' | 'string' | 'select';
+  tipo: 'boolean' | 'number' | 'string' | 'select' | 'denominaciones';
   descripcion?: string;
   min?: number;
   max?: number;
@@ -20,6 +20,28 @@ interface CampoDef {
   sufijo?: string;
   opciones?: { label: string; value: string }[];
 }
+
+/** Estructura de una denominación de efectivo (billete/moneda) editable en el modal. */
+interface DenominacionForm {
+  valor: number;
+  etiqueta: string;
+  tipo: 'BILLETE' | 'MONEDA';
+  activa: boolean;
+}
+
+const DENOMINACIONES_COP_DEFECTO: DenominacionForm[] = [
+  { valor: 100000, etiqueta: '$100.000', tipo: 'BILLETE', activa: true },
+  { valor: 50000, etiqueta: '$50.000', tipo: 'BILLETE', activa: true },
+  { valor: 20000, etiqueta: '$20.000', tipo: 'BILLETE', activa: true },
+  { valor: 10000, etiqueta: '$10.000', tipo: 'BILLETE', activa: true },
+  { valor: 5000, etiqueta: '$5.000', tipo: 'BILLETE', activa: true },
+  { valor: 2000, etiqueta: '$2.000', tipo: 'BILLETE', activa: true },
+  { valor: 1000, etiqueta: '$1.000', tipo: 'BILLETE', activa: true },
+  { valor: 500, etiqueta: '$500', tipo: 'MONEDA', activa: true },
+  { valor: 200, etiqueta: '$200', tipo: 'MONEDA', activa: true },
+  { valor: 100, etiqueta: '$100', tipo: 'MONEDA', activa: true },
+  { valor: 50, etiqueta: '$50', tipo: 'MONEDA', activa: true },
+];
 
 interface ParametroMetadata {
   nombreVisible: string;
@@ -154,6 +176,112 @@ const METADATOS_PARAMETROS: Record<string, ParametroMetadata> = {
         step: 1000,
         sufijo: 'COP',
         descripcion: 'Monto máximo de diferencia aceptado sin requerir VoBo de gerencia.',
+      },
+    ],
+  },
+  politica_precios: {
+    nombreVisible: 'Política de Precios en Mostrador',
+    descripcion:
+      'Define si el cajero puede modificar el precio base del ítem y cuál es la diferencia máxima permitida antes de exigir autorización de supervisor.',
+    categoria: 'Finanzas & POS',
+    icono: '💲',
+    campos: [
+      {
+        key: 'permiteModificarPrecio',
+        label: 'Permitir Modificar el Precio del Ítem',
+        tipo: 'boolean',
+        descripcion:
+          'Si está apagado, el precio se toma siempre del catálogo/lista de precios sin edición manual en mostrador.',
+      },
+      {
+        key: 'maxDiferenciaPorcentaje',
+        label: 'Diferencia Máxima Permitida sobre el Precio de Lista',
+        tipo: 'number',
+        min: 0,
+        max: 100,
+        step: 1,
+        sufijo: '%',
+        descripcion:
+          'Tolerancia de negociación del cajero (ej: 10% permite bajar de $100.000 a $90.000 sin autorización).',
+      },
+      {
+        key: 'requiereVoBoSuperaTolerancia',
+        label: 'Exigir VoBo al Superar la Tolerancia',
+        tipo: 'boolean',
+        descripcion:
+          'Obliga al flujo de autorización con clave/PIN de supervisor cuando la diferencia excede el porcentaje permitido.',
+      },
+      {
+        key: 'permitirMultiplicadorLista',
+        label: 'Permitir Multiplicar por Lista de Precios',
+        tipo: 'boolean',
+        descripcion:
+          'Habilita la selección explícita de una lista de precios (Mayorista, Distribuidor, etc.) al capturar el ítem.',
+      },
+    ],
+  },
+  listas_precio: {
+    nombreVisible: 'Gestión de Listas de Precios',
+    descripcion:
+      'Parámetros para generar y actualizar listas de precios masivamente. El aumento se aplica al porcentaje de ajuste de cada lista.',
+    categoria: 'Finanzas & POS',
+    icono: '🏷️',
+    campos: [
+      {
+        key: 'listaPredeterminada',
+        label: 'Lista de Precios Predeterminada',
+        tipo: 'select',
+        opciones: [
+          { label: 'Lista Base (Precio de Catálogo)', value: 'BASE' },
+          { label: 'Lista Mayorista', value: 'MAYORISTA' },
+          { label: 'Lista Distribuidor', value: 'DISTRIBUIDOR' },
+          { label: 'Lista Corporativa', value: 'CORPORATIVA' },
+        ],
+        descripcion: 'Lista aplicada automáticamente cuando el ítem no tiene una asignada.',
+      },
+      {
+        key: 'porcentajeAumentoMasivo',
+        label: 'Porcentaje de Aumento Masivo',
+        tipo: 'number',
+        min: 0,
+        max: 100,
+        step: 0.5,
+        sufijo: '%',
+        descripcion:
+          'Porcentaje usado por la función "Aumentar Lista de Precios" para actualizar todos los ítems de una lista.',
+      },
+      {
+        key: 'aumentarPorCategoria',
+        label: 'Permitir Aumento Segmentado por Categoría',
+        tipo: 'boolean',
+        descripcion:
+          'Habilita aplicar el aumento solo a los ítems de una categoría o subcategoría seleccionada.',
+      },
+    ],
+  },
+  denominaciones_efectivo: {
+    nombreVisible: 'Monedas y Denominaciones de Efectivo',
+    descripcion:
+      'Denominaciones (billetes y monedas) que se muestran en el arqueo/cierre de caja para contar el efectivo por filas. Agregue o retire denominaciones según la operación.',
+    categoria: 'Tesorería',
+    icono: '💵',
+    campos: [
+      {
+        key: 'monedaBase',
+        label: 'Moneda Base de Caja',
+        tipo: 'select',
+        opciones: [
+          { label: 'Peso Colombiano (COP)', value: 'COP' },
+          { label: 'Dólar Estadounidense (USD)', value: 'USD' },
+        ],
+        descripcion: 'Moneda con la que se realiza el conteo y arqueo de efectivo.',
+      },
+      {
+        key: 'denominaciones',
+        label: 'Denominaciones Habilitadas para Arqueo',
+        tipo: 'denominaciones',
+        descripcion:
+          'Lista de billetes y monedas con su valor, tipo y estado. Se usa en el cierre de caja para registrar cuántas unidades de cada denominación hay.',
       },
     ],
   },
@@ -319,6 +447,125 @@ export function ParametroDinamicoModal({
                         isChecked ? 'translate-x-7' : 'translate-x-1'
                       }`}
                     />
+                  </div>
+                </div>
+              );
+            }
+
+            if (campo.tipo === 'denominaciones') {
+              const lista: DenominacionForm[] =
+                Array.isArray(val) && val.length > 0 ? val : DENOMINACIONES_COP_DEFECTO;
+              const totalDisponible = lista
+                .filter((d) => d.activa)
+                .reduce((acc, d) => acc + d.valor, 0);
+
+              const actualizarLista = (nueva: DenominacionForm[]) =>
+                setValoresForm((prev) => ({ ...prev, [campo.key]: nueva }));
+
+              return (
+                <div
+                  key={campo.key}
+                  className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-sm font-semibold text-white">{campo.label}</label>
+                    <Badge variant="info">{lista.filter((d) => d.activa).length} activas</Badge>
+                  </div>
+                  {campo.descripcion && (
+                    <p className="text-xs text-slate-400">{campo.descripcion}</p>
+                  )}
+
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                    {lista.map((d, idx) => (
+                      <div
+                        key={`${d.valor}-${idx}`}
+                        className="flex items-center gap-2 p-2 rounded-lg bg-slate-950/70 border border-slate-800"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={d.activa}
+                          onChange={(e) => {
+                            const nueva = [...lista];
+                            nueva[idx] = { ...d, activa: e.target.checked };
+                            actualizarLista(nueva);
+                          }}
+                          className="w-4 h-4 rounded accent-indigo-500 cursor-pointer shrink-0"
+                          title="Habilitar denominación en el arqueo"
+                        />
+                        <input
+                          type="number"
+                          value={d.valor}
+                          onChange={(e) => {
+                            const nueva = [...lista];
+                            nueva[idx] = { ...d, valor: Number(e.target.value) || 0 };
+                            actualizarLista(nueva);
+                          }}
+                          className="w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-mono text-right focus:outline-none focus:border-indigo-500"
+                          placeholder="Valor"
+                        />
+                        <input
+                          type="text"
+                          value={d.etiqueta}
+                          onChange={(e) => {
+                            const nueva = [...lista];
+                            nueva[idx] = { ...d, etiqueta: e.target.value };
+                            actualizarLista(nueva);
+                          }}
+                          className="flex-1 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500"
+                          placeholder="Etiqueta (ej: $50.000)"
+                        />
+                        <select
+                          value={d.tipo}
+                          onChange={(e) => {
+                            const nueva = [...lista];
+                            nueva[idx] = { ...d, tipo: e.target.value as 'BILLETE' | 'MONEDA' };
+                            actualizarLista(nueva);
+                          }}
+                          className="px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white cursor-pointer focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="BILLETE">Billete</option>
+                          <option value="MONEDA">Moneda</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => actualizarLista(lista.filter((_, i) => i !== idx))}
+                          title="Eliminar denominación"
+                          className="px-2 py-1 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 text-xs font-bold transition-colors cursor-pointer shrink-0"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                    <span className="text-[11px] text-slate-400">
+                      Suma de denominaciones activas:{' '}
+                      <span className="font-mono font-bold text-emerald-400">
+                        ${totalDisponible.toLocaleString('es-CO')}
+                      </span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          actualizarLista([
+                            ...lista,
+                            { valor: 0, etiqueta: '', tipo: 'BILLETE', activa: true },
+                          ])
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-semibold transition-colors cursor-pointer"
+                      >
+                        + Agregar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => actualizarLista(DENOMINACIONES_COP_DEFECTO)}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-semibold transition-colors cursor-pointer"
+                      >
+                        ↺ Restaurar COP
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

@@ -8,6 +8,61 @@ export interface UnidadPresentacion {
   activo: boolean;
 }
 
+/**
+ * Categoría de ítems multinivel (Árbol jerárquico: Categoría -> Subcategoría -> ...).
+ * Permite clasificar ítems y servicios para filtrado especializado en el POS.
+ */
+export interface CategoriaItem {
+  uuid: string;
+  codigo: string;
+  nombre: string;
+  nivel: number;
+  categoriaPadreUuid?: string | null;
+  rutaCompleta?: string;
+  activo: boolean;
+  hijos?: CategoriaItem[];
+}
+
+/**
+ * Lista de precios configurable (Estilo Novasoft / POS comercial).
+ * El recargo/descuento se aplica en porcentaje sobre el precio base del ítem.
+ */
+export interface ListaPrecio {
+  uuid: string;
+  codigo: string;
+  nombre: string;
+  porcentajeAjuste: number;
+  esPredeterminada: boolean;
+  activa: boolean;
+}
+
+/**
+ * Política global de manipulación de precios en mostrador.
+ * Define si el cajero puede modificar el precio y con qué tolerancia máxima.
+ */
+export interface PoliticaPrecios {
+  permiteModificarPrecio: boolean;
+  maxDiferenciaPorcentaje: number;
+  requiereVoBoSuperaTolerancia: boolean;
+  permitirMultiplicadorLista: boolean;
+}
+
+/** Denominación de efectivo (billete o moneda) para el arqueo/cierre de caja. */
+export interface DenominacionEfectivo {
+  valor: number;
+  etiqueta: string;
+  tipo: 'BILLETE' | 'MONEDA';
+  activa: boolean;
+}
+
+/** Configuración de monedas/denominaciones admitidas por caja para conteo de efectivo. */
+export interface ConfiguracionDenominaciones {
+  monedaBase: string;
+  monedasAdmitidas: string[];
+  denominaciones: DenominacionEfectivo[];
+}
+
+
 export interface ItemCatalogo {
   uuid: string;
   codigoReferencia: string;
@@ -21,6 +76,14 @@ export interface ItemCatalogo {
   workflowDefinicionUuid?: string;
   workflowDefinicionCodigo?: string;
   workflowDefinicionNombre?: string;
+  /** Categoría multinivel a la que pertenece el ítem (opcional en ítems heredados). */
+  categoria?: CategoriaItem | null;
+  categoriaUuid?: string | null;
+  /** Lista de precios asignada (si aplica). */
+  listaPrecioUuid?: string | null;
+  listaPrecioNombre?: string | null;
+  /** Precio final con el ajuste de la lista de precios aplicado. */
+  precioConLista?: number;
 }
 
 export interface ItemsResponse {
@@ -54,6 +117,8 @@ export interface SubtipoDocumento {
   formatoPapel: string;
   imprimeAlAsentar: boolean;
   activo: boolean;
+  /** Cantidad de ceros a la izquierda del folio (padding estilo Novasoft, ej: 4 -> 0001). */
+  longitudCeros?: number;
 }
 
 export interface TipoDocumentoBase {
