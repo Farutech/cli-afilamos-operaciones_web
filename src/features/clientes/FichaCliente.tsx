@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { catalogosApi } from '../../services/catalogosApi';
 import type { Cliente, ClienteHistorico } from '../../types/catalogos';
 import { Card, Badge, Button } from '@farutech/design-system';
+import { RegistroClienteModal } from './RegistroClienteModal';
 
 interface FichaClienteProps {
   onIniciarSolicitud?: (cliente: Cliente) => void;
@@ -15,6 +16,7 @@ export const FichaCliente: React.FC<FichaClienteProps> = ({ onIniciarSolicitud }
   const [loading, setLoading] = useState(false);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [mostrarModalNuevo, setMostrarModalNuevo] = useState(false);
 
   // Cargar lista inicial de clientes
   useEffect(() => {
@@ -76,7 +78,7 @@ export const FichaCliente: React.FC<FichaClienteProps> = ({ onIniciarSolicitud }
               Histórico integral de compras, órdenes de servicio y saldo consolidado (RF-7.1, RF-7.4)
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px', minWidth: '280px' }}>
+          <div style={{ display: 'flex', gap: '8px', minWidth: '360px', alignItems: 'center' }}>
             <input
               type="text"
               placeholder="Buscar por nombre o documento..."
@@ -90,6 +92,12 @@ export const FichaCliente: React.FC<FichaClienteProps> = ({ onIniciarSolicitud }
                 fontSize: '0.875rem',
               }}
             />
+            <Button
+              variant="primary"
+              onClick={() => setMostrarModalNuevo(true)}
+            >
+              + Nuevo Cliente
+            </Button>
           </div>
         </div>
       </Card>
@@ -247,6 +255,16 @@ export const FichaCliente: React.FC<FichaClienteProps> = ({ onIniciarSolicitud }
           </Card>
         )}
       </div>
+
+      <RegistroClienteModal
+        isOpen={mostrarModalNuevo}
+        onClose={() => setMostrarModalNuevo(false)}
+        onClienteCreado={(cl) => {
+          setClientes((prev) => [cl, ...prev]);
+          setClienteSeleccionado(cl);
+          setMostrarModalNuevo(false);
+        }}
+      />
     </div>
   );
 };

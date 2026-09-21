@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Card, Button, Badge, Input } from '@farutech/design-system';
+import { Card, Button, Badge, Input, Modal, Alert } from '@farutech/design-system';
 import { ItemSelector } from '../catalogos/ItemSelector';
-import { RegistroRapidoClienteModal } from './RegistroRapidoClienteModal';
+import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
 import type { ItemCatalogo, Cliente, CanalOrigen, TipoDocumentoIdentidad } from '../../types/catalogos';
 import type { NaturalezaItem } from '../../types/solicitudes';
 
@@ -46,6 +46,33 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const [selectedCanal, setSelectedCanal] = useState<string>(canales[0]?.uuid || '');
   const [selectedCliente, setSelectedCliente] = useState<string>(clientesIniciales[0]?.uuid || '');
   const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
+
+  // Subtipos de Documento y Consecutivos (Tipo Novasoft)
+  const [subtipoDoc, setSubtipoDoc] = useState<'SOL-GEN' | 'SOL-PREF'>('SOL-GEN');
+  const [plantillaFormato, setPlantillaFormato] = useState<'TIRILLA' | 'MEDIA_CARTA' | 'CARTA'>('TIRILLA');
+  const [isPlantillaModalOpen, setIsPlantillaModalOpen] = useState(false);
+
+  const infoConsecutivo = useMemo(() => {
+    if (subtipoDoc === 'SOL-GEN') {
+      return {
+        prefijo: 'SG',
+        subtipoNombre: 'Solicitud General de Taller e Inventario',
+        folioActual: 2,
+        siguienteNumero: 'SG-0003',
+        longitud: 4,
+        tipoImpresion: 'Tirilla POS 80mm / Media Carta',
+      };
+    } else {
+      return {
+        prefijo: 'SP',
+        subtipoNombre: 'Solicitud Preferencial / Prioritaria',
+        folioActual: 0,
+        siguienteNumero: 'SP-0001',
+        longitud: 4,
+        tipoImpresion: 'Carta Completa / Formato Especial',
+      };
+    }
+  }, [subtipoDoc]);
 
   const [lineas, setLineas] = useState<LineaDetalleLocal[]>([]);
   const [totalPagadoInventario, setTotalPagadoInventario] = useState<number>(0);
@@ -198,6 +225,87 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* 1. Cabecera de Solicitud */}
       <Card>
+        {/* Barra de Subtipo de Documento & Consecutivos Novasoft-Style */}
+        <div className="mb-5 pb-4 border-b border-gray-800 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Subtipo de Solicitud:</span>
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setSubtipoDoc('SOL-GEN')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    subtipoDoc === 'SOL-GEN'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-1 ring-blue-400'
+                      : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  📄 SOL-GEN · Solicitud Estándar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubtipoDoc('SOL-PREF')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    subtipoDoc === 'SOL-PREF'
+                      ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-400'
+                      : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  ⭐ SOL-PREF · Preferencial / VIP
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <div className="text-[11px] text-gray-400">Plantilla de Salida:</div>
+                <select
+                  value={plantillaFormato}
+                  onChange={(e) => setPlantillaFormato(e.target.value as any)}
+                  className="bg-gray-800 text-white text-xs border border-white/10 rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                >
+                  <option value="TIRILLA">Tirilla POS 80mm</option>
+                  <option value="MEDIA_CARTA">Media Carta (Talón Taller)</option>
+                  <option value="CARTA">Carta Completa (Factura/OT)</option>
+                </select>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={() => setIsPlantillaModalOpen(true)}
+                className="mt-3 text-xs"
+              >
+                👁️ Ver Formato Documento
+              </Button>
+            </div>
+          </div>
+
+          {/* Caja de Consecutivo Proyectado */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-gray-900/80 border border-white/10 text-xs">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div>
+                <span className="text-gray-400">Prefijo: </span>
+                <span className="font-mono font-bold text-amber-300">{infoConsecutivo.prefijo}</span>
+              </div>
+              <div>
+                <span className="text-gray-400">Folio Actual: </span>
+                <span className="font-mono font-bold text-gray-200">{String(infoConsecutivo.folioActual).padStart(infoConsecutivo.longitud, '0')}</span>
+              </div>
+              <div>
+                <span className="text-gray-400">Siguiente a Asentar: </span>
+                <span className="font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/50">
+                  {infoConsecutivo.siguienteNumero}
+                </span>
+              </div>
+              <div className="text-gray-400 hidden sm:block">
+                <span>Longitud: {infoConsecutivo.longitud} dígitos · Novasoft Auto</span>
+              </div>
+            </div>
+            <Badge variant="success">Consecutivo Activo</Badge>
+          </div>
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
           <div>
             <label htmlFor="select-canal" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>
@@ -564,91 +672,217 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         </div>
       </Card>
 
-      {/* Modal Registro Rápido Cliente */}
-      <RegistroRapidoClienteModal
+      {/* Modal Reutilizable Registro de Cliente */}
+      <RegistroClienteModal
         isOpen={isClienteModalOpen}
         onClose={() => setIsClienteModalOpen(false)}
         onClienteCreado={handleClienteCreado}
         tiposDocumento={tiposDocumento}
       />
 
-      {/* Modal VoBo Supervisor */}
-      {isVoBoModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
+      {/* Modal Vista Previa de Plantilla / Formato de Documento HTML */}
+      <Modal
+        isOpen={isPlantillaModalOpen}
+        onClose={() => setIsPlantillaModalOpen(false)}
+        title={`Vista Previa de Documento: ${infoConsecutivo.siguienteNumero} (${plantillaFormato})`}
+        size="lg"
+      >
+        <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
+          <div className="flex justify-between items-center bg-gray-900/60 p-3 rounded-xl border border-white/10 text-xs">
+            <div>
+              <span className="text-gray-400">Subtipo Configurado: </span>
+              <span className="font-bold text-white">{infoConsecutivo.subtipoNombre}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="info">{plantillaFormato}</Badge>
+              <Button size="sm" variant="secondary" onClick={() => window.print()}>
+                🖨️ Imprimir
+              </Button>
+            </div>
+          </div>
+
+          {/* Contenedor del documento HTML según formato */}
           <div
-            style={{
-              background: 'white',
-              borderRadius: '8px',
-              padding: '1.5rem',
-              width: '100%',
-              maxWidth: '420px',
-            }}
+            className={`mx-auto bg-white text-gray-900 rounded-lg shadow-2xl p-6 font-sans transition-all ${
+              plantillaFormato === 'TIRILLA'
+                ? 'max-w-[320px] text-xs'
+                : plantillaFormato === 'MEDIA_CARTA'
+                ? 'max-w-[550px] text-sm'
+                : 'max-w-full text-sm'
+            }`}
           >
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.125rem' }}>VoBo Excepción Anticipo</h3>
-            {voboError && (
-              <div style={{ padding: '0.5rem', background: '#fee2e2', color: '#991b1b', marginBottom: '1rem', fontSize: '0.8125rem' }}>
-                {voboError}
+            {/* Encabezado del documento */}
+            <div className="text-center border-b border-gray-300 pb-3 mb-3">
+              <h2 className="text-base font-black tracking-wider uppercase m-0">ORDEON POS & TALLER</h2>
+              <p className="text-[11px] text-gray-600 m-0 font-medium">Afilamos Operaciones S.A.S.</p>
+              <p className="text-[10px] text-gray-500 m-0">NIT: 900.123.456-7 · Régimen Responsable de IVA</p>
+              <p className="text-[10px] text-gray-500 m-0">Carrera 15 # 45-67, Bogotá D.C. · Tel: (601) 321 4567</p>
+
+              <div className="mt-2.5 inline-block px-3 py-1 bg-gray-100 rounded border border-gray-300">
+                <span className="font-mono font-bold text-sm tracking-widest text-gray-800">
+                  {infoConsecutivo.siguienteNumero}
+                </span>
               </div>
-            )}
-            <form onSubmit={handleAprobarVoBo}>
-              <div style={{ marginBottom: '1rem' }}>
-                <Input
-                  id="vobo-supervisor"
-                  label="Código de Supervisor"
-                  value={supervisorCodigo}
-                  onChange={(e) => setSupervisorCodigo(e.target.value)}
-                  placeholder="SUPERVISOR_01"
-                  required
-                />
+              <div className="text-[10px] text-gray-500 mt-1">
+                {subtipoDoc === 'SOL-GEN' ? 'ORDEN DE SERVICIO & TALLER' : 'ORDEN PRIORITARIA / PREFERENCIAL'}
               </div>
-              <div style={{ marginBottom: '1rem' }}>
-                <Input
-                  id="vobo-pin"
-                  label="PIN de Autorización"
-                  type="password"
-                  value={supervisorPin}
-                  onChange={(e) => setSupervisorPin(e.target.value)}
-                  placeholder="****"
-                  required
-                />
+            </div>
+
+            {/* Datos del Cliente y Emisión */}
+            <div className="grid grid-cols-2 gap-2 text-[11px] border-b border-gray-200 pb-2.5 mb-3">
+              <div>
+                <span className="text-gray-500 block">Cliente:</span>
+                <strong className="block text-gray-900">
+                  {clientes.find((c) => c.uuid === selectedCliente)?.nombreRazonSocial || 'Consumidor Final'}
+                </strong>
+                <span className="text-gray-600">
+                  Doc: {clientes.find((c) => c.uuid === selectedCliente)?.numeroDocumento || '22222222'}
+                </span>
               </div>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <Input
-                  id="vobo-justificacion"
-                  label="Justificación Obligatoria"
-                  value={justificacionVoBo}
-                  onChange={(e) => setJustificacionVoBo(e.target.value)}
-                  placeholder="Motivo de autorización"
-                  required
-                />
+              <div className="text-right">
+                <span className="text-gray-500 block">Fecha Emisión:</span>
+                <span className="text-gray-800 font-medium">{new Date().toLocaleDateString('es-CO')}</span>
+                <span className="text-gray-500 block mt-0.5">Canal:</span>
+                <span className="text-gray-800 font-medium">
+                  {canales.find((c) => c.uuid === selectedCanal)?.nombre || 'Mostrador'}
+                </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                <Button type="button" variant="outline" onClick={() => setIsVoBoModalOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" variant="primary">
-                  Autorizar VoBo
-                </Button>
+            </div>
+
+            {/* Tabla de Líneas */}
+            <div className="mb-3">
+              <table className="w-full text-left text-[11px] border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-300 text-gray-600">
+                    <th className="py-1">Cant</th>
+                    <th className="py-1">Descripción</th>
+                    <th className="py-1 text-right">V. Unit</th>
+                    <th className="py-1 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {lineas.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-4 text-center text-gray-400 italic">
+                        (Sin ítems aún agregados en la solicitud)
+                      </td>
+                    </tr>
+                  ) : (
+                    lineas.map((l, i) => (
+                      <tr key={i}>
+                        <td className="py-1 font-mono">{l.cantidad}</td>
+                        <td className="py-1">
+                          <div className="font-medium text-gray-900">{l.descripcion}</div>
+                          {l.naturaleza === 'SERVICIO' && l.franjaCompromiso && (
+                            <div className="text-[9px] text-blue-600 font-semibold">
+                              Compromiso: {l.franjaCompromiso}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-1 text-right font-mono">${l.precioUnitario.toLocaleString()}</td>
+                        <td className="py-1 text-right font-mono font-bold">${l.subtotal.toLocaleString()}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totales y Liquidación */}
+            <div className="border-t border-gray-300 pt-2 space-y-1 text-[11px]">
+              <div className="flex justify-between text-gray-600">
+                <span>Total Inventario:</span>
+                <span className="font-mono font-medium">${totalInventario.toLocaleString()}</span>
               </div>
-            </form>
+              <div className="flex justify-between text-gray-600">
+                <span>Total Servicios:</span>
+                <span className="font-mono font-medium">${totalServicios.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-emerald-700 font-medium">
+                <span>Anticipos Aplicados:</span>
+                <span className="font-mono">-${totalAnticipos.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200">
+                <span>Total Neto:</span>
+                <span className="font-mono">${totalNeto.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm font-black text-red-600">
+                <span>Saldo Pendiente:</span>
+                <span className="font-mono">${saldoPendiente.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Código de barras simulado y política */}
+            <div className="mt-4 pt-3 border-t border-dashed border-gray-300 text-center">
+              <div className="font-mono tracking-[0.3em] font-bold text-xs py-1 text-gray-800 bg-gray-50 border border-gray-200 rounded">
+                * {infoConsecutivo.siguienteNumero} *
+              </div>
+              <p className="text-[9px] text-gray-400 mt-2 leading-relaxed">
+                Garantía técnica de afilado: 3 días hábiles a partir de la entrega. Conserve este comprobante para reclamar su herramienta en taller.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-gray-800">
+            <Button variant="secondary" onClick={() => setIsPlantillaModalOpen(false)}>
+              Cerrar Vista Previa
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
+
+      {/* Modal VoBo Supervisor */}
+      <Modal
+        isOpen={isVoBoModalOpen}
+        onClose={() => setIsVoBoModalOpen(false)}
+        title="VoBo Excepción Anticipo"
+        size="sm"
+      >
+        <div className="p-4 space-y-4">
+          <p className="text-xs text-gray-400">
+            Autorización de supervisor para asentar solicitud de servicio con anticipo menor al mínimo requerido (40%).
+          </p>
+          {voboError && <Alert variant="danger">{voboError}</Alert>}
+          <form onSubmit={handleAprobarVoBo} className="space-y-4">
+            <Input
+              id="vobo-supervisor"
+              label="Código de Supervisor *"
+              value={supervisorCodigo}
+              onChange={(e) => setSupervisorCodigo(e.target.value)}
+              placeholder="SUPERVISOR_01"
+              required
+              fullWidth
+            />
+            <Input
+              id="vobo-pin"
+              label="PIN de Autorización *"
+              type="password"
+              value={supervisorPin}
+              onChange={(e) => setSupervisorPin(e.target.value)}
+              placeholder="****"
+              required
+              fullWidth
+            />
+            <Input
+              id="vobo-justificacion"
+              label="Justificación Obligatoria *"
+              value={justificacionVoBo}
+              onChange={(e) => setJustificacionVoBo(e.target.value)}
+              placeholder="Ej: Cliente frecuente / Convenio corporativo"
+              required
+              fullWidth
+            />
+            <div className="pt-3 border-t border-gray-800 flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setIsVoBoModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="primary">
+                Autorizar VoBo
+              </Button>
+            </div>
+          </form>
+        </div>
+      </Modal>
     </div>
   );
 };

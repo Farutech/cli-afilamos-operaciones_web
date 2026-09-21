@@ -249,36 +249,36 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-white/10">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
             <span>💰</span> Gestión de Caja y Turnos
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-gray-400 mt-1">
             Control de aperturas con base monetaria obligatoria, arqueos ciegos y VoBo de supervisor.
           </p>
         </div>
         <div className="mt-4 sm:mt-0 flex items-center gap-2">
-          <span className="text-xs font-semibold px-2.5 py-1 rounded bg-slate-100 text-slate-700">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded bg-gray-800 text-gray-300 border border-white/10">
             Rol: {userRole}
           </span>
-          <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded bg-slate-100 text-slate-700">
+          <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded bg-blue-950 text-blue-300 border border-blue-800/40">
             {codigoCajaDefault}
           </span>
           {turno ? (
             <span
               className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${
                 turno.estado === 'ABIERTO'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-500/50'
                   : turno.estado === 'PENDIENTE_VOBO'
-                  ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
-                  : 'bg-slate-100 text-slate-800 border border-slate-300'
+                  ? 'bg-amber-900/50 text-amber-300 border border-amber-500/50 animate-pulse'
+                  : 'bg-gray-800 text-gray-300 border border-white/10'
               }`}
             >
               ● {turno.estado}
             </span>
           ) : (
-            <span className="text-xs font-bold uppercase px-3 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+            <span className="text-xs font-bold uppercase px-3 py-1 rounded-full bg-rose-950/60 text-rose-300 border border-rose-800/50">
               ● SIN TURNO ACTIVO
             </span>
           )}
@@ -287,98 +287,142 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
       {/* Alertas */}
       {errorMsg && (
-        <div className="p-4 bg-rose-50 border-l-4 border-rose-500 text-rose-800 rounded text-sm flex justify-between items-center">
+        <div className="p-4 bg-rose-950/40 border border-rose-800/50 text-rose-300 rounded-xl text-sm flex justify-between items-center">
           <div>
             <strong className="font-semibold">Atención:</strong> {errorMsg}
           </div>
-          <button onClick={() => setErrorMsg(null)} className="text-rose-600 hover:text-rose-900 font-bold ml-4">
+          <button onClick={() => setErrorMsg(null)} className="text-rose-400 hover:text-rose-200 font-bold ml-4">
             ×
           </button>
         </div>
       )}
 
       {successMsg && (
-        <div className="p-4 bg-emerald-50 border-l-4 border-emerald-500 text-emerald-800 rounded text-sm flex justify-between items-center">
+        <div className="p-4 bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 rounded-xl text-sm flex justify-between items-center">
           <div>
             <strong className="font-semibold">Éxito:</strong> {successMsg}
           </div>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-600 hover:text-emerald-900 font-bold ml-4">
+          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-200 font-bold ml-4">
             ×
           </button>
         </div>
       )}
 
       {cargando ? (
-        <div className="p-12 text-center text-slate-400">Cargando estado de la caja...</div>
+        <div className="p-12 text-center text-gray-400">Cargando estado de la caja...</div>
       ) : !turno || turno.estado === 'CERRADO' ? (
-        /* Panel Apertura */
-        <Card>
-          <div className="max-w-md mx-auto text-center space-y-4">
-            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl">
-              💵
+        /* Panel Apertura Premium */
+        <div className="max-w-xl mx-auto my-6">
+          <Card className="p-8 bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 border border-white/15 rounded-2xl shadow-2xl space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto text-3xl shadow-lg shadow-emerald-950/40">
+                💵
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-wide">Apertura de Turno de Caja</h2>
+              <p className="text-xs text-gray-400 max-w-md mx-auto">
+                Para habilitar cobros, anticipos y ventas en mostrador, asigne el fondo de arranque en efectivo para cambio (RF-6.3).
+              </p>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-blue-950/60 border border-blue-800/50 text-blue-300 font-mono font-bold">
+                  Terminal: {codigoCajaDefault}
+                </span>
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-gray-800 border border-white/10 text-gray-300">
+                  Operador: {userRole}
+                </span>
+              </div>
             </div>
-            <h2 className="text-lg font-bold text-slate-800">Apertura de Turno de Caja</h2>
-            <p className="text-sm text-slate-500">
-              Para registrar cobros y operaciones, debe inicializar la jornada ingresando la base monetaria en efectivo obligatoria (RF-6.3).
-            </p>
 
-            <form onSubmit={handleAbrirTurno} className="space-y-4 text-left pt-2">
-              <Input
-                label="Caja Física"
-                type="text"
-                value={codigoCajaDefault}
-                disabled
-              />
-              <Input
-                label="Base Inicial en Efectivo (COP) *"
-                type="number"
-                min="0"
-                step="1000"
-                required
-                value={baseInicial}
-                onChange={(e) => setBaseInicial(e.target.value)}
-                placeholder="100000"
-                helperText="Monto físico entregado al cajero para dar cambio."
-              />
+            <form onSubmit={handleAbrirTurno} className="space-y-5 pt-2">
+              {/* Chips de Selección Rápida */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                  Selección Rápida de Base Inicial
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[50000, 100000, 200000, 500000].map((val) => {
+                    const esSeleccionado = Number(baseInicial) === val;
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setBaseInicial(String(val))}
+                        className={`py-2 px-1 rounded-xl text-xs font-mono font-bold transition-all ${
+                          esSeleccionado
+                            ? 'bg-primary-600 text-white border-2 border-primary-400 shadow-md shadow-primary-900/50 scale-[1.02]'
+                            : 'bg-gray-800/80 text-gray-300 border border-white/10 hover:border-white/20 hover:bg-gray-800'
+                        }`}
+                      >
+                        ${val.toLocaleString('es-CO')}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Input de Monto Personalizado */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-gray-300">
+                    Base Inicial en Efectivo (COP) *
+                  </label>
+                  <span className="text-xs font-mono font-bold text-emerald-400">
+                    ${Number(baseInicial || 0).toLocaleString('es-CO')} COP
+                  </span>
+                </div>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  required
+                  value={baseInicial}
+                  onChange={(e) => setBaseInicial(e.target.value)}
+                  placeholder="100000"
+                  helperText="Monto físico contado entregado en la gaveta para cambio."
+                />
+              </div>
+
               <Button
                 type="submit"
-                disabled={abriendoTurno}
+                disabled={abriendoTurno || !baseInicial || Number(baseInicial) < 0}
                 variant="primary"
+                size="lg"
                 fullWidth
               >
-                {abriendoTurno ? 'Inicializando turno...' : '✨ Abrir Turno de Caja'}
+                {abriendoTurno
+                  ? 'Inicializando jornada...'
+                  : `✨ Abrir Turno con $${Number(baseInicial || 0).toLocaleString('es-CO')}`}
               </Button>
             </form>
-          </div>
-        </Card>
+          </Card>
+        </div>
       ) : turno.estado === 'ABIERTO' ? (
         /* Panel Turno Abierto */
         <div className="space-y-6">
           {/* Métricas Principales */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-semibold text-slate-400 uppercase">Turno Actual</span>
-              <p className="text-lg font-bold text-slate-800 mt-1">{turno.codigo}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Cajero: {turno.nombreCajero}</p>
+            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm">
+              <span className="text-xs font-semibold text-gray-400 uppercase">Turno Actual</span>
+              <p className="text-lg font-bold text-white mt-1">{turno.codigo}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Cajero: {turno.nombreCajero}</p>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-semibold text-slate-400 uppercase">Base Inicial</span>
-              <p className="text-xl font-bold text-emerald-600 mt-1">
+            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm">
+              <span className="text-xs font-semibold text-gray-400 uppercase">Base Inicial</span>
+              <p className="text-xl font-bold text-emerald-400 mt-1">
                 ${turno.baseInicial.toLocaleString('es-CO')}
               </p>
-              <p className="text-xs text-slate-500 mt-0.5">Efectivo de arranque</p>
+              <p className="text-xs text-gray-400 mt-0.5">Efectivo de arranque</p>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-semibold text-slate-400 uppercase">Movimientos</span>
-              <p className="text-xl font-bold text-slate-800 mt-1">{turno.movimientos.length}</p>
-              <p className="text-xs text-slate-500 mt-0.5">Entradas y salidas</p>
+            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm">
+              <span className="text-xs font-semibold text-gray-400 uppercase">Movimientos</span>
+              <p className="text-xl font-bold text-white mt-1">{turno.movimientos.length}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Entradas y salidas</p>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-semibold text-slate-400 uppercase">Apertura</span>
-              <p className="text-sm font-semibold text-slate-700 mt-1">
+            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm">
+              <span className="text-xs font-semibold text-gray-400 uppercase">Apertura</span>
+              <p className="text-sm font-semibold text-gray-200 mt-1">
                 {new Date(turno.fechaAperturaUtc).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
               </p>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-gray-400 mt-0.5">
                 {new Date(turno.fechaAperturaUtc).toLocaleDateString('es-CO')}
               </p>
             </div>
@@ -404,16 +448,16 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
           </div>
 
           {/* Tabla de Movimientos del Turno */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <h2 className="font-bold text-slate-800 text-sm uppercase tracking-wide">
+          <div className="bg-gray-900/80 rounded-xl shadow-sm border border-white/10 overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/10 bg-gray-950/40 flex items-center justify-between">
+              <h2 className="font-bold text-white text-sm uppercase tracking-wide">
                 Movimientos Inmutables del Turno (RF-6.4, T052)
               </h2>
-              <span className="text-xs text-slate-500">Solo inserción (append-only)</span>
+              <span className="text-xs text-gray-400">Solo inserción (append-only)</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-600">
-                <thead className="bg-slate-100 text-xs uppercase text-slate-500 font-semibold border-b border-slate-200">
+              <table className="w-full text-left text-sm text-gray-300">
+                <thead className="bg-white/5 text-xs uppercase text-gray-400 font-semibold border-b border-white/10">
                   <tr>
                     <th className="px-6 py-3">Hora</th>
                     <th className="px-6 py-3">Código</th>
@@ -422,10 +466,10 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                     <th className="px-6 py-3 text-right">Monto</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-white/5">
                   {turno.movimientos.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-6 text-center text-slate-400">
+                      <td colSpan={5} className="px-6 py-6 text-center text-gray-400">
                         No hay movimientos registrados en este turno.
                       </td>
                     </tr>
@@ -433,16 +477,16 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                     turno.movimientos.map((m) => {
                       const esEgreso = m.tipoMovimiento === 'EGRESO_CAJA_MENOR';
                       return (
-                        <tr key={m.id} className="hover:bg-slate-50">
-                          <td className="px-6 py-3 text-xs text-slate-500">
+                        <tr key={m.id} className="hover:bg-white/[0.03] transition-colors">
+                          <td className="px-6 py-3 text-xs text-gray-400">
                             {new Date(m.fechaUtc).toLocaleTimeString('es-CO')}
                           </td>
-                          <td className="px-6 py-3 font-mono text-xs text-slate-500">{m.codigo}</td>
+                          <td className="px-6 py-3 font-mono text-xs text-blue-300 font-bold">{m.codigo}</td>
                           <td className="px-6 py-3">
                             <Badge
                               variant={
                                 m.tipoMovimiento === 'BASE_INICIAL'
-                                  ? 'primary'
+                                  ? 'info'
                                   : esEgreso
                                   ? 'danger'
                                   : 'success'
@@ -452,13 +496,13 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                               {m.tipoMovimiento}
                             </Badge>
                           </td>
-                          <td className="px-6 py-3 font-medium text-slate-800">{m.concepto}</td>
+                          <td className="px-6 py-3 font-medium text-white">{m.concepto}</td>
                           <td
-                            className={`px-6 py-3 text-right font-bold ${
-                              esEgreso ? 'text-rose-600' : 'text-slate-800'
+                            className={`px-6 py-3 text-right font-bold font-mono ${
+                              esEgreso ? 'text-rose-400' : 'text-emerald-400'
                             }`}
                           >
-                            {esEgreso ? '-' : ''}${m.monto.toLocaleString('es-CO')}
+                            {esEgreso ? '-' : '+'}${m.monto.toLocaleString('es-CO')}
                           </td>
                         </tr>
                       );

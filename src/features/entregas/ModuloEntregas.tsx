@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Card, Button, Badge, Input } from '@farutech/design-system';
+import { Card, Button, Badge, Input, Modal } from '@farutech/design-system';
 import { entregasApi } from '../../services/entregasApi';
 import type {
   ItemListoEntrega,
@@ -33,6 +33,9 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
 
   // Remisión Activa en edición / despacho
   const [remisionActiva, setRemisionActiva] = useState<RemisionDetalle | null>(null);
+
+  // Modal de Selección para Nueva Entrega
+  const [mostrarModalNuevaEntrega, setMostrarModalNuevaEntrega] = useState(false);
 
   // Modal de Pago
   const [isPagoModalOpen, setIsPagoModalOpen] = useState(false);
@@ -208,8 +211,8 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Módulo de Entregas y Despacho</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-white tracking-tight">Módulo de Entregas y Despacho</h1>
+          <p className="text-sm text-gray-400">
             Liquidación final de saldos, generación de remisiones y entrega formal al cliente.
           </p>
         </div>
@@ -217,25 +220,37 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           <Button variant="secondary" onClick={cargarItemsListos} disabled={loading}>
             {loading ? 'Actualizando...' : 'Refrescar'}
           </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              if (solicitudesAgrupadas.length === 1) {
+                handleGenerarRemision(solicitudesAgrupadas[0].solicitudPublicId);
+              } else {
+                setMostrarModalNuevaEntrega(true);
+              }
+            }}
+          >
+            + Registrar Entrega / Despacho
+          </Button>
         </div>
       </div>
 
       {/* Alertas */}
       {errorMsg && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center justify-between">
+        <div className="p-4 bg-rose-950/40 border border-rose-800/50 text-rose-300 rounded-xl text-sm flex items-center justify-between">
           <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} className="text-red-500 hover:text-red-700 font-bold">✕</button>
+          <button onClick={() => setErrorMsg(null)} className="text-rose-400 hover:text-rose-200 font-bold">✕</button>
         </div>
       )}
       {successMsg && (
-        <div className="p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm flex items-center justify-between">
+        <div className="p-4 bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 rounded-xl text-sm flex items-center justify-between">
           <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} className="text-green-500 hover:text-green-700 font-bold">✕</button>
+          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-200 font-bold">✕</button>
         </div>
       )}
 
       {/* Buscador */}
-      <Card className="p-4">
+      <Card className="p-4 bg-gray-900/80 border border-white/10 rounded-xl">
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1">
             <Input
@@ -252,50 +267,50 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
 
       {/* VISTA DETALLE REMISIÓN ACTIVA */}
       {remisionActiva && (
-        <Card className="p-6 border-2 border-blue-500 bg-blue-50/20 space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-blue-100 pb-4">
+        <Card className="p-6 border border-blue-500/50 bg-blue-950/20 rounded-2xl space-y-6 shadow-2xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
             <div>
               <div className="flex items-center gap-3">
-                <h2 className="text-xl font-black text-gray-900">
+                <h2 className="text-xl font-black text-white tracking-wide">
                   Remisión: {remisionActiva.numeroDocumento}
                 </h2>
                 <Badge variant={remisionActiva.estado === 'ASENTADO' ? 'success' : 'warning'}>
                   {remisionActiva.estado}
                 </Badge>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Cliente: <span className="font-bold text-gray-700">{remisionActiva.cliente.nombreRazonSocial}</span> ({remisionActiva.cliente.numeroDocumento}) | Solicitud: {remisionActiva.documentoSolicitudNumero}
+              <p className="text-xs text-gray-400 mt-1">
+                Cliente: <span className="font-bold text-white">{remisionActiva.cliente.nombreRazonSocial}</span> ({remisionActiva.cliente.numeroDocumento}) | Solicitud: <span className="font-mono text-blue-300 font-bold">{remisionActiva.documentoSolicitudNumero}</span>
               </p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setRemisionActiva(null)}>
+            <Button variant="secondary" size="sm" onClick={() => setRemisionActiva(null)}>
               ✕ Cerrar Vista
             </Button>
           </div>
 
           {/* Tabla de Ítems en la Remisión */}
           <div>
-            <h3 className="text-sm font-bold text-gray-700 mb-2">Ítems a Entregar</h3>
-            <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
+            <h3 className="text-sm font-bold text-gray-300 mb-2">Ítems a Entregar</h3>
+            <div className="overflow-x-auto bg-gray-900/90 rounded-xl border border-white/10 shadow-inner">
+              <table className="min-w-full divide-y divide-white/10 text-sm">
+                <thead className="bg-white/5">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Descripción</th>
-                    <th className="px-4 py-2 text-center text-xs font-semibold text-gray-600">Cantidad</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Precio Unitario</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Subtotal</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Anticipo Aplicado</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Saldo Ítem</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-300">Descripción</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-300">Cantidad</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-300">Precio Unitario</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-300">Subtotal</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-300">Anticipo Aplicado</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-300">Saldo Ítem</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-white/5">
                   {remisionActiva.items.map((it) => (
-                    <tr key={it.publicId}>
-                      <td className="px-4 py-2 font-medium text-gray-900">{it.descripcion}</td>
-                      <td className="px-4 py-2 text-center text-gray-600">{it.cantidad}</td>
-                      <td className="px-4 py-2 text-right text-gray-600">${it.precioUnitario.toLocaleString()}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-gray-900">${it.subtotal.toLocaleString()}</td>
-                      <td className="px-4 py-2 text-right text-green-600">${it.anticipoDirectoImputado.toLocaleString()}</td>
-                      <td className="px-4 py-2 text-right font-bold text-gray-800">${it.saldoPendienteItem.toLocaleString()}</td>
+                    <tr key={it.publicId} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-2.5 font-medium text-white">{it.descripcion}</td>
+                      <td className="px-4 py-2.5 text-center text-gray-300">{it.cantidad}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-300 font-mono">${it.precioUnitario.toLocaleString()}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-white font-mono">${it.subtotal.toLocaleString()}</td>
+                      <td className="px-4 py-2.5 text-right text-emerald-400 font-mono">${it.anticipoDirectoImputado.toLocaleString()}</td>
+                      <td className="px-4 py-2.5 text-right font-bold text-gray-200 font-mono">${it.saldoPendienteItem.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -304,22 +319,22 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           </div>
 
           {/* Liquidación Financiera (T042) */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-white rounded-lg border border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-gray-900/90 rounded-xl border border-white/10">
             <div>
-              <span className="text-xs text-gray-500">Total Facturado</span>
-              <div className="text-lg font-bold text-gray-900">${remisionActiva.totalNeto.toLocaleString()}</div>
+              <span className="text-xs text-gray-400">Total Facturado</span>
+              <div className="text-lg font-bold text-white font-mono">${remisionActiva.totalNeto.toLocaleString()}</div>
             </div>
             <div>
-              <span className="text-xs text-gray-500">Anticipos Solicitud</span>
-              <div className="text-lg font-bold text-green-600">-${remisionActiva.totalAnticiposPrevios.toLocaleString()}</div>
+              <span className="text-xs text-gray-400">Anticipos Solicitud</span>
+              <div className="text-lg font-bold text-emerald-400 font-mono">-${remisionActiva.totalAnticiposPrevios.toLocaleString()}</div>
             </div>
             <div>
-              <span className="text-xs text-gray-500">Pagos en Entrega</span>
-              <div className="text-lg font-bold text-blue-600">-${remisionActiva.totalPagosEntrega.toLocaleString()}</div>
+              <span className="text-xs text-gray-400">Pagos en Entrega</span>
+              <div className="text-lg font-bold text-blue-400 font-mono">-${remisionActiva.totalPagosEntrega.toLocaleString()}</div>
             </div>
-            <div className="border-l pl-4 border-gray-200">
-              <span className="text-xs font-bold text-gray-700">Saldo Pendiente a Cobrar</span>
-              <div className={`text-xl font-black ${remisionActiva.saldoPendiente > 0 ? 'text-red-600' : 'text-green-600'}`}>
+            <div className="border-l pl-4 border-white/10">
+              <span className="text-xs font-bold text-gray-300">Saldo Pendiente a Cobrar</span>
+              <div className={`text-xl font-black font-mono ${remisionActiva.saldoPendiente > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                 ${remisionActiva.saldoPendiente.toLocaleString()}
               </div>
             </div>
@@ -329,42 +344,40 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           {remisionActiva.estado === 'BORRADOR' && (
             <div className="space-y-4 pt-2">
               {remisionActiva.saldoPendiente > 0 ? (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex flex-col md:flex-row items-center justify-between gap-3">
-                  <div className="text-sm text-amber-800">
-                    <span className="font-bold">⚠️ Invariante #3:</span> Existe un saldo pendiente de <strong>${remisionActiva.saldoPendiente.toLocaleString()}</strong>. El sistema bloquea el despacho hasta que el saldo esté 100% saldado.
+                <div className="p-4 bg-amber-950/40 border border-amber-800/50 rounded-xl flex flex-col md:flex-row items-center justify-between gap-3">
+                  <div className="text-sm text-amber-300">
+                    <span className="font-bold">⚠️ Invariante #3:</span> Existe un saldo pendiente de <strong className="font-mono">${remisionActiva.saldoPendiente.toLocaleString()}</strong>. El sistema bloquea el despacho hasta que el saldo esté 100% saldado.
                   </div>
                   <Button variant="primary" onClick={handleAbrirPago}>
                     💳 Registrar Cobro (${remisionActiva.saldoPendiente.toLocaleString()})
                   </Button>
                 </div>
               ) : (
-                <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm font-semibold flex items-center gap-2">
-                  <span>✅</span> Saldo 100% liquidado. La remisión está lista para asentar y despachar.
+                <div className="p-4 bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 rounded-xl text-sm font-semibold flex items-center gap-2">
+                  <span>✅</span> Saldo 100% liquidado. La remisión está lista para asentar y despachar al cliente.
                 </div>
               )}
 
               {/* Registro de Recibido Por (RF-5.5, T044) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white rounded-lg border border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-900/80 rounded-xl border border-white/10">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Entregado a (Nombre Completo) *
-                  </label>
                   <Input
+                    label="Entregado a (Nombre Completo) *"
                     value={recibidoPorNombre}
                     onChange={(e) => setRecibidoPorNombre(e.target.value)}
                     placeholder="Ej: Carlos Mendoza"
                     required
+                    fullWidth
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Cédula / Documento Identidad *
-                  </label>
                   <Input
+                    label="Cédula / Documento Identidad *"
                     value={recibidoPorDocumento}
                     onChange={(e) => setRecibidoPorDocumento(e.target.value)}
                     placeholder="Ej: 1098765432"
                     required
+                    fullWidth
                   />
                 </div>
               </div>
@@ -388,9 +401,9 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           )}
 
           {remisionActiva.estado === 'ASENTADO' && (
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 space-y-1">
-              <div className="font-bold text-green-700">📦 Remisión Finalizada y Despachada</div>
-              <div>Recibido por: <strong>{remisionActiva.recibidoPorNombre}</strong> (Doc: {remisionActiva.recibidoPorDocumento})</div>
+            <div className="p-4 bg-emerald-950/40 border border-emerald-800/50 rounded-xl text-sm text-gray-200 space-y-1">
+              <div className="font-bold text-emerald-300">📦 Remisión Finalizada y Despachada</div>
+              <div>Recibido por: <strong className="text-white">{remisionActiva.recibidoPorNombre}</strong> (Doc: {remisionActiva.recibidoPorDocumento})</div>
               <div className="text-xs text-gray-400">Fecha de entrega: {new Date(remisionActiva.fechaEmision).toLocaleString()}</div>
             </div>
           )}
@@ -398,27 +411,32 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       )}
 
       {/* TABLA DE SOLICITUDES LISTAS PARA GENERAR REMISIÓN */}
-      <Card className="overflow-hidden">
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">Órdenes Listas para Entrega (1 Solicitud por Remisión)</h2>
-          <p className="text-xs text-gray-500">
-            Trabajos de taller terminados pendientes de entrega en mostrador.
-          </p>
+      <Card className="overflow-hidden bg-gray-900/80 border border-white/10 rounded-2xl shadow-xl">
+        <div className="p-4 border-b border-white/10 bg-gray-950/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-white">Órdenes Listas para Entrega (1 Solicitud por Remisión)</h2>
+            <p className="text-xs text-gray-400">
+              Trabajos de taller terminados pendientes de entrega y liquidación en mostrador.
+            </p>
+          </div>
+          <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-gray-800 text-gray-300 border border-white/10">
+            {solicitudesAgrupadas.length} pendientes
+          </span>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-white/10 text-sm">
+            <thead className="bg-white/5">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Solicitud</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Cliente</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Ítems Listos</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Total</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Anticipos</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Saldo a Cobrar</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Acción</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-300">Solicitud</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-300">Cliente</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-300">Ítems Listos</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-300">Total</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-300">Anticipos</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-300">Saldo a Cobrar</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-300">Acción</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-white/5">
               {solicitudesAgrupadas.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
@@ -427,25 +445,25 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 </tr>
               ) : (
                 solicitudesAgrupadas.map((sol) => (
-                  <tr key={sol.solicitudPublicId} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-bold text-gray-900">{sol.solicitudNumero}</td>
+                  <tr key={sol.solicitudPublicId} className="hover:bg-white/[0.03] transition-colors">
+                    <td className="px-4 py-3 font-bold font-mono text-white">{sol.solicitudNumero}</td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{sol.clienteNombre}</div>
-                      <div className="text-xs text-gray-400">{sol.clienteDocumento}</div>
+                      <div className="font-semibold text-white">{sol.clienteNombre}</div>
+                      <div className="text-xs text-gray-400 font-mono">{sol.clienteDocumento}</div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="space-y-1">
                         {sol.items.map((it) => (
-                          <div key={it.itemPublicId} className="text-xs text-gray-600 flex items-center gap-2">
+                          <div key={it.itemPublicId} className="text-xs text-gray-300 flex items-center gap-2">
                             <span>• {it.descripcion} (Cant: {it.cantidad})</span>
                             <Badge variant="success">{it.etapaActualNombre}</Badge>
                           </div>
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900">${sol.totalNeto.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-green-600 font-medium">${sol.totalAnticipos.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-bold text-red-600">${sol.saldoPendiente.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono text-white font-semibold">${sol.totalNeto.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono text-emerald-400">${sol.totalAnticipos.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-rose-400">${sol.saldoPendiente.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right">
                       <Button
                         size="sm"
@@ -464,33 +482,101 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         </div>
       </Card>
 
+      {/* MODAL NUEVA ENTREGA / SELECCIONAR SOLICITUD */}
+      <Modal
+        isOpen={mostrarModalNuevaEntrega}
+        onClose={() => setMostrarModalNuevaEntrega(false)}
+        title="Registrar Nueva Entrega / Despacho"
+        size="lg"
+      >
+        <div className="p-4 space-y-4">
+          <p className="text-xs text-gray-400">
+            Seleccione la solicitud u orden de servicio finalizada en taller para liquidar saldos y generar remisión formal de despacho.
+          </p>
+
+          {solicitudesAgrupadas.length === 0 ? (
+            <div className="p-8 text-center text-gray-400 border border-dashed border-white/10 rounded-xl">
+              No hay órdenes listas para entrega pendientes en cola de taller.
+            </div>
+          ) : (
+            <div className="divide-y divide-white/5 border border-white/10 rounded-xl overflow-hidden bg-gray-950/40">
+              {solicitudesAgrupadas.map((sol) => (
+                <div key={sol.solicitudPublicId} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white/[0.02]">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white font-mono">{sol.solicitudNumero}</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-blue-950 text-blue-300 font-medium">
+                        {sol.items.length} {sol.items.length === 1 ? 'ítem listo' : 'ítems listos'}
+                      </span>
+                    </div>
+                    <div className="text-sm font-semibold text-gray-200 mt-1">{sol.clienteNombre}</div>
+                    <div className="text-xs text-gray-400 font-mono">Doc: {sol.clienteDocumento}</div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-xs text-gray-400">Saldo a Cobrar</div>
+                      <div className={`text-base font-black font-mono ${sol.saldoPendiente > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        ${sol.saldoPendiente.toLocaleString('es-CO')}
+                      </div>
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        setMostrarModalNuevaEntrega(false);
+                        handleGenerarRemision(sol.solicitudPublicId);
+                      }}
+                    >
+                      📦 Iniciar Entrega
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-3 border-t border-white/10">
+            <Button variant="secondary" onClick={() => setMostrarModalNuevaEntrega(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* MODAL COBRAR SALDO PENDIENTE */}
-      {isPagoModalOpen && remisionActiva && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md p-6 space-y-4">
-            <h3 className="text-lg font-bold text-gray-900">Cobro de Entrega</h3>
-            <p className="text-xs text-gray-500">
-              Remisión: <span className="font-semibold">{remisionActiva.numeroDocumento}</span> | Cliente: {remisionActiva.cliente.nombreRazonSocial}
-            </p>
+      <Modal
+        isOpen={isPagoModalOpen && !!remisionActiva}
+        onClose={() => setIsPagoModalOpen(false)}
+        title="Cobro de Saldo de Entrega"
+        size="md"
+      >
+        {remisionActiva && (
+          <div className="p-4 space-y-4">
+            <div className="bg-gray-900/60 p-3 rounded-xl border border-white/10">
+              <span className="text-xs text-gray-400">Remisión: </span>
+              <span className="font-bold font-mono text-white">{remisionActiva.numeroDocumento}</span>
+              <div className="text-xs text-gray-300 mt-0.5">Cliente: {remisionActiva.cliente.nombreRazonSocial}</div>
+            </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Monto a Cobrar ($) *</label>
+                <label className="block text-xs font-semibold text-gray-300 uppercase mb-1">Monto a Cobrar (COP) *</label>
                 <Input
                   type="number"
                   value={montoPago}
                   onChange={(e) => setMontoPago(Number(e.target.value))}
                   max={remisionActiva.saldoPendiente}
                   min={1}
+                  fullWidth
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Medio de Pago *</label>
+                <label className="block text-xs font-semibold text-gray-300 uppercase mb-1">Medio de Pago *</label>
                 <select
                   value={instrumentoSeleccionado}
                   onChange={(e) => setInstrumentoSeleccionado(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-gray-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   {instrumentosPago.length === 0 ? (
                     <option value="">Efectivo Mostrador (Predeterminado)</option>
@@ -505,16 +591,17 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Referencia Transacción (Opcional)</label>
                 <Input
+                  label="Referencia Transacción (Opcional)"
                   value={referenciaPago}
                   onChange={(e) => setReferenciaPago(e.target.value)}
                   placeholder="Ej: Aprobación datáfono #987654"
+                  fullWidth
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
               <Button variant="secondary" onClick={() => setIsPagoModalOpen(false)}>
                 Cancelar
               </Button>
@@ -522,9 +609,9 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 Confirmar Recaudo
               </Button>
             </div>
-          </Card>
-        </div>
-      )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

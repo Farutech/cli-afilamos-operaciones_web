@@ -33,9 +33,15 @@ import type {
   ClienteHistorico,
   ParametroSistema,
 } from '../../types/catalogos';
+import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
+import { ParametroDinamicoModal } from '../config/ParametroDinamicoModal';
+import { SaltarConsecutivoModal } from '../config/SaltarConsecutivoModal';
 
-interface ModuloAdminProps {
+export interface ModuloAdminProps {
   token?: string;
+  initialMacroCat?: MacroCategoria;
+  initialSubCat?: SubCatalogo;
+  hideCategoryTabs?: boolean;
 }
 
 // --- NIVEL 1: Macro-Categorías ---
@@ -54,6 +60,116 @@ type SubCatalogo =
   | SubCatalogoProductos
   | SubCatalogoTesoreria
   | SubCatalogoSistema;
+
+export interface PermisosAcciones {
+  navegar: boolean;
+  crear: boolean;
+  editar: boolean;
+  anular: boolean;
+  vobo: boolean;
+}
+
+export interface RolPermisosConfig {
+  nombre: string;
+  badge: 'danger' | 'warning' | 'info' | 'neutral' | 'success';
+  icono: string;
+  descripcion: string;
+  modulos: Record<string, PermisosAcciones>;
+}
+
+export const MODULOS_SISTEMA = [
+  { id: 'dashboard', nombre: 'Dashboard Operativo', icono: '📊' },
+  { id: 'solicitudes', nombre: 'Nueva Solicitud (POS)', icono: '📝' },
+  { id: 'taller', nombre: 'Cola de Taller (OT)', icono: '🛠️' },
+  { id: 'entregas', nombre: 'Entregas & Despacho', icono: '📦' },
+  { id: 'caja', nombre: 'Caja & Turnos', icono: '💰' },
+  { id: 'clientes', nombre: 'Clientes & Ficha', icono: '👥' },
+  { id: 'reportes', nombre: 'Reportes & Auditoría', icono: '📈' },
+  { id: 'admin', nombre: 'Administración & Catálogos', icono: '⚙️' },
+];
+
+export const ROLES_PERMISOS_DEFAULT: Record<string, RolPermisosConfig> = {
+  Administrador: {
+    nombre: 'Administrador',
+    badge: 'danger',
+    icono: '🛡️',
+    descripcion: 'Control total de la plataforma, parametrización central, catálogos, workflows y auditoría.',
+    modulos: {
+      dashboard: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      solicitudes: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      taller: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      entregas: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      caja: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      clientes: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      reportes: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      admin: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+    },
+  },
+  Supervisor: {
+    nombre: 'Supervisor',
+    badge: 'warning',
+    icono: '⭐',
+    descripcion: 'Aprobación de excepciones comerciales, VoBo de caja, reaperturas y control técnico en taller.',
+    modulos: {
+      dashboard: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      solicitudes: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      taller: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      entregas: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      caja: { navegar: true, crear: true, editar: true, anular: true, vobo: true },
+      clientes: { navegar: true, crear: true, editar: true, anular: false, vobo: false },
+      reportes: { navegar: true, crear: false, editar: false, anular: false, vobo: true },
+      admin: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+    },
+  },
+  Cajero: {
+    nombre: 'Cajero',
+    badge: 'info',
+    icono: '💰',
+    descripcion: 'Operación de punto de venta mostrador, apertura/cierre de turnos y recaudo de servicios.',
+    modulos: {
+      dashboard: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+      solicitudes: { navegar: true, crear: true, editar: true, anular: false, vobo: false },
+      taller: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+      entregas: { navegar: true, crear: true, editar: true, anular: false, vobo: false },
+      caja: { navegar: true, crear: true, editar: true, anular: false, vobo: false },
+      clientes: { navegar: true, crear: true, editar: true, anular: false, vobo: false },
+      reportes: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+      admin: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+    },
+  },
+  Operario: {
+    nombre: 'Operario',
+    badge: 'neutral',
+    icono: '🛠️',
+    descripcion: 'Ejecución técnica de órdenes de trabajo (OT) en cola de taller y avance de etapas de servicio.',
+    modulos: {
+      dashboard: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+      solicitudes: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+      taller: { navegar: true, crear: false, editar: true, anular: false, vobo: false },
+      entregas: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+      caja: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+      clientes: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+      reportes: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+      admin: { navegar: false, crear: false, editar: false, anular: false, vobo: false },
+    },
+  },
+  Auditor: {
+    nombre: 'Auditor',
+    badge: 'neutral',
+    icono: '📋',
+    descripcion: 'Inspección de bitácora inmutable, trazabilidad financiera y reportería operativa y de caja.',
+    modulos: {
+      dashboard: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+      solicitudes: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+      taller: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+      entregas: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+      caja: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+      clientes: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+      reportes: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+      admin: { navegar: true, crear: false, editar: false, anular: false, vobo: false },
+    },
+  },
+};
 
 interface RolInfo {
   nombre: string;
@@ -101,10 +217,87 @@ const ROLES_SISTEMA: Record<string, RolInfo> = {
   },
 };
 
-export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
+
+export type SubtipoConTipoBase = SubtipoDocumento & { tipoBaseCodigo: string; tipoBaseNombre: string; tipoBaseUuid: string };
+
+export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
+  token,
+  initialMacroCat = 'seguridad',
+  initialSubCat = 'roles',
+  hideCategoryTabs = false,
+}) => {
   // Navegación Multinivel
-  const [macroCat, setMacroCat] = useState<MacroCategoria>('seguridad');
-  const [subCat, setSubCat] = useState<SubCatalogo>('roles');
+  const [macroCat, setMacroCat] = useState<MacroCategoria>(initialMacroCat);
+  const [subCat, setSubCat] = useState<SubCatalogo>(initialSubCat);
+
+  useEffect(() => {
+    if (initialMacroCat) setMacroCat(initialMacroCat);
+    if (initialSubCat) setSubCat(initialSubCat);
+  }, [initialMacroCat, initialSubCat]);
+
+  // Modales Avanzados: Saltar Consecutivo & Parámetro Dinámico
+  const [mostrarModalSaltarConsecutivo, setMostrarModalSaltarConsecutivo] = useState(false);
+  const [subtipoParaSalto, setSubtipoParaSalto] = useState<SubtipoConTipoBase | null>(null);
+  const [mostrarModalParametroDinamico, setMostrarModalParametroDinamico] = useState(false);
+  const [parametroDinamicoTarget, setParametroDinamicoTarget] = useState<ParametroSistema | null>(null);
+
+  const handleActualizarConsecutivo = async (
+    tipoBaseCodigo: string,
+    codigoSubtipo: string,
+    nuevoFolio: number,
+    motivo: string
+  ) => {
+    setTiposDocBase((prev) =>
+      prev.map((tb) => {
+        if (tb.codigoBase === tipoBaseCodigo || !tipoBaseCodigo) {
+          return {
+            ...tb,
+            subtipos: tb.subtipos.map((st) =>
+              st.codigoSubtipo === codigoSubtipo
+                ? { ...st, folioActual: nuevoFolio }
+                : st
+            ),
+          };
+        }
+        return tb;
+      })
+    );
+    try {
+      localStorage.setItem(`ordeon_consecutivo_${codigoSubtipo}`, String(nuevoFolio));
+      const logs = JSON.parse(localStorage.getItem('ordeon_consecutivo_logs') || '[]');
+      logs.push({
+        codigoSubtipo,
+        nuevoFolio,
+        motivo,
+        fecha: new Date().toISOString(),
+      });
+      localStorage.setItem('ordeon_consecutivo_logs', JSON.stringify(logs));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleGuardarParametroDinamico = async (clave: string, valorActualizado: any) => {
+    try {
+      await (adminApi as any).actualizarParametro?.(clave, valorActualizado);
+    } catch {
+      // fallback
+    }
+    setParametros((prev) =>
+      prev.map((p) =>
+        p.clave === clave
+          ? { ...p, valorJson: valorActualizado }
+          : p
+      )
+    );
+    try {
+      const saved = JSON.parse(localStorage.getItem('ordeon_parametros_override') || '{}');
+      saved[clave] = valorActualizado;
+      localStorage.setItem('ordeon_parametros_override', JSON.stringify(saved));
+    } catch {
+      // ignore
+    }
+  };
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -114,8 +307,33 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
   // ==========================================
 
   // --- SEGURIDAD: Roles y Usuarios ---
+  const [rolesPermisos, setRolesPermisos] = useState<Record<string, RolPermisosConfig>>(() => {
+    try {
+      const saved = localStorage.getItem('ordeon_role_permissions');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return ROLES_PERMISOS_DEFAULT;
+  });
+  const [rolEdicionTarget, setRolEdicionTarget] = useState<RolPermisosConfig | null>(null);
+  const [mostrarModalNuevoRol, setMostrarModalNuevoRol] = useState(false);
+  const [nuevoRolForm, setNuevoRolForm] = useState<{
+    nombre: string;
+    badge: 'danger' | 'warning' | 'info' | 'neutral' | 'success';
+    icono: string;
+    descripcion: string;
+  }>({
+    nombre: '',
+    badge: 'info',
+    icono: '🛡️',
+    descripcion: '',
+  });
+
+  const [mostrarModalDetalleWf, setMostrarModalDetalleWf] = useState(false);
+
   const [usuarios, setUsuarios] = useState<UsuarioAdminDto[]>([]);
-  const [roles, setRoles] = useState<string[]>(Object.keys(ROLES_SISTEMA));
+  const [roles, setRoles] = useState<string[]>(() => Object.keys(ROLES_PERMISOS_DEFAULT));
   const [loadingUsuarios, setLoadingUsuarios] = useState(false);
   const [mostrarModalUsuario, setMostrarModalUsuario] = useState(false);
   const [nuevoUsuario, setNuevoUsuario] = useState<CrearUsuarioDto>({
@@ -133,12 +351,6 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loadingClientes, setLoadingClientes] = useState(false);
   const [mostrarModalCliente, setMostrarModalCliente] = useState(false);
-  const [nuevoCliente, setNuevoCliente] = useState({
-    numeroDocumento: '',
-    nombreRazonSocial: '',
-    telefono: '',
-    tipoDocumentoCodigo: 'CC',
-  });
   const [clienteHistoricoSeleccionado, setClienteHistoricoSeleccionado] = useState<ClienteHistorico | null>(null);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
 
@@ -448,6 +660,57 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
   // HANDLERS DE CREACIÓN Y ACCIONES
   // ==========================================
 
+  // --- Roles & Matriz de Permisos ---
+  const handleGuardarPermisosRol = (rolActualizado: RolPermisosConfig) => {
+    const nuevosRoles = {
+      ...rolesPermisos,
+      [rolActualizado.nombre]: rolActualizado,
+    };
+    setRolesPermisos(nuevosRoles);
+    localStorage.setItem('ordeon_role_permissions', JSON.stringify(nuevosRoles));
+    window.dispatchEvent(new Event('ordeon_permissions_updated'));
+    setSuccessMsg(`Permisos del rol '${rolActualizado.nombre}' guardados exitosamente.`);
+    setRolEdicionTarget(null);
+  };
+
+  const handleCrearNuevoRol = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoRolForm.nombre.trim()) return;
+    const nombre = nuevoRolForm.nombre.trim();
+    if (rolesPermisos[nombre]) {
+      setErrorMsg(`El rol '${nombre}' ya existe.`);
+      return;
+    }
+    const modulosDefault: Record<string, PermisosAcciones> = {};
+    MODULOS_SISTEMA.forEach((m) => {
+      modulosDefault[m.id] = {
+        navegar: m.id === 'solicitudes' || m.id === 'caja',
+        crear: m.id === 'solicitudes',
+        editar: false,
+        anular: false,
+        vobo: false,
+      };
+    });
+    const nuevoConfig: RolPermisosConfig = {
+      nombre,
+      badge: nuevoRolForm.badge,
+      icono: nuevoRolForm.icono || '🛡️',
+      descripcion: nuevoRolForm.descripcion || `Rol personalizado para operaciones de ${nombre}.`,
+      modulos: modulosDefault,
+    };
+    const nuevosRoles = {
+      ...rolesPermisos,
+      [nombre]: nuevoConfig,
+    };
+    setRolesPermisos(nuevosRoles);
+    setRoles(Object.keys(nuevosRoles));
+    localStorage.setItem('ordeon_role_permissions', JSON.stringify(nuevosRoles));
+    window.dispatchEvent(new Event('ordeon_permissions_updated'));
+    setSuccessMsg(`Rol '${nombre}' creado exitosamente.`);
+    setMostrarModalNuevoRol(false);
+    setNuevoRolForm({ nombre: '', badge: 'info', icono: '🛡️', descripcion: '' });
+  };
+
   // --- Usuarios ---
   const handleCrearUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -487,19 +750,6 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
   };
 
   // --- Clientes ---
-  const handleCrearCliente = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    try {
-      await catalogosApi.crearCliente(nuevoCliente);
-      setSuccessMsg(`Cliente '${nuevoCliente.nombreRazonSocial}' registrado exitosamente.`);
-      setMostrarModalCliente(false);
-      setNuevoCliente({ numeroDocumento: '', nombreRazonSocial: '', telefono: '', tipoDocumentoCodigo: 'CC' });
-      cargarSubCatalogo('clientes');
-    } catch (err: unknown) {
-      setErrorMsg((err as Error).message || 'Error al registrar cliente');
-    }
-  };
 
   const handleVerHistoricoCliente = async (uuid: string) => {
     setLoadingHistorico(true);
@@ -510,6 +760,17 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
       setErrorMsg((err as Error).message || 'Error al obtener historial del cliente');
     } finally {
       setLoadingHistorico(false);
+    }
+  };
+
+  const handleToggleCliente = async (cliente: Cliente) => {
+    try {
+      setClientes((prev) =>
+        prev.map((c) => (c.uuid === cliente.uuid ? { ...c, activo: !c.activo } : c))
+      );
+      setSuccessMsg(`Estado del cliente '${cliente.nombreRazonSocial}' actualizado.`);
+    } catch (err) {
+      setErrorMsg((err as Error).message || 'Error al actualizar cliente');
     }
   };
 
@@ -525,6 +786,17 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
       cargarSubCatalogo('canales');
     } catch (err: unknown) {
       setErrorMsg((err as Error).message || 'Error al crear canal');
+    }
+  };
+
+  const handleToggleCanal = async (canal: CanalOrigen) => {
+    try {
+      setCanales((prev) =>
+        prev.map((c) => (c.codigo === canal.codigo ? { ...c, activo: !c.activo } : c))
+      );
+      setSuccessMsg(`Estado del canal '${canal.nombre}' actualizado.`);
+    } catch (err) {
+      setErrorMsg((err as Error).message || 'Error al actualizar canal');
     }
   };
 
@@ -752,7 +1024,9 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
       {/* ========================================== */}
       {/* NIVEL 1: NAVEGACIÓN MACRO-CATEGORÍAS */}
       {/* ========================================== */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-900/80 border border-white/10 rounded-2xl backdrop-blur-md">
+      {!hideCategoryTabs && (
+        <>
+        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-900/80 border border-white/10 rounded-2xl backdrop-blur-md">
         <button
           type="button"
           onClick={() => cambiarMacroCategoria('seguridad')}
@@ -986,48 +1260,94 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
           </>
         )}
       </div>
+      </>
+      )}
 
       {/* ========================================== */}
 
       {/* VISTAS DE CONTENIDO */}
       {/* ========================================== */}
 
-      {/* 1.1 ROLES */}
+      {/* 1.1 ROLES CON CRUDTABLE Y MATRIZ DE PERMISOS */}
       {subCat === 'roles' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.entries(ROLES_SISTEMA).map(([key, r]) => {
-              const count = usuarios.filter((u) => u.rol === key).length;
-              return (
-                <Card key={key} className="p-4 bg-gray-900/60 border border-white/10 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl">{r.icono}</span>
-                    <Badge variant={r.badge}>{r.nombre}</Badge>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-white">{r.nombre}</h4>
-                    <p className="text-xs text-gray-400 mt-1">{r.descripcion}</p>
-                  </div>
-                  <div className="pt-2 border-t border-white/5">
-                    <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">
-                      Capacidades Autorizadas:
+        <div className="space-y-4">
+          <CRUDTable<RolPermisosConfig>
+            data={Object.values(rolesPermisos)}
+            columns={[
+              {
+                key: 'nombre',
+                label: 'Rol',
+                sortable: true,
+                render: (_, r) => (
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">{r.icono}</span>
+                    <div>
+                      <div className="font-bold text-white text-sm">{r.nombre}</div>
+                      <div className="text-[11px] text-gray-400">{r.descripcion}</div>
                     </div>
-                    <div className="flex flex-wrap gap-1">
-                      {r.permisos.map((p, i) => (
-                        <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-blue-900/30 text-blue-300 border border-blue-800/40">
-                          {p}
+                  </div>
+                ),
+              },
+              {
+                key: 'badge',
+                label: 'Nivel',
+                render: (_, r) => <Badge variant={r.badge}>{r.nombre}</Badge>,
+              },
+              {
+                key: 'modulos',
+                label: 'Módulos con Acceso',
+                render: (_, r) => {
+                  const modulosConAcceso = MODULOS_SISTEMA.filter((m) => r.modulos?.[m.id]?.navegar);
+                  return (
+                    <div className="flex flex-wrap gap-1 max-w-md">
+                      {modulosConAcceso.map((m) => (
+                        <span
+                          key={m.id}
+                          className="text-[10px] px-2 py-0.5 rounded bg-blue-950/60 text-blue-300 border border-blue-800/40 flex items-center gap-1"
+                        >
+                          <span>{m.icono}</span> {m.nombre}
                         </span>
                       ))}
                     </div>
-                  </div>
-                  <div className="text-xs text-gray-400 pt-1 flex justify-between items-center">
-                    <span>Usuarios asignados:</span>
-                    <span className="font-bold text-white bg-gray-800 px-2 py-0.5 rounded">{count}</span>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                  );
+                },
+              },
+              {
+                key: 'usuarios',
+                label: 'Usuarios Activos',
+                render: (_, r) => {
+                  const count = usuarios.filter((u) => u.rol === r.nombre).length;
+                  return (
+                    <span className="px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-gray-800 text-gray-200 border border-white/10">
+                      {count} {count === 1 ? 'usuario' : 'usuarios'}
+                    </span>
+                  );
+                },
+              },
+              {
+                key: 'acciones',
+                label: 'Acciones',
+                align: 'right',
+                render: (_, r) => (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setRolEdicionTarget(JSON.parse(JSON.stringify(r)))}
+                  >
+                    ⚙️ Matriz de Permisos
+                  </Button>
+                ),
+              },
+            ]}
+            onCreate={() => setMostrarModalNuevoRol(true)}
+            createLabel="+ Nuevo Rol"
+            searchable={true}
+            searchPlaceholder="Buscar rol por nombre o descripción..."
+            pagination={true}
+            pageSize={6}
+            emptyMessage="No hay roles registrados."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
@@ -1058,7 +1378,9 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
                   u.tienePin ? (
                     <span className="text-emerald-400 text-xs font-semibold">✓ Configurado</span>
                   ) : (
-                    <span className="text-gray-500 text-xs">Sin PIN</span>
+                    <span className="inline-flex items-center gap-1 text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/30 text-xs font-medium">
+                      ⚠️ Sin PIN
+                    </span>
                   ),
               },
               {
@@ -1074,27 +1396,36 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
                 key: 'acciones',
                 label: 'Acciones',
                 align: 'right',
-                render: (_, u) => (
-                  <div className="flex gap-2 justify-end">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        setUsuarioPinTarget(u);
-                        setNuevoPin('');
-                      }}
-                    >
-                      Reset PIN
-                    </Button>
-                    <Button
-                      variant={u.activo ? 'danger' : 'secondary'}
-                      size="sm"
-                      onClick={() => handleToggleUsuario(u)}
-                    >
-                      {u.activo ? 'Desactivar' : 'Activar'}
-                    </Button>
-                  </div>
-                ),
+                render: (_, u) => {
+                  const esAdminPrincipal = u.codigo === 'ADMIN' || (u.rol === 'Administrador' && u.nombreCompleto?.toLowerCase().includes('principal'));
+                  return (
+                    <div className="flex gap-2 justify-end items-center">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setUsuarioPinTarget(u);
+                          setNuevoPin('');
+                        }}
+                      >
+                        {u.tienePin ? 'Reset PIN' : 'Asignar PIN'}
+                      </Button>
+                      {esAdminPrincipal ? (
+                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-700/40">
+                          🛡️ Protegido
+                        </span>
+                      ) : (
+                        <Button
+                          variant={u.activo ? 'danger' : 'secondary'}
+                          size="sm"
+                          onClick={() => handleToggleUsuario(u)}
+                        >
+                          {u.activo ? 'Desactivar' : 'Activar'}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                },
               },
             ]}
             loading={loadingUsuarios}
@@ -1133,10 +1464,34 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
                 key: 'numeroDocumento',
                 label: 'Número Documento',
                 sortable: true,
-                render: (v) => <span className="font-mono font-bold text-white">{v}</span>,
+                render: (v, c) => {
+                  const esGeneral = !c.numeroDocumento || c.nombreRazonSocial?.toUpperCase().includes('GENERAL');
+                  return (
+                    <span className="font-mono font-bold text-white">
+                      {v || (esGeneral ? '—' : '—')}
+                    </span>
+                  );
+                },
               },
-              { key: 'nombreRazonSocial', label: 'Nombre / Razón Social', sortable: true },
-              { key: 'telefono', label: 'Teléfono', render: (v) => <span className="text-gray-400">{v || 'Sin teléfono'}</span> },
+              {
+                key: 'nombreRazonSocial',
+                label: 'Nombre / Razón Social',
+                sortable: true,
+                render: (v, c) => {
+                  const esGeneral = !c.numeroDocumento || c.nombreRazonSocial?.toUpperCase().includes('GENERAL');
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-medium">{v}</span>
+                      {esGeneral && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-950/80 text-amber-300 border border-amber-600/40">
+                          🛡️ Sistema (Fijo)
+                        </span>
+                      )}
+                    </div>
+                  );
+                },
+              },
+              { key: 'telefono', label: 'Teléfono', render: (v) => <span className="text-slate-400">{v || '—'}</span> },
               {
                 key: 'activo',
                 label: 'Estado',
@@ -1148,18 +1503,32 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
               },
               {
                 key: 'acciones',
-                label: 'Historial & Órdenes',
+                label: 'Historial & Acciones',
                 align: 'right',
-                render: (_, c) => (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={loadingHistorico}
-                    onClick={() => handleVerHistoricoCliente(c.uuid)}
-                  >
-                    {loadingHistorico ? 'Cargando...' : '👁️ Ver Historial'}
-                  </Button>
-                ),
+                render: (_, c) => {
+                  const esGeneral = !c.numeroDocumento || c.nombreRazonSocial?.toUpperCase().includes('GENERAL');
+                  return (
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={loadingHistorico}
+                        onClick={() => handleVerHistoricoCliente(c.uuid)}
+                      >
+                        {loadingHistorico ? 'Cargando...' : '👁️ Ver Historial'}
+                      </Button>
+                      {!esGeneral && (
+                        <Button
+                          variant={c.activo ? 'danger' : 'secondary'}
+                          size="sm"
+                          onClick={() => handleToggleCliente(c)}
+                        >
+                          {c.activo ? 'Desactivar' : 'Activar'}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                },
               },
             ]}
             loading={loadingClientes}
@@ -1202,9 +1571,29 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
             onCreate={() => setMostrarModalCanal(true)}
             createLabel="+ Nuevo Canal de Origen"
             searchable={true}
-            searchPlaceholder="Buscar canal..."
             pagination={true}
             pageSize={8}
+            rowActions={[
+              {
+                id: 'editar_canal',
+                label: 'Editar Canal',
+                icon: <span>✏️</span>,
+                tooltip: 'Editar código y nombre del canal',
+                variant: 'primary',
+                onClick: (row) => {
+                  setNuevoCanal({ codigo: row.codigo, nombre: row.nombre });
+                  setMostrarModalCanal(true);
+                },
+              },
+              {
+                id: 'toggle_canal',
+                label: 'Cambiar Estado',
+                icon: <span>🔄</span>,
+                variant: 'secondary',
+                tooltip: 'Activar o desactivar canal',
+                onClick: (row) => handleToggleCanal(row),
+              },
+            ]}
             emptyMessage="No se encontraron canales de origen."
             className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
           />
@@ -1429,104 +1818,97 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
         </div>
       )}
 
-      {/* 3.3 WORKFLOWS DE TALLER */}
+      {/* 3.3 WORKFLOWS DE TALLER CON CRUDTABLE */}
       {subCat === 'workflows' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-400">Flujos de trabajo técnicos versionados para ejecución de órdenes de trabajo (OT).</p>
-            <Button variant="primary" onClick={() => setMostrarModalNuevoWf(true)}>
-              + Nuevo Borrador de Workflow
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 space-y-3">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Definiciones Versionadas</h3>
-              {loadingWorkflows ? (
-                <div className="p-4 text-center text-gray-400">Cargando workflows...</div>
-              ) : (
-                workflows.map((wf) => {
-                  const seleccionado = workflowSeleccionado?.uuid === wf.uuid;
-                  return (
-                    <div
-                      key={wf.uuid}
-                      onClick={() => setWorkflowSeleccionado(wf)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                        seleccionado
-                          ? 'bg-blue-900/30 border-blue-500 shadow-md'
-                          : 'bg-gray-900/60 border-white/10 hover:border-white/20'
-                      }`}
+        <div className="space-y-4">
+          <CRUDTable<WorkflowDefinicionAdminDto>
+            data={workflows}
+            columns={[
+              {
+                key: 'codigo',
+                label: 'Código',
+                sortable: true,
+                render: (v) => <span className="font-mono font-bold text-white">{String(v)}</span>,
+              },
+              {
+                key: 'nombre',
+                label: 'Nombre del Workflow',
+                sortable: true,
+                render: (_, wf) => (
+                  <div>
+                    <div className="font-semibold text-white">{wf.nombre}</div>
+                    <div className="text-xs text-gray-400">{wf.descripcion}</div>
+                  </div>
+                ),
+              },
+              {
+                key: 'versionNumero',
+                label: 'Versión',
+                sortable: true,
+                render: (v) => (
+                  <span className="font-mono text-xs px-2 py-0.5 rounded bg-gray-800 text-blue-300 font-bold border border-white/10">
+                    v{String(v)}
+                  </span>
+                ),
+              },
+              {
+                key: 'etapas',
+                label: 'Etapas de Servicio',
+                render: (_, wf) => (
+                  <span className="text-xs text-gray-300 font-medium">
+                    {wf.etapas?.length ?? 0} etapas configuradas
+                  </span>
+                ),
+              },
+              {
+                key: 'estado',
+                label: 'Estado',
+                sortable: true,
+                render: (_, wf) => (
+                  <Badge variant={wf.esVigente ? 'success' : wf.activo ? 'warning' : 'neutral'}>
+                    {wf.esVigente ? 'PUBLICADO' : wf.activo ? 'BORRADOR' : 'RETIRADO'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'acciones',
+                label: 'Acciones',
+                align: 'right',
+                render: (_, wf) => (
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setWorkflowSeleccionado(wf);
+                        setMostrarModalDetalleWf(true);
+                      }}
                     >
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-white font-mono">{wf.codigo}</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">v{wf.versionNumero}</span>
-                          <Badge variant={wf.esVigente ? 'success' : wf.activo ? 'warning' : 'neutral'}>
-                            {wf.esVigente ? 'PUBLICADO' : wf.activo ? 'BORRADOR' : 'RETIRADO'}
-                          </Badge>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-300 mt-1">{wf.nombre}</p>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="lg:col-span-2">
-              {workflowSeleccionado ? (
-                <Card className="p-5 bg-gray-900/40 border border-white/10 space-y-4">
-                  <div className="flex justify-between items-start border-b border-white/10 pb-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-bold text-white">{workflowSeleccionado.nombre}</h2>
-                        <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 font-mono">
-                          {workflowSeleccionado.codigo} · v{workflowSeleccionado.versionNumero}
-                        </span>
-                        <Badge variant={workflowSeleccionado.esVigente ? 'success' : 'warning'}>
-                          {workflowSeleccionado.esVigente ? 'PUBLICADO' : 'BORRADOR'}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1">{workflowSeleccionado.descripcion}</p>
-                    </div>
-
-                    {!workflowSeleccionado.esVigente && workflowSeleccionado.activo && (
-                      <Button variant="primary" size="sm" onClick={() => handlePublicarWorkflow(workflowSeleccionado)}>
+                      👁️ Ver Detalle &amp; Etapas
+                    </Button>
+                    {!wf.esVigente && wf.activo && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handlePublicarWorkflow(wf)}
+                      >
                         Publicar Versión
                       </Button>
                     )}
                   </div>
-
-
-                  <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Etapas y Transiciones</h4>
-                    <div className="space-y-3">
-                      {workflowSeleccionado.etapas.map((et, idx) => (
-                        <div key={et.uuid} className="p-3 bg-black/40 rounded-lg border border-white/5 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="w-6 h-6 rounded-full bg-blue-900/50 border border-blue-700 text-blue-300 text-xs flex items-center justify-center font-bold">
-                              {idx + 1}
-                            </span>
-                            <div>
-                              <div className="text-sm font-semibold text-white">{et.nombre}</div>
-                              <div className="text-xs font-mono text-gray-400">{et.codigo}</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {et.esFinal && <Badge variant="success">Etapa Final</Badge>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-              ) : (
-                <div className="p-12 text-center text-gray-500 border border-dashed border-white/10 rounded-lg">
-                  Selecciona un workflow para ver su configuración técnica.
-                </div>
-              )}
-            </div>
-          </div>
+                ),
+              },
+            ]}
+            loading={loadingWorkflows}
+            onCreate={() => setMostrarModalNuevoWf(true)}
+            createLabel="+ Nuevo Borrador de Workflow"
+            searchable={true}
+            searchPlaceholder="Buscar workflow por código o nombre..."
+            pagination={true}
+            pageSize={8}
+            emptyMessage="No se encontraron workflows de taller."
+            className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
+          />
         </div>
       )}
 
@@ -1557,15 +1939,26 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
                 key: 'acciones',
                 label: 'Acciones',
                 align: 'right',
-                render: (_, c) => (
-                  <Button
-                    variant={c.activa ? 'danger' : 'secondary'}
-                    size="sm"
-                    onClick={() => handleToggleCaja(c)}
-                  >
-                    {c.activa ? 'Desactivar' : 'Activar'}
-                  </Button>
-                ),
+                render: (_, c) => {
+                  const tieneTurnoAbierto = Boolean((c as any).tieneTurnoAbierto || (c as any).turnoActivo);
+                  return (
+                    <div className="flex items-center justify-end gap-2">
+                      {tieneTurnoAbierto ? (
+                        <span className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-950/60 text-amber-300 border border-amber-600/30">
+                          🔒 Turno Abierto (Bloqueada)
+                        </span>
+                      ) : (
+                        <Button
+                          variant={c.activa ? 'danger' : 'secondary'}
+                          size="sm"
+                          onClick={() => handleToggleCaja(c)}
+                        >
+                          {c.activa ? 'Desactivar' : 'Activar'}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                },
               },
             ]}
             loading={loadingCajas}
@@ -1805,6 +2198,30 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
             ]}
             pagination={true}
             pageSize={8}
+            rowActions={[
+              {
+                id: 'saltar_consecutivo',
+                label: 'Saltar Consecutivo',
+                icon: <span>⏭️</span>,
+                tooltip: 'Saltar consecutivo / Renumeración de folios (Novasoft-Style)',
+                variant: 'secondary',
+                onClick: (row) => {
+                  setSubtipoParaSalto(row);
+                  setMostrarModalSaltarConsecutivo(true);
+                },
+              },
+              {
+                id: 'editar',
+                label: 'Editar Subtipo',
+                icon: <span>✏️</span>,
+                tooltip: 'Editar propiedades del subtipo',
+                variant: 'primary',
+                onClick: (row) => {
+                  setSubtipoParaSalto(row);
+                  setMostrarModalSaltarConsecutivo(true);
+                },
+              },
+            ]}
             emptyMessage="No se encontraron subtipos de documento registrados."
             className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
           />
@@ -1855,7 +2272,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
                     size="sm"
                     onClick={() => {
                       setParametroTarget(row);
-                      setNuevoValorParametro(row.valorJson);
+                      setNuevoValorParametro(typeof row.valorJson === 'string' ? row.valorJson : JSON.stringify(row.valorJson, null, 2));
                     }}
                   >
                     Editar Valor
@@ -1879,6 +2296,19 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
             ]}
             pagination={true}
             pageSize={10}
+            rowActions={[
+              {
+                id: 'configurar_parametro',
+                label: 'Configurar Regla',
+                icon: <span>⚙️</span>,
+                tooltip: 'Configurar regla con formulario dinámico e inteligente',
+                variant: 'primary',
+                onClick: (row) => {
+                  setParametroDinamicoTarget(row);
+                  setMostrarModalParametroDinamico(true);
+                },
+              },
+            ]}
             emptyMessage="No se encontraron parámetros registrados."
             className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
           />
@@ -1987,59 +2417,17 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
         </form>
       </Modal>
 
-      {/* Modal 3: Nuevo Cliente */}
-      <Modal
+      {/* Modal 3: Nuevo Cliente Unificado */}
+      <RegistroClienteModal
         isOpen={mostrarModalCliente}
         onClose={() => setMostrarModalCliente(false)}
-        title="Nuevo Cliente"
-        size="md"
-      >
-        <form onSubmit={handleCrearCliente} className="space-y-4 p-4">
-          <Select
-            label="Tipo de Identificación"
-            value={nuevoCliente.tipoDocumentoCodigo}
-            onChange={(e) => setNuevoCliente({ ...nuevoCliente, tipoDocumentoCodigo: e.target.value })}
-            options={[
-              { label: 'Cédula de Ciudadanía (CC)', value: 'CC' },
-              { label: 'NIT / Persona Jurídica', value: 'NIT' },
-              { label: 'Cédula de Extranjería (CE)', value: 'CE' },
-              { label: 'Pasaporte', value: 'PASAPORTE' },
-            ]}
-            fullWidth
-          />
-          <Input
-            label="Número de Documento"
-            required
-            placeholder="Ej: 1020304050"
-            value={nuevoCliente.numeroDocumento}
-            onChange={(e) => setNuevoCliente({ ...nuevoCliente, numeroDocumento: e.target.value })}
-            fullWidth
-          />
-          <Input
-            label="Nombre / Razón Social"
-            required
-            placeholder="Ej: Carpintería El Cedro"
-            value={nuevoCliente.nombreRazonSocial}
-            onChange={(e) => setNuevoCliente({ ...nuevoCliente, nombreRazonSocial: e.target.value })}
-            fullWidth
-          />
-          <Input
-            label="Teléfono / WhatsApp"
-            placeholder="Ej: 300 123 4567"
-            value={nuevoCliente.telefono}
-            onChange={(e) => setNuevoCliente({ ...nuevoCliente, telefono: e.target.value })}
-            fullWidth
-          />
-          <div className="pt-3 flex justify-end gap-2">
-            <Button variant="secondary" type="button" onClick={() => setMostrarModalCliente(false)}>
-              Cancelar
-            </Button>
-            <Button variant="primary" type="submit">
-              Registrar Cliente
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        tiposDocumento={tiposDocId}
+        onClienteCreado={(cl) => {
+          setSuccessMsg(`Cliente '${cl.nombreRazonSocial}' registrado exitosamente.`);
+          setMostrarModalCliente(false);
+          cargarSubCatalogo('clientes');
+        }}
+      />
 
       {/* Modal 4: Historial Cliente */}
       <Modal
@@ -2575,6 +2963,354 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({ token }) => {
           </div>
         </form>
       </Modal>
+
+      {/* Modal 14: Matriz de Permisos por Rol (Checkboxes Grid) */}
+      <Modal
+        isOpen={!!rolEdicionTarget}
+        onClose={() => setRolEdicionTarget(null)}
+        title={`Matriz de Permisos: ${rolEdicionTarget?.nombre ?? ''}`}
+        size="lg"
+      >
+        {rolEdicionTarget && (
+          <div className="p-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-900/80 p-3.5 rounded-xl border border-white/10">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{rolEdicionTarget.icono}</span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-white text-base">{rolEdicionTarget.nombre}</h3>
+                    <Badge variant={rolEdicionTarget.badge}>{rolEdicionTarget.nombre}</Badge>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">{rolEdicionTarget.descripcion}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const modulosActualizados: Record<string, PermisosAcciones> = {};
+                    MODULOS_SISTEMA.forEach((m) => {
+                      modulosActualizados[m.id] = {
+                        navegar: true,
+                        crear: true,
+                        editar: true,
+                        anular: true,
+                        vobo: true,
+                      };
+                    });
+                    setRolEdicionTarget({
+                      ...rolEdicionTarget,
+                      modulos: modulosActualizados,
+                    });
+                  }}
+                >
+                  ✓ Marcar Todo
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const modulosActualizados: Record<string, PermisosAcciones> = {};
+                    MODULOS_SISTEMA.forEach((m) => {
+                      modulosActualizados[m.id] = {
+                        navegar: true,
+                        crear: false,
+                        editar: false,
+                        anular: false,
+                        vobo: false,
+                      };
+                    });
+                    setRolEdicionTarget({
+                      ...rolEdicionTarget,
+                      modulos: modulosActualizados,
+                    });
+                  }}
+                >
+                  👁️ Solo Ver
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const modulosActualizados: Record<string, PermisosAcciones> = {};
+                    MODULOS_SISTEMA.forEach((m) => {
+                      modulosActualizados[m.id] = {
+                        navegar: false,
+                        crear: false,
+                        editar: false,
+                        anular: false,
+                        vobo: false,
+                      };
+                    });
+                    setRolEdicionTarget({
+                      ...rolEdicionTarget,
+                      modulos: modulosActualizados,
+                    });
+                  }}
+                >
+                  ✕ Desmarcar Todo
+                </Button>
+              </div>
+            </div>
+
+            {/* Grid Interactivo de Permisos con Checks */}
+            <div className="overflow-x-auto border border-white/10 rounded-xl bg-gray-950/60 shadow-inner">
+              <table className="min-w-full divide-y divide-white/10 text-xs">
+                <thead className="bg-white/5">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-200">Módulo / Pantalla</th>
+                    <th className="px-3 py-3 text-center font-semibold text-gray-200">Ver / Navegar</th>
+                    <th className="px-3 py-3 text-center font-semibold text-gray-200">Crear</th>
+                    <th className="px-3 py-3 text-center font-semibold text-gray-200">Editar</th>
+                    <th className="px-3 py-3 text-center font-semibold text-gray-200">Anular</th>
+                    <th className="px-3 py-3 text-center font-semibold text-gray-200">VoBo Supervisor</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {MODULOS_SISTEMA.map((mod) => {
+                    const perms = rolEdicionTarget.modulos?.[mod.id] || {
+                      navegar: false,
+                      crear: false,
+                      editar: false,
+                      anular: false,
+                      vobo: false,
+                    };
+
+                    const handleToggle = (campo: keyof PermisosAcciones) => {
+                      setRolEdicionTarget({
+                        ...rolEdicionTarget,
+                        modulos: {
+                          ...rolEdicionTarget.modulos,
+                          [mod.id]: {
+                            ...perms,
+                            [campo]: !perms[campo],
+                          },
+                        },
+                      });
+                    };
+
+                    return (
+                      <tr key={mod.id} className="hover:bg-white/[0.03] transition-colors">
+                        <td className="px-4 py-3 font-medium text-white flex items-center gap-2.5">
+                          <span className="text-base">{mod.icono}</span>
+                          <span>{mod.nombre}</span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={perms.navegar}
+                            onChange={() => handleToggle('navegar')}
+                            className="w-4 h-4 rounded text-blue-600 bg-gray-800 border-white/20 focus:ring-blue-500 cursor-pointer accent-blue-500"
+                          />
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={perms.crear}
+                            onChange={() => handleToggle('crear')}
+                            className="w-4 h-4 rounded text-emerald-600 bg-gray-800 border-white/20 focus:ring-emerald-500 cursor-pointer accent-emerald-500"
+                          />
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={perms.editar}
+                            onChange={() => handleToggle('editar')}
+                            className="w-4 h-4 rounded text-amber-600 bg-gray-800 border-white/20 focus:ring-amber-500 cursor-pointer accent-amber-500"
+                          />
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={perms.anular}
+                            onChange={() => handleToggle('anular')}
+                            className="w-4 h-4 rounded text-rose-600 bg-gray-800 border-white/20 focus:ring-rose-500 cursor-pointer accent-rose-500"
+                          />
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={perms.vobo}
+                            onChange={() => handleToggle('vobo')}
+                            className="w-4 h-4 rounded text-purple-600 bg-gray-800 border-white/20 focus:ring-purple-500 cursor-pointer accent-purple-500"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+              <Button variant="secondary" onClick={() => setRolEdicionTarget(null)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" onClick={() => handleGuardarPermisosRol(rolEdicionTarget)}>
+                Guardar Matriz de Permisos
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal 15: Nuevo Rol */}
+      <Modal
+        isOpen={mostrarModalNuevoRol}
+        onClose={() => setMostrarModalNuevoRol(false)}
+        title="Crear Nuevo Rol del Sistema"
+        size="md"
+      >
+        <form onSubmit={handleCrearNuevoRol} className="space-y-4 p-4">
+          <Input
+            label="Nombre del Rol"
+            required
+            placeholder="Ej: Asistente de Taller"
+            value={nuevoRolForm.nombre}
+            onChange={(e) => setNuevoRolForm({ ...nuevoRolForm, nombre: e.target.value })}
+            fullWidth
+          />
+          <Input
+            label="Descripción del Rol"
+            placeholder="Ej: Personal encargado de recepción y clasificación de herramientas."
+            value={nuevoRolForm.descripcion}
+            onChange={(e) => setNuevoRolForm({ ...nuevoRolForm, descripcion: e.target.value })}
+            fullWidth
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Distintivo Visual (Badge)"
+              value={nuevoRolForm.badge}
+              onChange={(e) => setNuevoRolForm({ ...nuevoRolForm, badge: e.target.value as any })}
+              options={[
+                { label: 'Información (Azul)', value: 'info' },
+                { label: 'Éxito (Verde)', value: 'success' },
+                { label: 'Advertencia (Ámbar)', value: 'warning' },
+                { label: 'Peligro / Crítico (Rojo)', value: 'danger' },
+                { label: 'Neutral (Gris)', value: 'neutral' },
+              ]}
+              fullWidth
+            />
+            <Select
+              label="Ícono Representativo"
+              value={nuevoRolForm.icono}
+              onChange={(e) => setNuevoRolForm({ ...nuevoRolForm, icono: e.target.value })}
+              options={[
+                { label: '🛡️ Escudo', value: '🛡️' },
+                { label: '⭐ Estrella', value: '⭐' },
+                { label: '💰 Caja', value: '💰' },
+                { label: '🛠️ Herramientas', value: '🛠️' },
+                { label: '📋 Lista', value: '📋' },
+                { label: '🏷️ Etiqueta', value: '🏷️' },
+                { label: '👤 Usuario', value: '👤' },
+              ]}
+              fullWidth
+            />
+          </div>
+          <div className="pt-3 flex justify-end gap-2">
+            <Button variant="secondary" type="button" onClick={() => setMostrarModalNuevoRol(false)}>
+              Cancelar
+            </Button>
+            <Button variant="primary" type="submit">
+              Crear Rol &amp; Configurar Permisos
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal 16: Detalle Visual de Workflow */}
+      <Modal
+        isOpen={mostrarModalDetalleWf && !!workflowSeleccionado}
+        onClose={() => setMostrarModalDetalleWf(false)}
+        title={`Flujo Técnico: ${workflowSeleccionado?.nombre ?? ''}`}
+        size="lg"
+      >
+        {workflowSeleccionado && (
+          <div className="p-4 space-y-5">
+            <div className="flex justify-between items-start bg-gray-900/70 p-4 rounded-xl border border-white/10">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-white text-base">{workflowSeleccionado.codigo}</span>
+                  <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-blue-300 font-mono font-bold">
+                    v{workflowSeleccionado.versionNumero}
+                  </span>
+                  <Badge variant={workflowSeleccionado.esVigente ? 'success' : 'warning'}>
+                    {workflowSeleccionado.esVigente ? 'PUBLICADO' : 'BORRADOR'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-gray-300 mt-1">{workflowSeleccionado.descripcion}</p>
+              </div>
+
+              {!workflowSeleccionado.esVigente && workflowSeleccionado.activo && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    handlePublicarWorkflow(workflowSeleccionado);
+                    setMostrarModalDetalleWf(false);
+                  }}
+                >
+                  🚀 Publicar Versión
+                </Button>
+              )}
+            </div>
+
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                Secuencia Lineal de Etapas y Transiciones ({workflowSeleccionado.etapas.length})
+              </h4>
+              <div className="space-y-3">
+                {workflowSeleccionado.etapas.map((et, idx) => (
+                  <div
+                    key={et.uuid}
+                    className="p-3.5 bg-gray-900/60 rounded-xl border border-white/10 flex items-center justify-between shadow-sm hover:border-white/20 transition-all"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <span className="w-7 h-7 rounded-full bg-blue-600/30 border border-blue-500 text-blue-300 text-xs flex items-center justify-center font-bold">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <div className="text-sm font-semibold text-white">{et.nombre}</div>
+                        <div className="text-xs font-mono text-gray-400">{et.codigo}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {et.esFinal ? (
+                        <Badge variant="success">🏁 Etapa Final (Lista para Despacho)</Badge>
+                      ) : (
+                        <span className="text-xs text-gray-400 font-mono flex items-center gap-1">
+                          Paso {idx + 1} de {workflowSeleccionado.etapas.length} ➜
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-white/10">
+              <Button variant="secondary" onClick={() => setMostrarModalDetalleWf(false)}>
+                Cerrar Detalle
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <SaltarConsecutivoModal
+        isOpen={mostrarModalSaltarConsecutivo}
+        onClose={() => setMostrarModalSaltarConsecutivo(false)}
+        subtipo={subtipoParaSalto}
+        onActualizarConsecutivo={handleActualizarConsecutivo}
+      />
+
+      <ParametroDinamicoModal
+        isOpen={mostrarModalParametroDinamico}
+        onClose={() => setMostrarModalParametroDinamico(false)}
+        parametro={parametroDinamicoTarget}
+        onGuardar={handleGuardarParametroDinamico}
+      />
     </div>
   );
 };

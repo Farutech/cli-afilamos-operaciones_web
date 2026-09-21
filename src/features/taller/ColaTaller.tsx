@@ -254,8 +254,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Cola de Trabajo de Taller</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-2xl font-bold text-white">Cola de Trabajo de Taller</h1>
+          <p className="text-sm text-slate-400">
             Control técnico de ítems de servicio, órdenes de trabajo (OT) y transiciones de workflow.
           </p>
         </div>
@@ -268,15 +268,15 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
       {/* Alertas */}
       {errorMsg && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center justify-between">
+        <div className="p-4 bg-red-950/60 border border-red-800/50 text-red-300 rounded-lg text-sm flex items-center justify-between">
           <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} className="text-red-500 hover:text-red-700 font-bold">✕</button>
+          <button onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-red-200 font-bold">✕</button>
         </div>
       )}
       {successMsg && (
-        <div className="p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm flex items-center justify-between">
+        <div className="p-4 bg-emerald-950/60 border border-emerald-800/50 text-emerald-300 rounded-lg text-sm flex items-center justify-between">
           <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} className="text-green-500 hover:text-green-700 font-bold">✕</button>
+          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-200 font-bold">✕</button>
         </div>
       )}
 
@@ -284,11 +284,11 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
       <Card className="p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Filtrar por Etapa</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">Filtrar por Etapa</label>
             <select
               value={filtroEtapa}
               onChange={(e) => setFiltroEtapa(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-slate-700 bg-slate-950 text-white rounded-md text-sm focus:ring-2 focus:ring-blue-500"
             >
               {ETAPAS_FILTRO.map((et) => (
                 <option key={et.codigo} value={et.codigo}>
@@ -298,7 +298,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
             </select>
           </div>
           <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Buscar OT / Solicitud / Cliente / Ítem</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">Buscar OT / Solicitud / Cliente / Ítem</label>
             <Input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
@@ -311,18 +311,18 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
       {/* Tabla de la Cola */}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-slate-800 text-sm">
+            <thead className="bg-slate-950/80">
               <tr>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">OT / Solicitud</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Ítem & Detalle</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Cliente</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Franja Compromiso</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Etapa Actual</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Acciones Técnicas</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-400">OT / Solicitud</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-400">Ítem & Detalle</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-400">Cliente</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-400">Franja Compromiso</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-400">Etapa Actual</th>
+                <th className="px-4 py-3 text-right font-semibold text-slate-400">Acciones Técnicas</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
               {itemsFiltrados.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
@@ -331,23 +331,23 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                 </tr>
               ) : (
                 itemsFiltrados.map((item) => (
-                  <tr key={item.itemPublicId} className="hover:bg-gray-50 transition-colors">
+                  <tr key={item.itemPublicId} className="hover:bg-slate-950/80 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-bold text-gray-900">{item.documentoOtNumero}</div>
-                      <div className="text-xs text-gray-500">Sol: {item.documentoSolicitudNumero}</div>
+                      <div className="font-bold text-white">{item.documentoOtNumero}</div>
+                      <div className="text-xs text-slate-400">Sol: {item.documentoSolicitudNumero}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{item.descripcion}</div>
+                      <div className="font-medium text-white">{item.descripcion}</div>
                       <div className="text-xs text-gray-400">
                         Cód: {item.itemCodigo} | Cant: {item.cantidad}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-gray-900">{item.clienteNombre}</div>
+                      <div className="text-white">{item.clienteNombre}</div>
                       <div className="text-xs text-gray-400">{item.clienteTelefono}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-950/60 text-amber-300 border border-amber-500/30">
                         ⏱ {item.franjaCompromiso || 'Sin Franja'}
                       </span>
                     </td>
@@ -431,10 +431,10 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
       {isTransicionModalOpen && itemSeleccionado && transicionSeleccionada && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-lg p-6 space-y-4">
-            <h3 className="text-lg font-bold text-gray-900">
+            <h3 className="text-lg font-bold text-white">
               Ejecutar Transición: {transicionSeleccionada.nombre}
             </h3>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-400">
               Ítem: <span className="font-semibold">{itemSeleccionado.descripcion}</span> ({itemSeleccionado.itemCodigo})<br />
               Destino: <span className="font-semibold text-blue-600">{transicionSeleccionada.etapaDestinoNombre}</span>
             </p>
@@ -466,7 +466,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Código Supervisor</label>
+                      <label className="block text-xs text-slate-400 mb-1">Código Supervisor</label>
                       <Input
                         value={supervisorCodigo}
                         onChange={(e) => setSupervisorCodigo(e.target.value)}
@@ -474,7 +474,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">PIN Supervisor</label>
+                      <label className="block text-xs text-slate-400 mb-1">PIN Supervisor</label>
                       <Input
                         type="password"
                         value={supervisorPin}
@@ -484,7 +484,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Justificación</label>
+                    <label className="block text-xs text-slate-400 mb-1">Justificación</label>
                     <Input
                       value={supervisorJustificacion}
                       onChange={(e) => setSupervisorJustificacion(e.target.value)}
@@ -511,8 +511,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
       {isActividadModalOpen && itemSeleccionado && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-lg p-6 space-y-4">
-            <h3 className="text-lg font-bold text-gray-900">Registrar Actividad Técnica</h3>
-            <p className="text-sm text-gray-500">
+            <h3 className="text-lg font-bold text-white">Registrar Actividad Técnica</h3>
+            <p className="text-sm text-slate-400">
               Ítem: <span className="font-semibold">{itemSeleccionado.descripcion}</span> ({itemSeleccionado.itemCodigo})
             </p>
 
@@ -572,7 +572,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-lg p-6 space-y-4">
             <h3 className="text-lg font-bold text-red-600">Cancelar Ítem de Taller</h3>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-slate-400">
               Se cancelará el ítem <span className="font-semibold">{itemSeleccionado.descripcion}</span> en la OT {itemSeleccionado.documentoOtNumero}.
             </p>
 
@@ -594,7 +594,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Código Supervisor</label>
+                      <label className="block text-xs text-slate-400 mb-1">Código Supervisor</label>
                       <Input
                         value={supervisorCodigo}
                         onChange={(e) => setSupervisorCodigo(e.target.value)}
@@ -602,7 +602,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">PIN Supervisor</label>
+                      <label className="block text-xs text-slate-400 mb-1">PIN Supervisor</label>
                       <Input
                         type="password"
                         value={supervisorPin}
@@ -612,7 +612,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Justificación Supervisor</label>
+                    <label className="block text-xs text-slate-400 mb-1">Justificación Supervisor</label>
                     <Input
                       value={supervisorJustificacion}
                       onChange={(e) => setSupervisorJustificacion(e.target.value)}
@@ -644,12 +644,12 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-xl p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">
+              <h3 className="text-lg font-bold text-white">
                 Historial Técnico: {itemSeleccionado.itemCodigo}
               </h3>
               <button
                 onClick={() => setIsHistorialModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 font-bold"
+                className="text-gray-400 hover:text-slate-400 font-bold"
               >
                 ✕
               </button>
@@ -660,12 +660,12 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                 <div className="text-center py-6 text-gray-400 text-sm">Sin eventos registrados aún.</div>
               ) : (
                 itemSeleccionado.historial.map((ev, idx) => (
-                  <div key={idx} className="p-3 bg-gray-50 border border-gray-100 rounded-lg text-xs space-y-1">
+                  <div key={idx} className="p-3 bg-slate-950/80 border border-gray-100 rounded-lg text-xs space-y-1">
                     <div className="flex justify-between font-semibold text-gray-700">
                       <span>{ev.accion} ({ev.etapaNombre})</span>
                       <span className="text-gray-400">{new Date(ev.fechaHoraUtc).toLocaleString()}</span>
                     </div>
-                    <div className="text-gray-600">{ev.detalle}</div>
+                    <div className="text-slate-400">{ev.detalle}</div>
                     {ev.usuarioCodigo && (
                       <div className="text-gray-400">Usuario: {ev.usuarioCodigo}</div>
                     )}

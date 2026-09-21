@@ -1,52 +1,42 @@
-import { useState, useEffect } from 'react'
-import { DesignSystemProvider, Badge, Button } from '@farutech/design-system'
-import { ColaTaller } from './features/taller/ColaTaller'
-import { SolicitudCapturaMixta } from './features/solicitudes/SolicitudCapturaMixta'
-import { ModuloEntregas } from './features/entregas/ModuloEntregas'
-import { ModuloCaja } from './features/caja/ModuloCaja'
-import { FichaCliente } from './features/clientes/FichaCliente'
-import { DashboardOperativo } from './features/dashboard/DashboardOperativo'
-import { ModuloReportes } from './features/reportes/ModuloReportes'
-import { ModuloAdmin } from './features/admin/ModuloAdmin'
-import { LoginForm } from './features/auth/LoginForm'
-import { useBarcodeScanner } from './hooks/useBarcodeScanner'
-import { catalogosApi } from './services/catalogosApi'
-import type { UsuarioSesion } from './types/auth'
-import type { CanalOrigen, TipoDocumentoIdentidad, Cliente, MedioPagoInstrumento } from './types/catalogos'
-
-type TabId = 'dashboard' | 'caja' | 'solicitudes' | 'taller' | 'entregas' | 'clientes' | 'reportes' | 'admin'
-
-const NAV_ITEMS: { id: TabId; label: string; icon: string; adminOnly?: boolean }[] = [
-  { id: 'dashboard',   label: 'Dashboard',             icon: '📊' },
-  { id: 'solicitudes', label: 'Nueva Solicitud (POS)', icon: '📝' },
-  { id: 'taller',      label: 'Cola de Taller (OT)',   icon: '🛠️' },
-  { id: 'entregas',    label: 'Entregas & Despacho',   icon: '📦' },
-  { id: 'caja',        label: 'Caja & Turnos',         icon: '💰' },
-  { id: 'clientes',    label: 'Clientes',              icon: '👥' },
-  { id: 'reportes',    label: 'Reportes',              icon: '📈' },
-  { id: 'admin',       label: 'Administración',        icon: '⚙️', adminOnly: true },
-]
+import { useState, useEffect } from 'react';
+import { DesignSystemProvider } from '@farutech/design-system';
+import { AppLayout, type ViewRoute } from './components/layout/AppLayout';
+import { ColaTaller } from './features/taller/ColaTaller';
+import { TableroKanbanTaller } from './features/taller/TableroKanbanTaller';
+import { SolicitudCapturaMixta } from './features/solicitudes/SolicitudCapturaMixta';
+import { HistorialSolicitudesView } from './features/solicitudes/HistorialSolicitudesView';
+import { ModuloEntregas } from './features/entregas/ModuloEntregas';
+import { ModuloCaja } from './features/caja/ModuloCaja';
+import { FichaCliente } from './features/clientes/FichaCliente';
+import { DashboardOperativo } from './features/dashboard/DashboardOperativo';
+import { ModuloReportes } from './features/reportes/ModuloReportes';
+import { ModuloAdmin } from './features/admin/ModuloAdmin';
+import { LoginForm } from './features/auth/LoginForm';
+import { useBarcodeScanner } from './hooks/useBarcodeScanner';
+import { catalogosApi } from './services/catalogosApi';
+import type { UsuarioSesion } from './types/auth';
+import type { CanalOrigen, TipoDocumentoIdentidad, Cliente, MedioPagoInstrumento } from './types/catalogos';
 
 export function App() {
-  const [sesion, setSesion] = useState<UsuarioSesion | null>(null)
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard')
+  const [sesion, setSesion] = useState<UsuarioSesion | null>(null);
+  const [currentRoute, setCurrentRoute] = useState<ViewRoute>('dashboard');
 
   // Lector de código de barras USB/HID (RF-11.2)
   useBarcodeScanner((code) => {
     if (code.startsWith('SOL-') || code.startsWith('OT-') || code.startsWith('REM-')) {
-      setActiveTab('entregas')
+      setCurrentRoute('entregas_pendientes');
     }
-  })
+  });
 
   // Catálogos para captura de solicitudes y entregas
-  const [canales, setCanales] = useState<CanalOrigen[]>([])
-  const [tiposDoc, setTiposDoc] = useState<TipoDocumentoIdentidad[]>([])
-  const [clientes, setClientes] = useState<Cliente[]>([])
-  const [instrumentos, setInstrumentos] = useState<MedioPagoInstrumento[]>([])
+  const [canales, setCanales] = useState<CanalOrigen[]>([]);
+  const [tiposDoc, setTiposDoc] = useState<TipoDocumentoIdentidad[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [instrumentos, setInstrumentos] = useState<MedioPagoInstrumento[]>([]);
 
   useEffect(() => {
-    if (!sesion) return
-    let isMounted = true
+    if (!sesion) return;
+    let isMounted = true;
     const fetchCatalogos = async () => {
       try {
         const [cRes, tdRes, clRes, inRes] = await Promise.all([
@@ -54,172 +44,231 @@ export function App() {
           catalogosApi.getTiposDocumentoIdentidad().catch(() => ({ tipos: [] })),
           catalogosApi.getClientes().catch(() => ({ clientes: [], total: 0 })),
           catalogosApi.getMediosPagoInstrumentos().catch(() => ({ instrumentos: [] })),
-        ])
+        ]);
         if (isMounted) {
-          setCanales(cRes.canales)
-          setTiposDoc(tdRes.tipos)
-          setClientes(clRes.clientes)
-          setInstrumentos(inRes.instrumentos)
+          setCanales(cRes.canales);
+          setTiposDoc(tdRes.tipos);
+          setClientes(clRes.clientes);
+          setInstrumentos(inRes.instrumentos);
         }
       } catch {
         // Ignorar fallback
       }
-    }
-    fetchCatalogos()
-    return () => { isMounted = false }
-  }, [sesion])
+    };
+    fetchCatalogos();
+    return () => {
+      isMounted = false;
+    };
+  }, [sesion]);
 
   const handleLogout = () => {
-    localStorage.removeItem('ordeon_token')
-    setSesion(null)
-  }
-
-  const esAdmin = sesion?.rol?.toLowerCase().includes('admin') ?? false
-  const visibleNav = NAV_ITEMS.filter(n => !n.adminOnly || esAdmin)
+    localStorage.removeItem('ordeon_token');
+    setSesion(null);
+  };
 
   if (!sesion) {
     return (
       <DesignSystemProvider colorMode="dark">
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--color-bg)',
+          }}
+        >
           <LoginForm onLoginSuccess={(s: UsuarioSesion) => setSesion(s)} />
         </div>
       </DesignSystemProvider>
-    )
+    );
   }
 
   return (
     <DesignSystemProvider colorMode="dark">
-      <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)' }}>
+      <AppLayout
+        sesion={sesion}
+        activeRoute={currentRoute}
+        onRouteChange={setCurrentRoute}
+        onLogout={handleLogout}
+        turnoActivo={true}
+        otPendientesCount={4}
+      >
+        {/* Enrutamiento Dinámico Principal */}
+        {currentRoute === 'dashboard' && (
+          <DashboardOperativo
+            token={sesion.token}
+            onNavigateTab={(t) => {
+              if (t === 'solicitudes') setCurrentRoute('solicitudes_nueva');
+              else if (t === 'taller') setCurrentRoute('taller_cola');
+              else if (t === 'caja') setCurrentRoute('caja_apertura');
+              else if (t === 'entregas') setCurrentRoute('entregas_pendientes');
+              else if (t === 'clientes') setCurrentRoute('clientes');
+              else if (t === 'reportes') setCurrentRoute('reportes_operativos');
+              else if (t === 'admin') setCurrentRoute('config_roles');
+            }}
+          />
+        )}
 
-      {/* ─── SIDEBAR IZQUIERDO ─────────────────────────────────────── */}
-      <aside style={{
-        width: '220px',
-        minWidth: '220px',
-        background: 'var(--color-surface)',
-        borderRight: '1px solid var(--color-border)',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '0',
-      }}>
-        {/* Logo / Marca */}
-        <div style={{ padding: '20px 16px 16px', borderBottom: '1px solid var(--color-border)' }}>
-          <h1 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--color-text)', margin: 0, lineHeight: 1.2 }}>
-            Ordeon POS &amp; Taller
-          </h1>
-          <p style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', margin: '4px 0 0 0', lineHeight: 1.3 }}>
-            Afilamos Operaciones
-          </p>
-        </div>
+        {currentRoute === 'solicitudes_nueva' && (
+          <SolicitudCapturaMixta
+            canales={canales}
+            tiposDocumento={tiposDoc}
+            clientes={clientes}
+            onAsentarSolicitud={async () => setCurrentRoute('solicitudes_lista')}
+          />
+        )}
 
-        {/* Menú de navegación */}
-        <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {visibleNav.map(item => {
-            const isActive = activeTab === item.id
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  fontWeight: isActive ? 600 : 400,
-                  textAlign: 'left',
-                  width: '100%',
-                  background: isActive ? 'var(--color-primary)' : 'transparent',
-                  color: isActive ? '#fff' : 'var(--color-text)',
-                  transition: 'background 0.15s, color 0.15s',
-                }}
-                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-surface-hover)' }}
-                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-              >
-                <span style={{ fontSize: '1rem' }}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            )
-          })}
-        </nav>
+        {currentRoute === 'solicitudes_lista' && (
+          <HistorialSolicitudesView
+            onNuevaSolicitud={() => setCurrentRoute('solicitudes_nueva')}
+          />
+        )}
 
-        {/* Footer de sesión */}
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--color-border)' }}>
-          <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontWeight: 600, fontSize: '0.8rem', color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {sesion.nombreCompleto}
-            </div>
-            <div className="mt-1">
-              <Badge variant="info" size="sm">{sesion.rol}</Badge>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout} fullWidth>
-            Cerrar Sesión
-          </Button>
-        </div>
-      </aside>
+        {currentRoute === 'taller_cola' && (
+          <ColaTaller
+            token={sesion.token}
+            usuarioActual={{ publicId: sesion.publicId, codigo: sesion.codigo, rol: sesion.rol }}
+          />
+        )}
 
-      {/* ─── CONTENIDO PRINCIPAL ───────────────────────────────────── */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', minWidth: 0 }}>
-        {/* Barra superior */}
-        <header style={{
-          padding: '14px 24px',
-          borderBottom: '1px solid var(--color-border)',
-          background: 'var(--color-surface)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-        }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>
-            {NAV_ITEMS.find(n => n.id === activeTab)?.icon}{' '}
-            {NAV_ITEMS.find(n => n.id === activeTab)?.label}
-          </h2>
-        </header>
+        {currentRoute === 'taller_kanban' && <TableroKanbanTaller />}
 
-        {/* Vista activa */}
-        <div style={{ padding: '24px', flex: 1 }}>
-          {activeTab === 'dashboard' ? (
-            <DashboardOperativo
-              token={sesion.token}
-              onNavigateTab={(t) => setActiveTab(t as TabId)}
-            />
-          ) : activeTab === 'clientes' ? (
-            <FichaCliente onIniciarSolicitud={() => setActiveTab('solicitudes')} />
-          ) : activeTab === 'reportes' ? (
-            <ModuloReportes token={sesion.token} />
-          ) : activeTab === 'admin' ? (
-            <ModuloAdmin token={sesion.token} />
-          ) : activeTab === 'caja' ? (
-            <ModuloCaja userRole={sesion.rol} token={sesion.token} />
-          ) : activeTab === 'entregas' ? (
-            <ModuloEntregas
-              token={sesion.token}
-              instrumentosPago={instrumentos}
-              usuarioActual={{ publicId: sesion.publicId, codigo: sesion.codigo, rol: sesion.rol }}
-            />
-          ) : activeTab === 'taller' ? (
-            <ColaTaller
-              token={sesion.token}
-              usuarioActual={{ publicId: sesion.publicId, codigo: sesion.codigo, rol: sesion.rol }}
-            />
-          ) : (
-            <SolicitudCapturaMixta
-              canales={canales}
-              tiposDocumento={tiposDoc}
-              clientes={clientes}
-              onAsentarSolicitud={async () => { setActiveTab('taller') }}
-            />
-          )}
-        </div>
-      </main>
-    </div>
+        {(currentRoute === 'entregas_pendientes' || currentRoute === 'entregas_remisiones') && (
+          <ModuloEntregas
+            token={sesion.token}
+            instrumentosPago={instrumentos}
+            usuarioActual={{ publicId: sesion.publicId, codigo: sesion.codigo, rol: sesion.rol }}
+          />
+        )}
+
+        {(currentRoute === 'caja_apertura' ||
+          currentRoute === 'caja_movimientos' ||
+          currentRoute === 'caja_arqueo') && (
+          <ModuloCaja userRole={sesion.rol} token={sesion.token} />
+        )}
+
+        {currentRoute === 'clientes' && (
+          <FichaCliente onIniciarSolicitud={() => setCurrentRoute('solicitudes_nueva')} />
+        )}
+
+        {(currentRoute === 'reportes_operativos' ||
+          currentRoute === 'reportes_financieros' ||
+          currentRoute === 'reportes_bitacora') && (
+          <ModuloReportes token={sesion.token} />
+        )}
+
+        {/* ─── CONFIGURACIÓN (ADMINISTRACIÓN REORGANIZADA) ─────────────── */}
+        {currentRoute === 'config_roles' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="seguridad"
+            initialSubCat="roles"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_usuarios' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="seguridad"
+            initialSubCat="usuarios"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_canales' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="clientes"
+            initialSubCat="canales"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_documentos_identidad' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="clientes"
+            initialSubCat="tipos_doc"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_items' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="productos"
+            initialSubCat="items"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_unidades' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="productos"
+            initialSubCat="unidades"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_workflows' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="productos"
+            initialSubCat="workflows"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_cajas' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="tesoreria"
+            initialSubCat="cajas"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_medios_pago' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="tesoreria"
+            initialSubCat="medios_pago"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_cuentas' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="tesoreria"
+            initialSubCat="recaudos"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_documentos' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="sistema"
+            initialSubCat="tipos_subtipos"
+            hideCategoryTabs={true}
+          />
+        )}
+
+        {currentRoute === 'config_parametros' && (
+          <ModuloAdmin
+            token={sesion.token}
+            initialMacroCat="sistema"
+            initialSubCat="parametros"
+            hideCategoryTabs={true}
+          />
+        )}
+      </AppLayout>
     </DesignSystemProvider>
-  )
+  );
 }
 
-export default App
+export default App;
