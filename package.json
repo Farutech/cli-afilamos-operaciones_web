@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@farutech/design-system": "file:./packages/farutech-design-system-1.1.0.tgz",
+    "@farutech/design-system": "file:./packages/farutech-design-system-1.0.3.tgz",
     "@headlessui/react": "^2.2.10",
     "@heroicons/react": "^2.2.0",
     "clsx": "^2.1.1",
