@@ -820,7 +820,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                   </div>
                 </div>
 
-                {modoDesgloseEfectivo ? (
+                {modoDesgloseEfectivo && (
                   <div className="space-y-2 pt-2">
                     <div className="flex items-center justify-between text-[11px] text-slate-400 pb-1">
                       <span>Planilla de Conteo Físico por Denominación:</span>
