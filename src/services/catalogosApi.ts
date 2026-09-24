@@ -14,6 +14,8 @@ import type {
   ParametroSistema,
   CategoriaItem,
   ListaPrecio,
+  PoliticaPrecios,
+  ConfiguracionDenominaciones,
 } from '../types/catalogos';
 
 export const catalogosApi = {
@@ -235,6 +237,57 @@ export const catalogosApi = {
     return api.post<ListaPrecio>(`/catalogos/listas-precio/${uuid}/aumento`, {
       porcentajeAumento,
     });
+  },
+
+  async actualizarListaPrecio(
+    uuid: string,
+    dto: { nombre: string; porcentajeAjuste: number; esPredeterminada: boolean }
+  ): Promise<ListaPrecio> {
+    return api.put<ListaPrecio>(`/catalogos/listas-precio/${uuid}`, dto);
+  },
+
+  async setListaPrecioActiva(uuid: string, activa: boolean): Promise<void> {
+    await api.patch<void>(`/catalogos/listas-precio/${uuid}/activa`, {
+      activo: activa,
+    });
+  },
+
+  // --- Política Global de Precios en Mostrador ---
+  async getPoliticaPrecios(): Promise<PoliticaPrecios> {
+    return api.get<PoliticaPrecios>('/catalogos/politica-precios');
+  },
+
+  async actualizarPoliticaPrecios(dto: {
+    permiteModificarPrecio: boolean;
+    maxDiferenciaPorcentaje: number;
+    requiereVoBoSuperaTolerancia: boolean;
+    permitirMultiplicadorLista: boolean;
+  }): Promise<PoliticaPrecios> {
+    return api.put<PoliticaPrecios>('/catalogos/politica-precios', dto);
+  },
+
+  // --- Categorías de Ítems: edición y activación ---
+  async actualizarCategoriaItem(
+    uuid: string,
+    dto: { nombre: string; nivel: number; categoriaPadreUuid?: string | null }
+  ): Promise<CategoriaItem> {
+    return api.put<CategoriaItem>(`/catalogos/categorias-items/${uuid}`, dto);
+  },
+
+  async setCategoriaItemActivo(uuid: string, activo: boolean): Promise<void> {
+    await api.patch<void>(`/catalogos/categorias-items/${uuid}/activo`, { activo });
+  },
+
+  // --- Denominaciones de Efectivo (parametrizadas vía Parámetros del Sistema) ---
+  // La configuración vive como definición (`denominaciones_efectivo` en ValorJson),
+  // de modo que el arqueo renderiza la planilla sin inventar billetes/monedas.
+  async getConfiguracionDenominaciones(): Promise<ConfiguracionDenominaciones> {
+    const res = await api.get<{ parametros: ParametroSistema[] }>('/catalogos/parametros');
+    const parametro = (res.parametros || []).find((p) => p.clave === 'denominaciones_efectivo');
+    if (!parametro) {
+      throw new Error('Parametro denominaciones_efectivo no configurado');
+    }
+    return JSON.parse(parametro.valorJson) as ConfiguracionDenominaciones;
   },
 };
 

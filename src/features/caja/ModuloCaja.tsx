@@ -8,7 +8,40 @@ import {
   obtenerDetalleSupervisor,
   procesarVoBo
 } from '../../services/cajaApi';
+import { catalogosApi } from '../../services/catalogosApi';
+import type { DenominacionEfectivo } from '../../types/catalogos';
 import { Badge, Button, Card, Input } from '@farutech/design-system';
+
+/** Planilla de conteo por denominación (cantidad + subtotal calculado). */
+interface ConteoDenominacion {
+  valor: number;
+  etiqueta: string;
+  tipo: 'BILLETE' | 'MONEDA';
+  cantidad: number;
+}
+
+const aConteo = (d: DenominacionEfectivo): ConteoDenominacion => ({
+  valor: d.valor,
+  etiqueta: d.etiqueta,
+  tipo: d.tipo,
+  cantidad: 0,
+});
+
+/** Fallback estándar COP (solo si el backend aún no define la configuración). */
+const DENOMINACIONES_DEFAULT: DenominacionEfectivo[] = [
+  { valor: 100000, etiqueta: '$100.000', tipo: 'BILLETE', activa: true },
+  { valor: 50000, etiqueta: '$50.000', tipo: 'BILLETE', activa: true },
+  { valor: 20000, etiqueta: '$20.000', tipo: 'BILLETE', activa: true },
+  { valor: 10000, etiqueta: '$10.000', tipo: 'BILLETE', activa: true },
+  { valor: 5000, etiqueta: '$5.000', tipo: 'BILLETE', activa: true },
+  { valor: 2000, etiqueta: '$2.000', tipo: 'BILLETE', activa: true },
+  { valor: 1000, etiqueta: '$1.000', tipo: 'BILLETE', activa: true },
+  { valor: 1000, etiqueta: '$1.000', tipo: 'MONEDA', activa: true },
+  { valor: 500, etiqueta: '$500', tipo: 'MONEDA', activa: true },
+  { valor: 200, etiqueta: '$200', tipo: 'MONEDA', activa: true },
+  { valor: 100, etiqueta: '$100', tipo: 'MONEDA', activa: true },
+  { valor: 50, etiqueta: '$50', tipo: 'MONEDA', activa: true },
+];
 
 interface ModuloCajaProps {
   codigoCajaDefault?: string;
@@ -40,22 +73,35 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
   const [guardandoArqueo, setGuardandoArqueo] = useState<boolean>(false);
   const [modoDesgloseEfectivo, setModoDesgloseEfectivo] = useState<boolean>(true);
 
-  const [conteoDenominaciones, setConteoDenominaciones] = useState<
-    { valor: number; etiqueta: string; tipo: 'BILLETE' | 'MONEDA'; cantidad: number }[]
-  >([
-    { valor: 100000, etiqueta: '$100.000', tipo: 'BILLETE', cantidad: 0 },
-    { valor: 50000, etiqueta: '$50.000', tipo: 'BILLETE', cantidad: 0 },
-    { valor: 20000, etiqueta: '$20.000', tipo: 'BILLETE', cantidad: 0 },
-    { valor: 10000, etiqueta: '$10.000', tipo: 'BILLETE', cantidad: 0 },
-    { valor: 5000, etiqueta: '$5.000', tipo: 'BILLETE', cantidad: 0 },
-    { valor: 2000, etiqueta: '$2.000', tipo: 'BILLETE', cantidad: 0 },
-    { valor: 1000, etiqueta: '$1.000', tipo: 'BILLETE', cantidad: 0 },
-    { valor: 1000, etiqueta: '$1.000', tipo: 'MONEDA', cantidad: 0 },
-    { valor: 500, etiqueta: '$500', tipo: 'MONEDA', cantidad: 0 },
-    { valor: 200, etiqueta: '$200', tipo: 'MONEDA', cantidad: 0 },
-    { valor: 100, etiqueta: '$100', tipo: 'MONEDA', cantidad: 0 },
-    { valor: 50, etiqueta: '$50', tipo: 'MONEDA', cantidad: 0 },
-  ]);
+  const [conteoDenominaciones, setConteoDenominaciones] = useState<ConteoDenominacion[]>(
+    DENOMINACIONES_DEFAULT.map(aConteo)
+  );
+  const [denominacionesConfiguradas, setDenominacionesConfiguradas] = useState<boolean>(false);
+
+  // Las denominaciones admitidas viven como definición en el backend; el arqueo
+  // solo renderiza la planilla y calcula subtotales, sin inventar billetes/monedas.
+  useEffect(() => {
+    let cancelado = false;
+    const cargarDenominaciones = async () => {
+      try {
+        const config = await catalogosApi.getConfiguracionDenominaciones();
+        const activas = (config.denominaciones || []).filter((d) => d.activa);
+        if (cancelado) return;
+        if (activas.length > 0) {
+          setConteoDenominaciones(activas.map(aConteo));
+          setDenominacionesConfiguradas(true);
+        }
+      } catch {
+        // Se mantiene el fallback estándar COP hasta que el administrador
+        // configure las denominaciones desde Administración.
+        if (!cancelado) setDenominacionesConfiguradas(false);
+      }
+    };
+    cargarDenominaciones();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   const handleCantidadDenominacionChange = (index: number, cantidad: number) => {
     setConteoDenominaciones((prev) => {
@@ -823,7 +869,18 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                 {modoDesgloseEfectivo && (
                   <div className="space-y-2 pt-2">
                     <div className="flex items-center justify-between text-[11px] text-slate-400 pb-1">
-                      <span>Planilla de Conteo Físico por Denominación:</span>
+                      <span className="flex items-center gap-2">
+                        Planilla de Conteo Físico por Denominación:
+                        {denominacionesConfiguradas ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/50 text-[10px] font-semibold">
+                            ✓ Configuradas por Administración
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-semibold">
+                            Estándar COP (fallback)
+                          </span>
+                        )}
+                      </span>
                       <button
                         type="button"
                         onClick={handleReiniciarConteo}
