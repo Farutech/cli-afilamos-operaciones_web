@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Badge, Input, Modal, Alert } from '@farutech/design-system';
 import { ItemSelector } from '../catalogos/ItemSelector';
 import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
-import type { ItemCatalogo, Cliente, CanalOrigen, TipoDocumentoIdentidad } from '../../types/catalogos';
+import { catalogosApi } from '../../services/catalogosApi';
+import type { ItemCatalogo, Cliente, CanalOrigen, TipoDocumentoIdentidad, PoliticaPrecios, ListaPrecio } from '../../types/catalogos';
 import type { NaturalezaItem } from '../../types/solicitudes';
 
 export interface LineaDetalleLocal {
@@ -92,18 +93,75 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const [lineas, setLineas] = useState<LineaDetalleLocal[]>([]);
   const [totalPagadoInventario, setTotalPagadoInventario] = useState<number>(0);
   const [voboAutorizado, setVoboAutorizado] = useState(false);
+  // Aviso de la política de precios (bloqueo/tolerancia) al agregar una línea.
+  const [alertaPolitica, setAlertaPolitica] = useState<string | null>(null);
 
-  // Política de precios en mostrador
-  const [politicaPrecios] = useState({
-    permiteModificarPrecio: true,
-    maxDiferenciaPorcentaje: 15,
+  // Política de precios en mostrador (orquestada desde el catálogo maestro).
+  const [politicaPrecios, setPoliticaPrecios] = useState<PoliticaPrecios>({
+    permiteModificarPrecio: false,
+    maxDiferenciaPorcentaje: 0,
     requiereVoBoSuperaTolerancia: true,
+    permitirMultiplicadorLista: false,
   });
+  const [politicaCargando, setPoliticaCargando] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    const cargarPolitica = async () => {
+      try {
+        const politica = await catalogosApi.getPoliticaPrecios();
+        if (!cancelado) setPoliticaPrecios(politica);
+      } catch {
+        if (!cancelado) {
+          setPoliticaPrecios({
+            permiteModificarPrecio: false,
+            maxDiferenciaPorcentaje: 0,
+            requiereVoBoSuperaTolerancia: true,
+            permitirMultiplicadorLista: false,
+          });
+        }
+      } finally {
+        if (!cancelado) setPoliticaCargando(false);
+      }
+    };
+    cargarPolitica();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   // Ítem cargado desde el catálogo (autocompletado o lupa modal)
   const [itemSeleccionado, setItemSeleccionado] = useState<ItemCatalogo | null>(null);
   const [precioBaseRef, setPrecioBaseRef] = useState<number>(0);
-  const [listaPrecioSeleccionada, setListaPrecioSeleccionada] = useState<string>('BASE');
+  const [listaPrecioSeleccionada, setListaPrecioSeleccionada] = useState<string>('');
+  // Listas de precios paramétricas desde el catálogo maestro (no hardcoded).
+  const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([]);
+
+  useEffect(() => {
+    let cancelado = false;
+    const cargarListas = async () => {
+      try {
+        const res = await catalogosApi.getListasPrecio();
+        const activas = (res.listas || []).filter((l) => l.activa);
+        if (cancelado) return;
+        if (activas.length > 0) {
+          setListasPrecio(activas);
+          // La lista predeterminada (o la primera) queda seleccionada por defecto.
+          const predeterminada = activas.find((l) => l.esPredeterminada) || activas[0];
+          setListaPrecioSeleccionada((actual) =>
+            actual && activas.some((l) => l.uuid === actual) ? actual : predeterminada.uuid
+          );
+        }
+      } catch {
+        // Sin listas del servidor no se ofrece selector; el precio base manda.
+        if (!cancelado) setListasPrecio([]);
+      }
+    };
+    cargarListas();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   // Formulario de nueva línea
   const [naturalezaManual, setNaturalezaManual] = useState<NaturalezaItem>('SERVICIO');
@@ -162,7 +220,11 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     setPrecioBaseRef(item.precioBase);
     setStockRefActual(item.stockReferencial ?? null);
     setCantidadManual(1);
-    setListaPrecioSeleccionada(item.listaPrecioNombre || 'BASE');
+    setAlertaPolitica(null);
+    // La lista por defecto es la asignada al ítem (si existe en el catálogo cargado).
+    if (item.listaPrecioUuid && listasPrecio.some((l) => l.uuid === item.listaPrecioUuid)) {
+      setListaPrecioSeleccionada(item.listaPrecioUuid);
+    }
   };
 
   const handleCancelarItemSeleccionado = () => {
@@ -173,10 +235,34 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     setPrecioManual(0);
     setPrecioBaseRef(0);
     setStockRefActual(null);
+    setAlertaPolitica(null);
   };
 
   const handleAgregarLinea = () => {
     if (!itemSeleccionado || !descripcionManual.trim() || cantidadManual <= 0 || precioManual < 0) return;
+
+    // ─── Validación de la Política de Precios (definición del backend, no regla local) ───
+    const referenciaPrecio = precioBaseRef;
+    const precioAlterado = referenciaPrecio > 0 && precioManual !== referenciaPrecio;
+    const porcentajeDiferencia =
+      referenciaPrecio > 0 ? (Math.abs(precioManual - referenciaPrecio) / referenciaPrecio) * 100 : 0;
+    const excedeTolerancia = porcentajeDiferencia > politicaPrecios.maxDiferenciaPorcentaje;
+
+    if (precioAlterado && !politicaPrecios.permiteModificarPrecio) {
+      setAlertaPolitica(
+        `⛔ La política global de precios no permite modificar el precio unitario desde mostrador (diferencia de ${porcentajeDiferencia.toFixed(2)}% vs. catálogo).`
+      );
+      return;
+    }
+
+    if (precioAlterado && excedeTolerancia && politicaPrecios.requiereVoBoSuperaTolerancia && !voboAutorizado) {
+      setAlertaPolitica(
+        `⚠️ La diferencia de ${porcentajeDiferencia.toFixed(2)}% supera la tolerancia de la política (${politicaPrecios.maxDiferenciaPorcentaje}%). Requiere VoBo de supervisor antes de asentar.`
+      );
+      return;
+    }
+
+    setAlertaPolitica(null);
 
     const subtotal = cantidadManual * precioManual;
     const esServicio = naturalezaManual === 'SERVICIO';
@@ -477,11 +563,14 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         {!itemSeleccionado ? (
           <div className="space-y-2">
             <p className="text-xs text-slate-400">
-              Seleccione un ítem o servicio del catálogo para agregarlo a la orden. Ingrese mínimo 3
-              dígitos en el buscador rápido o haga clic en la <strong className="text-indigo-400">lupa 🔍</strong> para
-              consultar por categorías multinivel.
+              La captura exige un ítem del catálogo maestro. Ingrese mínimo 3 dígitos en el
+              buscador rápido o haga clic en la <strong className="text-indigo-400">lupa 🔍</strong> para
+              consultar por categorías multinivel. No se admite descripción manual de texto libre.
             </p>
             <ItemSelector onSelectItem={handleSelectItemCatalogo} />
+            {politicaCargando && (
+              <p className="text-[11px] text-amber-300">Cargando política de precios…</p>
+            )}
           </div>
         ) : (
           <div className="p-4 rounded-xl bg-slate-950/80 border border-indigo-500/40 space-y-4 shadow-lg">
@@ -535,21 +624,37 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 <label className="text-[11px] font-semibold text-slate-300 block mb-1">
                   Lista de Precios
                 </label>
-                <select
-                  value={listaPrecioSeleccionada}
-                  onChange={(e) => {
-                    const l = e.target.value;
-                    setListaPrecioSeleccionada(l);
-                    if (l === 'BASE') setPrecioManual(precioBaseRef);
-                    else if (l === 'MAYORISTA') setPrecioManual(Math.round(precioBaseRef * 0.9));
-                    else if (l === 'DISTRIBUIDOR') setPrecioManual(Math.round(precioBaseRef * 0.85));
-                  }}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
-                >
-                  <option value="BASE">Lista Base (Precio Estándar)</option>
-                  <option value="MAYORISTA">Mayorista (-10%)</option>
-                  <option value="DISTRIBUIDOR">Distribuidor (-15%)</option>
-                </select>
+                {listasPrecio.length > 0 ? (
+                  <select
+                    value={listaPrecioSeleccionada}
+                    onChange={(e) => {
+                      const listaUuid = e.target.value;
+                      setListaPrecioSeleccionada(listaUuid);
+                      const lista = listasPrecio.find((l) => l.uuid === listaUuid);
+                      if (lista) {
+                        // El ajuste porcentual de la lista lo orquesta el backend:
+                        // el mostrador solo lo aplica sobre el precio base del ítem.
+                        const precioConLista = Math.round(
+                          precioBaseRef * (1 + lista.porcentajeAjuste / 100)
+                        );
+                        setPrecioManual(Math.max(0, precioConLista));
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    {listasPrecio.map((l) => (
+                      <option key={l.uuid} value={l.uuid}>
+                        {l.nombre}
+                        {l.esPredeterminada ? ' (Predeterminada)' : ''} ({l.porcentajeAjuste >= 0 ? '+' : ''}
+                        {l.porcentajeAjuste}%)
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-400">
+                    Precio Base del Catálogo (sin listas configuradas)
+                  </div>
+                )}
               </div>
 
               <div>
@@ -606,6 +711,21 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 </Button>
               </div>
             </div>
+
+            {/* Alerta de Política de Precios (definición orquestada por el backend) */}
+            {alertaPolitica && (
+              <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200 flex items-center gap-2">
+                <span>🛡️</span>
+                <span>{alertaPolitica}</span>
+                <button
+                  type="button"
+                  onClick={() => setAlertaPolitica(null)}
+                  className="ml-auto text-amber-400 hover:text-amber-200 font-bold cursor-pointer"
+                >
+                  ✖
+                </button>
+              </div>
+            )}
 
             {/* Alerta de Política de Precios si la variación supera el límite */}
             {precioBaseRef > 0 && Math.abs(precioManual - precioBaseRef) / precioBaseRef * 100 > politicaPrecios.maxDiferenciaPorcentaje && (
