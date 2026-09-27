@@ -652,16 +652,16 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             catalogosApi.getCategoriasItem().catch(() => ({ categorias: [] })),
             catalogosApi.getListasPrecio().catch(() => ({ listas: [] })),
           ]);
-          setItems(resItems.items);
-          setUnidades(resUnidades.unidades);
-          setWorkflows(resWfs);
+          setItems(resItems.items || []);
+          setUnidades(resUnidades.unidades || []);
+          setWorkflows(resWfs || []);
           if (resCats.categorias && resCats.categorias.length > 0) {
             setCategoriasItems(resCats.categorias);
           }
           if (resListas.listas && resListas.listas.length > 0) {
             setListasPrecio(resListas.listas);
           }
-          if (resUnidades.unidades.length > 0) {
+          if (resUnidades.unidades && resUnidades.unidades.length > 0) {
             setNuevoItem(prev => ({ ...prev, uuidUnidadPresentacion: resUnidades.unidades[0].uuid }));
           }
         } catch (err: unknown) {
@@ -675,7 +675,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         setLoadingUnidades(true);
         try {
           const res = await catalogosApi.getUnidades();
-          setUnidades(res.unidades);
+          setUnidades(res.unidades || []);
         } catch (err: unknown) {
           setErrorMsg((err as Error).message || 'Error al cargar unidades');
         } finally {
@@ -3043,7 +3043,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
               label="Unidad de Medida"
               value={nuevoItem.uuidUnidadPresentacion}
               onChange={(e) => setNuevoItem({ ...nuevoItem, uuidUnidadPresentacion: e.target.value })}
-              options={unidades.map((u) => ({ label: `${u.nombre} (${u.abreviatura})`, value: u.uuid }))}
+              options={(unidades || []).map((u) => ({ label: `${u.nombre} (${u.abreviatura})`, value: u.uuid }))}
               fullWidth
             />
             <Input

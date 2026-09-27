@@ -26,6 +26,17 @@ interface ItemBuscarModalProps {
 
 const TAMANO_PAGINA = 10;
 
+function aplanarCategorias(cats: CategoriaItem[], nivel = 1): CategoriaItem[] {
+  const resultado: CategoriaItem[] = [];
+  cats.forEach((c) => {
+    resultado.push({ ...c, nivel });
+    if (c.hijos && c.hijos.length > 0) {
+      resultado.push(...aplanarCategorias(c.hijos, nivel + 1));
+    }
+  });
+  return resultado;
+}
+
 export function ItemBuscarModal({
   isOpen,
   onClose,
@@ -50,17 +61,6 @@ export function ItemBuscarModal({
   const [itemDetalle, setItemDetalle] = useState<ItemCatalogo | null>(null);
   const [pagina, setPagina] = useState(1);
 
-  const aplanarCategorias = useCallback((cats: CategoriaItem[], nivel = 1): CategoriaItem[] => {
-    const resultado: CategoriaItem[] = [];
-    cats.forEach((c) => {
-      resultado.push({ ...c, nivel });
-      if (c.hijos && c.hijos.length > 0) {
-        resultado.push(...aplanarCategorias(c.hijos, nivel + 1));
-      }
-    });
-    return resultado;
-  }, []);
-
   const cargarCategorias = useCallback(async () => {
     try {
       const res = await catalogosApi.getCategoriasItem();
@@ -69,7 +69,7 @@ export function ItemBuscarModal({
       // El árbol de categorías aún no está sembrado: el filtro queda deshabilitado.
       setCategorias([]);
     }
-  }, [aplanarCategorias]);
+  }, []);
 
   const cargarItems = useCallback(async () => {
     setLoading(true);

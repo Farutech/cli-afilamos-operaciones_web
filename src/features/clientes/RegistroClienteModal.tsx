@@ -28,16 +28,15 @@ export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
   useEffect(() => {
     if (tiposDocProp && tiposDocProp.length > 0) {
       setTiposDoc(tiposDocProp);
-      if (!uuidTipoDoc) {
-        setUuidTipoDoc(tiposDocProp[0].uuid);
-      }
-    } else if (isOpen && tiposDoc.length === 0) {
-      catalogosApi.getTiposDocumentoIdentidad()
+      setUuidTipoDoc((curr) => curr || tiposDocProp[0].uuid);
+    } else if (isOpen) {
+      catalogosApi
+        .getTiposDocumentoIdentidad()
         .then((data) => {
           const list = data?.tipos || [];
           setTiposDoc(list);
-          if (list.length > 0 && !uuidTipoDoc) {
-            setUuidTipoDoc(list[0].uuid);
+          if (list.length > 0) {
+            setUuidTipoDoc((curr) => curr || list[0].uuid);
           }
         })
         .catch(() => {
