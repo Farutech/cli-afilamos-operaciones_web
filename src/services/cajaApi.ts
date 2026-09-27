@@ -51,17 +51,17 @@ export async function obtenerTurnoActivo(codigoCaja: string = 'CAJA-01', token?:
 
     return {
       id: 1,
-      publicId: res.uuid || res.shiftId || 'turno-01',
-      codigo: 'TURNO-01',
+      publicId: res.uuid || res.shiftId || '',
+      codigo: res.codigoCaja || res.registerCode || 'CAJA-01',
       codigoCaja: res.codigoCaja || res.registerCode || 'CAJA-01',
-      nombreCaja: 'Caja Mostrador',
+      nombreCaja: res.nombreCaja || res.registerCode || 'Caja',
       idUsuarioApertura: 1,
-      nombreCajero: 'Cajero Principal',
+      nombreCajero: res.cajeroNombre || res.openedByName || 'Cajero',
       fechaAperturaUtc: res.openedAt || new Date().toISOString(),
-      baseInicial: res.baseInicial || res.baseAmount || 0,
-      teoricoTotal: res.saldoTeorico || res.theoreticalBalance || 0,
+      baseInicial: res.baseInicial ?? res.baseAmount ?? 0,
+      teoricoTotal: res.saldoTeorico ?? res.theoreticalBalance ?? 0,
       diferenciaTotal: 0,
-      estado: 'ABIERTO',
+      estado: res.estado || res.status || 'ABIERTO',
       movimientos: [],
     };
   } catch (err: unknown) {
@@ -195,3 +195,13 @@ export async function procesarVoBo(turnoId: number, req: ProcesarVoBoRequest, to
     movimientos: [],
   };
 }
+
+export const cajaApi = {
+  abrirTurno,
+  obtenerTurnoActivo,
+  obtenerTurnoPorId,
+  registrarEgreso,
+  declararArqueoCiego,
+  obtenerDetalleSupervisor,
+  procesarVoBo,
+};

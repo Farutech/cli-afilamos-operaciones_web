@@ -23,8 +23,8 @@ export const dashboardApi = {
           despachadosHoyCount: 0,
           totalRecaudosHoy: data.cashCollectedToday ?? data.recaudadoHoy ?? 0,
           cajaAbierta: (data.activeShiftsCount ?? 0) > 0,
-          codigoCaja: 'CAJA-01',
-          turnoActivoCodigo: 'TURNO-01',
+          codigoCaja: data.activeRegisterCode ?? (data.activeShiftsCount > 0 ? 'CAJA' : null),
+          turnoActivoCodigo: data.activeShiftCode ?? (data.activeShiftsCount > 0 ? 'TURNO-ACTIVO' : null),
           saldoEfectivoActual: data.cashCollectedToday ?? data.recaudadoHoy ?? 0,
           distribucionCanales: [
             {

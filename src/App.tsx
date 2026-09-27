@@ -14,6 +14,8 @@ import { ModuloAdmin } from './features/admin/ModuloAdmin';
 import { LoginForm } from './features/auth/LoginForm';
 import { useBarcodeScanner } from './hooks/useBarcodeScanner';
 import { catalogosApi } from './services/catalogosApi';
+import { cajaApi } from './services/cajaApi';
+import { dashboardApi } from './services/dashboardApi';
 import type { UsuarioSesion } from './types/auth';
 import type { CanalOrigen, TipoDocumentoIdentidad, Cliente, MedioPagoInstrumento } from './types/catalogos';
 
@@ -40,23 +42,29 @@ export function App() {
   const [tiposDoc, setTiposDoc] = useState<TipoDocumentoIdentidad[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [instrumentos, setInstrumentos] = useState<MedioPagoInstrumento[]>([]);
+  const [turnoActivo, setTurnoActivo] = useState(false);
+  const [otPendientesCount, setOtPendientesCount] = useState(0);
 
   useEffect(() => {
     if (!sesion) return;
     let isMounted = true;
     const fetchCatalogos = async () => {
       try {
-        const [cRes, tdRes, clRes, inRes] = await Promise.all([
+        const [cRes, tdRes, clRes, inRes, turno, dash] = await Promise.all([
           catalogosApi.getCanalesOrigen().catch(() => ({ canales: [] })),
           catalogosApi.getTiposDocumentoIdentidad().catch(() => ({ tipos: [] })),
           catalogosApi.getClientes().catch(() => ({ clientes: [], total: 0 })),
           catalogosApi.getMediosPagoInstrumentos().catch(() => ({ instrumentos: [] })),
+          cajaApi.obtenerTurnoActivo('CAJA-01', sesion.token).catch(() => null),
+          dashboardApi.getMetricas(sesion.token).catch(() => null),
         ]);
         if (isMounted) {
           setCanales(cRes.canales);
           setTiposDoc(tdRes.tipos);
           setClientes(clRes.clientes);
           setInstrumentos(inRes.instrumentos);
+          setTurnoActivo(Boolean(turno));
+          setOtPendientesCount(dash?.itemsEnTallerCount ?? 0);
         }
       } catch {
         // Ignorar fallback
@@ -100,8 +108,8 @@ export function App() {
         activeRoute={currentRoute}
         onRouteChange={setCurrentRoute}
         onLogout={handleLogout}
-        turnoActivo={true}
-        otPendientesCount={4}
+        turnoActivo={turnoActivo}
+        otPendientesCount={otPendientesCount}
       >
         {/* Enrutamiento Dinámico Principal */}
         {currentRoute === 'dashboard' && (
