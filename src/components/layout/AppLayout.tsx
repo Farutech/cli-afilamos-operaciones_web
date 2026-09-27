@@ -249,7 +249,8 @@ export function AppLayout({
     };
   }, []);
 
-  const esAdmin = sesion.rol.toLowerCase().includes('admin');
+  const rawRol = (sesion?.rol || (sesion as any)?.user?.roles?.[0] || ((sesion as any)?.roles?.[0]) || 'Administrador').toString();
+  const esAdmin = typeof rawRol === 'string' && rawRol.toLowerCase().includes('admin');
 
   // Filtrado de navegación por permisos de rol
   const filteredNav = useMemo(() => {
@@ -258,8 +259,8 @@ export function AppLayout({
         .map((item) => {
           // Permiso del módulo padre
           if (item.moduloPermiso) {
-            if (rolePermissions && rolePermissions[sesion.rol]) {
-              const perms = rolePermissions[sesion.rol].modulos?.[item.moduloPermiso];
+            if (rolePermissions && rolePermissions[rawRol]) {
+              const perms = rolePermissions[rawRol].modulos?.[item.moduloPermiso];
               if (perms !== undefined && !perms.navegar) {
                 return null;
               }
@@ -285,7 +286,7 @@ export function AppLayout({
         items: filteredItems,
       };
     }).filter((section) => section.items.length > 0);
-  }, [sesion.rol, esAdmin, rolePermissions]);
+  }, [rawRol, esAdmin, rolePermissions]);
 
   const toggleGroup = (groupLabel: string) => {
     // Si ya está abierto, se colapsa (null); si no, se abre SOLO este y se cierran todos los demás
@@ -466,18 +467,20 @@ export function AppLayout({
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-bold text-indigo-400 shrink-0">
-                  {sesion.nombreCompleto
+                  {(sesion?.nombreCompleto || sesion?.codigo || 'AD')
                     .split(' ')
+                    .filter(Boolean)
                     .map((n) => n[0])
                     .slice(0, 2)
-                    .join('')}
+                    .join('')
+                    .toUpperCase()}
                 </div>
                 <div className="overflow-hidden">
                   <div className="text-xs font-bold text-white truncate">
-                    {sesion.nombreCompleto}
+                    {sesion?.nombreCompleto || sesion?.codigo || 'Administrador'}
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5">
-                    <Badge variant={esAdmin ? 'danger' : 'info'}>{sesion.rol}</Badge>
+                    <Badge variant={esAdmin ? 'danger' : 'info'}>{sesion?.rol || rawRol}</Badge>
                   </div>
                 </div>
               </div>

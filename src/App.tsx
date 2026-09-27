@@ -18,7 +18,14 @@ import type { UsuarioSesion } from './types/auth';
 import type { CanalOrigen, TipoDocumentoIdentidad, Cliente, MedioPagoInstrumento } from './types/catalogos';
 
 export function App() {
-  const [sesion, setSesion] = useState<UsuarioSesion | null>(null);
+  const [sesion, setSesion] = useState<UsuarioSesion | null>(() => {
+    try {
+      const saved = localStorage.getItem('ordeon_sesion');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [currentRoute, setCurrentRoute] = useState<ViewRoute>('dashboard');
 
   // Lector de código de barras USB/HID (RF-11.2)
@@ -63,6 +70,8 @@ export function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('ordeon_token');
+    localStorage.removeItem('ordeon_sesion');
+    localStorage.removeItem('ordeon_permissions');
     setSesion(null);
   };
 

@@ -24,9 +24,51 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
 
     setCargando(true)
     try {
-      const sesion = await api.post<UsuarioSesion>('/auth/login', { codigo, password })
-      // Persistir token para servicios que requieren acceso sin prop drilling (ej. cajaApi)
+      const res = await api.post<any>('/auth/login', { codigo, password })
+
+      // Resolver token
+      const token = res?.token || res?.accessToken || ''
+
+      // Extraer y normalizar rol
+      const rawRole = (
+        res?.user?.roles?.[0] ||
+        res?.roles?.[0] ||
+        res?.rol ||
+        'Administrador'
+      ).toString()
+
+      let mappedRol: UsuarioSesion['rol'] = 'Administrador'
+      const upperRole = rawRole.toUpperCase()
+      if (upperRole.includes('ADMIN')) {
+        mappedRol = 'Administrador'
+      } else if (upperRole.includes('CAJ')) {
+        mappedRol = 'Cajero'
+      } else if (upperRole.includes('OPER')) {
+        mappedRol = 'Operario'
+      } else if (upperRole.includes('AUDIT')) {
+        mappedRol = 'Auditor'
+      } else {
+        mappedRol = 'Administrador'
+      }
+
+      const sesion: UsuarioSesion = {
+        publicId: res?.user?.id || res?.publicId || 'usr-default',
+        codigo: res?.user?.username || res?.codigo || codigo,
+        nombreCompleto: res?.user?.fullName || res?.nombreCompleto || res?.user?.username || codigo,
+        email: res?.user?.email || res?.email || '',
+        rol: mappedRol,
+        token: token,
+      }
+
+      // Persistir token y sesión para que no se pierdan al recargar la página
       localStorage.setItem('ordeon_token', sesion.token)
+      localStorage.setItem('ordeon_sesion', JSON.stringify(sesion))
+
+      const permissions = res?.user?.permissions || res?.permissions
+      if (permissions && Array.isArray(permissions)) {
+        localStorage.setItem('ordeon_permissions', JSON.stringify(permissions))
+      }
+
       if (onLoginSuccess) {
         onLoginSuccess(sesion)
       }
