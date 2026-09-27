@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { dashboardApi } from '../../services/dashboardApi';
 import type { DashboardMetricasDto } from '../../types/dashboard';
-import { Card, Badge, Button } from '@farutech/design-system';
+import { Card, Badge, Button, StatsCard, StatsCardGroup } from '@farutech/design-system';
 
 interface DashboardOperativoProps {
   token?: string;
@@ -93,78 +93,41 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
         </Card>
       ) : metricas ? (
         <>
-          {/* Tarjetas KPI Superiores */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-            <Card style={{ borderLeft: '4px solid #3b82f6' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
-                Solicitudes con Saldo Activo
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, marginTop: '8px', color: '#1d4ed8' }}>
-                {metricas.solicitudesActivasCount}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                En proceso de anticipo o taller
-              </div>
-              {onNavigateTab && (
-                <Button variant="ghost" size="sm" style={{ marginTop: '8px', padding: 0 }} onClick={() => onNavigateTab('solicitudes')}>
-                  Ver solicitudes →
-                </Button>
-              )}
-            </Card>
-
-            <Card style={{ borderLeft: '4px solid #f59e0b' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
-                Ítems en Taller (OT)
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, marginTop: '8px', color: '#b45309' }}>
-                {metricas.itemsEnTallerCount}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                En etapas técnicas activas
-              </div>
-              {onNavigateTab && (
-                <Button variant="ghost" size="sm" style={{ marginTop: '8px', padding: 0 }} onClick={() => onNavigateTab('taller')}>
-                  Ir a cola de taller →
-                </Button>
-              )}
-            </Card>
-
-            <Card style={{ borderLeft: '4px solid #10b981' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
-                Listos para Entrega
-              </div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, marginTop: '8px', color: '#047857' }}>
-                {metricas.itemsListosEntregaCount}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                Listos en mostrador para remisión
-              </div>
-              {onNavigateTab && (
-                <Button variant="ghost" size="sm" style={{ marginTop: '8px', padding: 0 }} onClick={() => onNavigateTab('entregas')}>
-                  Gestionar despacho →
-                </Button>
-              )}
-            </Card>
-
-            <Card style={{ borderLeft: '4px solid #8b5cf6' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
-                Caja & Recaudo Diario
-              </div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, marginTop: '8px', color: '#6d28d9' }}>
-                ${metricas.totalRecaudosHoy.toLocaleString('es-CO')}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Badge variant={metricas.cajaAbierta ? 'success' : 'danger'}>
-                  {metricas.cajaAbierta ? `Turno Activo (${metricas.codigoCaja ?? 'CAJA-01'})` : 'Caja Cerrada'}
-                </Badge>
-              </div>
-              {onNavigateTab && (
-                <Button variant="ghost" size="sm" style={{ marginTop: '8px', padding: 0 }} onClick={() => onNavigateTab('caja')}>
-                  Administrar caja →
-                </Button>
-              )}
-            </Card>
-          </div>
+          {/* Tarjetas KPI Superiores usando Farutech Design System */}
+          <StatsCardGroup>
+            <StatsCard
+              title="Solicitudes con Saldo Activo"
+              value={metricas.solicitudesActivasCount}
+              icon={<span style={{ fontSize: '1.25rem' }}>📋</span>}
+              variant="primary"
+              description="En proceso de anticipo o taller"
+              onClick={onNavigateTab ? () => onNavigateTab('solicitudes') : undefined}
+            />
+            <StatsCard
+              title="Ítems en Taller (OT)"
+              value={metricas.itemsEnTallerCount}
+              icon={<span style={{ fontSize: '1.25rem' }}>🛠️</span>}
+              variant="warning"
+              description="En etapas técnicas activas"
+              onClick={onNavigateTab ? () => onNavigateTab('taller') : undefined}
+            />
+            <StatsCard
+              title="Listos para Entrega"
+              value={metricas.itemsListosEntregaCount}
+              icon={<span style={{ fontSize: '1.25rem' }}>📦</span>}
+              variant="success"
+              description="Listos en mostrador para remisión"
+              onClick={onNavigateTab ? () => onNavigateTab('entregas') : undefined}
+            />
+            <StatsCard
+              title="Recaudo Diario en Caja"
+              value={`$${metricas.totalRecaudosHoy.toLocaleString('es-CO')}`}
+              icon={<span style={{ fontSize: '1.25rem' }}>💰</span>}
+              variant="info"
+              description={metricas.cajaAbierta ? `Turno Activo (${metricas.codigoCaja ?? 'CAJA-01'})` : 'Caja Cerrada'}
+              onClick={onNavigateTab ? () => onNavigateTab('caja') : undefined}
+            />
+          </StatsCardGroup>
 
           {/* Gráfico / Distribución por Canales de Origen */}
           {mostrarCanales && (

@@ -65,7 +65,33 @@ export const catalogosApi = {
   },
 
   async getUnidades(): Promise<{ unidades: UnidadPresentacion[] }> {
-    return api.get<{ unidades: UnidadPresentacion[] }>('/catalogos/unidades');
+    try {
+      const res = await api.get<any>('/catalogos/unidades');
+      if (Array.isArray(res)) {
+        return {
+          unidades: res.map((u: any) => ({
+            uuid: u.id || u.uuid,
+            codigo: u.code || u.codigo,
+            nombre: u.name || u.nombre,
+            abreviatura: u.code || u.abreviatura || u.codigo,
+            activo: u.active ?? u.activo ?? true,
+          })),
+        };
+      }
+      return {
+        unidades: Array.isArray(res?.unidades)
+          ? res.unidades.map((u: any) => ({
+              uuid: u.id || u.uuid,
+              codigo: u.code || u.codigo,
+              nombre: u.name || u.nombre,
+              abreviatura: u.code || u.abreviatura || u.codigo,
+              activo: u.active ?? u.activo ?? true,
+            }))
+          : [],
+      };
+    } catch {
+      return { unidades: [] };
+    }
   },
 
   async crearUnidad(dto: { codigo: string; nombre: string; abreviatura: string }): Promise<UnidadPresentacion> {
@@ -89,8 +115,14 @@ export const catalogosApi = {
   },
 
   async getTiposDocumento(codigoBase?: string): Promise<{ tipos: TipoDocumentoBase[] }> {
-    const qs = codigoBase ? `?codigoBase=${encodeURIComponent(codigoBase)}` : '';
-    return api.get<{ tipos: TipoDocumentoBase[] }>(`/catalogos/tipos-documento${qs}`);
+    try {
+      const qs = codigoBase ? `?codigoBase=${encodeURIComponent(codigoBase)}` : '';
+      const res = await api.get<any>(`/catalogos/tipos-documento${qs}`);
+      if (Array.isArray(res)) return { tipos: res };
+      return { tipos: res?.tipos || [] };
+    } catch {
+      return { tipos: [] };
+    }
   },
 
   async crearSubtipo(uuidBase: string, dto: {
@@ -218,7 +250,13 @@ export const catalogosApi = {
 
   // --- Listas de Precios ---
   async getListasPrecio(): Promise<{ listas: ListaPrecio[] }> {
-    return api.get<{ listas: ListaPrecio[] }>('/catalogos/listas-precio');
+    try {
+      const res = await api.get<any>('/catalogos/listas-precio');
+      if (Array.isArray(res)) return { listas: res };
+      return { listas: res?.listas || [] };
+    } catch {
+      return { listas: [] };
+    }
   },
 
   async crearListaPrecio(dto: {
@@ -254,7 +292,22 @@ export const catalogosApi = {
 
   // --- Política Global de Precios en Mostrador ---
   async getPoliticaPrecios(): Promise<PoliticaPrecios> {
-    return api.get<PoliticaPrecios>('/catalogos/politica-precios');
+    try {
+      const res = await api.get<PoliticaPrecios>('/catalogos/politica-precios');
+      return res || {
+        permiteModificarPrecio: true,
+        maxDiferenciaPorcentaje: 25,
+        requiereVoBoSuperaTolerancia: true,
+        permitirMultiplicadorLista: true,
+      };
+    } catch {
+      return {
+        permiteModificarPrecio: true,
+        maxDiferenciaPorcentaje: 25,
+        requiereVoBoSuperaTolerancia: true,
+        permitirMultiplicadorLista: true,
+      };
+    }
   },
 
   async actualizarPoliticaPrecios(dto: {

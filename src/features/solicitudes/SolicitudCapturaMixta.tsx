@@ -49,7 +49,8 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
 
   // Subtipos de Documento y Consecutivos (Tipo Novasoft)
-  const [subtipoDoc, setSubtipoDoc] = useState<'SOL-GEN' | 'SOL-PREF'>('SOL-GEN');
+  const [subtipoDoc, setSubtipoDoc] = useState<string>('SOL-GEN');
+  const [subtipoPersonalizado, setSubtipoPersonalizado] = useState<string>('');
   const [plantillaFormato, setPlantillaFormato] = useState<'TIRILLA' | 'MEDIA_CARTA' | 'CARTA'>('TIRILLA');
   const [isPlantillaModalOpen, setIsPlantillaModalOpen] = useState(false);
 
@@ -59,30 +60,96 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().slice(0, 16);
   });
+
+  // Fecha y hora prometida de entrega
+  const [fechaEntrega, setFechaEntrega] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(17, 0, 0, 0);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  });
+
+  const aplicarPresetEntrega = (horas: number) => {
+    const d = new Date();
+    d.setHours(d.getHours() + horas);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    setFechaEntrega(d.toISOString().slice(0, 16));
+  };
+
+  const textoFechaEntrega = useMemo(() => {
+    if (!fechaEntrega) return 'No especificada';
+    try {
+      const d = new Date(fechaEntrega);
+      return new Intl.DateTimeFormat('es-CO', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(d);
+    } catch {
+      return fechaEntrega;
+    }
+  }, [fechaEntrega]);
+
   const [sufijoDoc, setSufijoDoc] = useState<string>('');
   const [numeroDocManual, setNumeroDocManual] = useState<string>('');
 
   const infoConsecutivo = useMemo(() => {
-    if (subtipoDoc === 'SOL-GEN') {
-      return {
-        prefijo: 'SG',
-        subtipoNombre: 'Solicitud General de Taller e Inventario',
-        folioActual: 2,
-        siguienteNumero: 'SG-0003',
-        longitud: 4,
-        tipoImpresion: 'Tirilla POS 80mm / Media Carta',
-      };
-    } else {
-      return {
-        prefijo: 'SP',
-        subtipoNombre: 'Solicitud Preferencial / Prioritaria',
-        folioActual: 0,
-        siguienteNumero: 'SP-0001',
-        longitud: 4,
-        tipoImpresion: 'Carta Completa / Formato Especial',
-      };
+    switch (subtipoDoc) {
+      case 'SOL-PREF':
+        return {
+          prefijo: 'SP',
+          subtipoNombre: 'Solicitud Prioritaria / VIP',
+          siguienteNumero: 'SP-0001',
+          longitud: 4,
+          tipoImpresion: 'Carta Completa / Formato Especial',
+        };
+      case 'SOL-GAR':
+        return {
+          prefijo: 'GA',
+          subtipoNombre: 'Garantía Técnica de Afilado',
+          siguienteNumero: 'GA-0001',
+          longitud: 4,
+          tipoImpresion: 'Tirilla POS 80mm / Media Carta',
+        };
+      case 'SOL-EXP':
+        return {
+          prefijo: 'SX',
+          subtipoNombre: 'Servicio Exprés en Mostrador',
+          siguienteNumero: 'SX-0001',
+          longitud: 4,
+          tipoImpresion: 'Tirilla POS 80mm',
+        };
+      case 'SOL-MAY':
+        return {
+          prefijo: 'SM',
+          subtipoNombre: 'Distribuidor / Mayorista',
+          siguienteNumero: 'SM-0001',
+          longitud: 4,
+          tipoImpresion: 'Carta Completa (Factura/OT)',
+        };
+      case 'OTRO':
+        return {
+          prefijo: (subtipoPersonalizado || 'SO').slice(0, 3).toUpperCase(),
+          subtipoNombre: subtipoPersonalizado || 'Solicitud Personalizada',
+          siguienteNumero: `${(subtipoPersonalizado || 'SO').slice(0, 2).toUpperCase()}-0001`,
+          longitud: 4,
+          tipoImpresion: 'Tirilla POS 80mm',
+        };
+      case 'SOL-GEN':
+      default:
+        return {
+          prefijo: 'SG',
+          subtipoNombre: 'Solicitud General de Taller e Inventario',
+          siguienteNumero: 'SG-0003',
+          longitud: 4,
+          tipoImpresion: 'Tirilla POS 80mm / Media Carta',
+        };
     }
-  }, [subtipoDoc]);
+  }, [subtipoDoc, subtipoPersonalizado]);
 
   // Folio visible por defecto con el prefijo y sufijo
   const folioCompletoVisible = useMemo(() => {
@@ -356,55 +423,80 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       {/* 1. Cabecera de Solicitud (Control Documental Estilo Novasoft) */}
       <Card>
         {/* Barra de Subtipo de Documento & Plantilla */}
-        <div className="mb-4 pb-4 border-b border-gray-800 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Subtipo de Solicitud (Novasoft Document Control):
-              </span>
-              <div className="flex items-center gap-2 mt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSubtipoDoc('SOL-GEN');
+        <div className="mb-4 pb-4 border-b border-gray-800 space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1">
+                Tipo / Subtipo de Solicitud:
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={subtipoDoc}
+                  onChange={(e) => {
+                    setSubtipoDoc(e.target.value);
                     setNumeroDocManual('');
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    subtipoDoc === 'SOL-GEN'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-1 ring-blue-400'
-                      : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  📄 SOL-GEN · Solicitud Estándar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSubtipoDoc('SOL-PREF');
-                    setNumeroDocManual('');
+                  style={{
+                    padding: '0.45rem 0.75rem',
+                    background: '#0f172a',
+                    color: '#f8fafc',
+                    border: '1px solid #475569',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
                   }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    subtipoDoc === 'SOL-PREF'
-                      ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-400'
-                      : 'bg-gray-800 text-gray-400 hover:text-gray-200'
-                  }`}
                 >
-                  ⭐ SOL-PREF · Preferencial / VIP
-                </button>
+                  <option value="SOL-GEN">📄 SOL-GEN · Solicitud Estándar (General Taller)</option>
+                  <option value="SOL-PREF">⭐ SOL-PREF · Solicitud Prioritaria / VIP</option>
+                  <option value="SOL-GAR">🛡️ SOL-GAR · Garantía Técnica de Afilado</option>
+                  <option value="SOL-EXP">⚡ SOL-EXP · Servicio Exprés en Mostrador</option>
+                  <option value="SOL-MAY">🏢 SOL-MAY · Distribuidor / Mayorista</option>
+                  <option value="OTRO">✏️ Otro (Subtipo Personalizado)</option>
+                </select>
+
+                {subtipoDoc === 'OTRO' && (
+                  <input
+                    type="text"
+                    placeholder="Escriba código o subtipo..."
+                    value={subtipoPersonalizado}
+                    onChange={(e) => setSubtipoPersonalizado(e.target.value.toUpperCase())}
+                    style={{
+                      padding: '0.45rem 0.75rem',
+                      background: '#0f172a',
+                      color: '#f8fafc',
+                      border: '1px solid #6366f1',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                )}
+
+                <Badge variant={subtipoDoc === 'SOL-PREF' ? 'warning' : subtipoDoc === 'SOL-EXP' ? 'danger' : 'info'}>
+                  {infoConsecutivo.subtipoNombre}
+                </Badge>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <div className="text-[11px] text-gray-400">Plantilla de Salida:</div>
+            <div className="flex items-center gap-3">
+              <div>
+                <label className="text-[11px] text-gray-400 block font-semibold mb-1">
+                  Plantilla de Salida:
+                </label>
                 <select
                   value={plantillaFormato}
                   onChange={(e) => setPlantillaFormato(e.target.value as any)}
-                  className="bg-gray-800 text-white text-xs border border-white/10 rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer"
+                  style={{
+                    padding: '0.45rem 0.75rem',
+                    background: '#0f172a',
+                    color: '#f8fafc',
+                    border: '1px solid #475569',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.85rem',
+                  }}
                 >
-                  <option value="TIRILLA">Tirilla POS 80mm</option>
-                  <option value="MEDIA_CARTA">Media Carta (Talón Taller)</option>
-                  <option value="CARTA">Carta Completa (Factura/OT)</option>
+                  <option value="TIRILLA">🧾 Tirilla POS 80mm</option>
+                  <option value="MEDIA_CARTA">📋 Media Carta (Talón Taller)</option>
+                  <option value="CARTA">📄 Carta Completa (Factura/OT)</option>
                 </select>
               </div>
               <Button
@@ -412,29 +504,46 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 size="sm"
                 type="button"
                 onClick={() => setIsPlantillaModalOpen(true)}
-                className="mt-3 text-xs"
+                style={{ marginTop: '1.25rem' }}
               >
                 👁️ Ver Formato
               </Button>
             </div>
           </div>
 
-          {/* Grilla Documental: Prefijo + Folio + Sufijo + Fecha/Hora Picker */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 rounded-xl bg-gray-900/90 border border-white/10 text-xs">
+          {/* Grilla Documental: Prefijo + Consecutivo + Sufijo + Fecha Documento */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '0.75rem',
+            padding: '0.875rem',
+            background: '#0f172a',
+            border: '1px solid #334155',
+            borderRadius: '0.5rem',
+          }}>
             <div>
-              <label className="text-[11px] text-gray-400 block font-semibold mb-1">
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>
                 Prefijo Documento
               </label>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20 text-sm">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  color: '#fbbf24',
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '0.375rem',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  fontSize: '0.9rem',
+                }}>
                   {infoConsecutivo.prefijo}
                 </span>
-                <span className="text-[10px] text-gray-400">Pad: {infoConsecutivo.longitud} ceros</span>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Long: {infoConsecutivo.longitud} dígitos</span>
               </div>
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400 block font-semibold mb-1">
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>
                 Número / Consecutivo *
               </label>
               <input
@@ -442,12 +551,23 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 value={numeroDocManual || infoConsecutivo.siguienteNumero}
                 onChange={(e) => setNumeroDocManual(e.target.value)}
                 placeholder={infoConsecutivo.siguienteNumero}
-                className="w-full px-2.5 py-1.5 bg-gray-950 border border-slate-700 rounded-lg font-mono font-bold text-emerald-400 text-xs focus:outline-none focus:border-indigo-500"
+                style={{
+                  width: '100%',
+                  padding: '0.45rem 0.65rem',
+                  background: '#020617',
+                  border: '1px solid #475569',
+                  borderRadius: '0.375rem',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  color: '#34d399',
+                  fontSize: '0.85rem',
+                  boxSizing: 'border-box',
+                }}
               />
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400 block font-semibold mb-1">
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>
                 Sufijo Opcional
               </label>
               <input
@@ -455,27 +575,163 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 value={sufijoDoc}
                 onChange={(e) => setSufijoDoc(e.target.value.toUpperCase())}
                 placeholder="Ej: 2026 o B"
-                className="w-full px-2.5 py-1.5 bg-gray-950 border border-slate-700 rounded-lg font-mono text-white text-xs focus:outline-none focus:border-indigo-500"
+                style={{
+                  width: '100%',
+                  padding: '0.45rem 0.65rem',
+                  background: '#020617',
+                  border: '1px solid #475569',
+                  borderRadius: '0.375rem',
+                  fontFamily: 'monospace',
+                  color: '#f8fafc',
+                  fontSize: '0.85rem',
+                  boxSizing: 'border-box',
+                }}
               />
             </div>
 
             <div>
-              <label className="text-[11px] text-gray-400 block font-semibold mb-1">
-                Fecha / Hora Documento (Año-Mes-Día) *
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>
+                Fecha / Hora Documento *
               </label>
               <input
                 type="datetime-local"
                 value={fechaDocumento}
                 onChange={(e) => setFechaDocumento(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-gray-950 border border-slate-700 rounded-lg text-white text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+                style={{
+                  width: '100%',
+                  padding: '0.45rem 0.65rem',
+                  background: '#020617',
+                  border: '1px solid #475569',
+                  borderRadius: '0.375rem',
+                  color: '#f8fafc',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  boxSizing: 'border-box',
+                }}
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-gray-400 px-1">
+          {/* Sección de Fecha Prometida de Entrega con Formato */}
+          <div style={{
+            padding: '0.875rem',
+            background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)',
+            border: '1px solid #3b82f6',
+            borderRadius: '0.5rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                📅 Fecha y Franja Prometida de Entrega
+              </span>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => aplicarPresetEntrega(4)}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    background: '#1e293b',
+                    color: '#e2e8f0',
+                    border: '1px solid #475569',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ⚡ +4 Horas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => aplicarPresetEntrega(24)}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    background: '#1e293b',
+                    color: '#e2e8f0',
+                    border: '1px solid #475569',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📅 +24 Horas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => aplicarPresetEntrega(48)}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    background: '#1e293b',
+                    color: '#e2e8f0',
+                    border: '1px solid #475569',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📦 +48 Horas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => aplicarPresetEntrega(72)}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    background: '#1e293b',
+                    color: '#e2e8f0',
+                    border: '1px solid #475569',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  🗓️ +72 Horas
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <input
+                type="datetime-local"
+                value={fechaEntrega}
+                onChange={(e) => setFechaEntrega(e.target.value)}
+                style={{
+                  padding: '0.45rem 0.75rem',
+                  background: '#020617',
+                  border: '1px solid #3b82f6',
+                  borderRadius: '0.375rem',
+                  color: '#f8fafc',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              />
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                background: 'rgba(59, 130, 246, 0.15)',
+                padding: '0.4rem 0.75rem',
+                borderRadius: '0.375rem',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+              }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#60a5fa' }}>
+                  🕒 Compromiso:{' '}
+                  <strong style={{ color: '#ffffff', textTransform: 'capitalize' }}>
+                    {textoFechaEntrega}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#94a3b8', padding: '0 0.25rem' }}>
             <span>
               Identificador Completo a Asentar:{' '}
-              <strong className="font-mono text-white">{folioCompletoVisible}</strong>
+              <strong style={{ fontFamily: 'monospace', color: '#ffffff', fontSize: '0.85rem' }}>{folioCompletoVisible}</strong>
             </span>
             <Badge variant="success">Consecutivo Activo</Badge>
           </div>
@@ -501,7 +757,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 color: '#f8fafc',
               }}
             >
-              {canales.map((c) => (
+              {(canales || []).map((c) => (
                 <option key={c.uuid} value={c.uuid}>
                   {c.nombre}
                 </option>
@@ -544,7 +800,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 color: '#f8fafc',
               }}
             >
-              {clientes.map((cli) => (
+              {(clientes || []).map((cli) => (
                 <option key={cli.uuid} value={cli.uuid}>
                   {cli.nombreRazonSocial} ({cli.numeroDocumento})
                 </option>
@@ -562,10 +818,8 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
 
         {!itemSeleccionado ? (
           <div className="space-y-2">
-            <p className="text-xs text-slate-400">
-              La captura exige un ítem del catálogo maestro. Ingrese mínimo 3 dígitos en el
-              buscador rápido o haga clic en la <strong className="text-indigo-400">lupa 🔍</strong> para
-              consultar por categorías multinivel. No se admite descripción manual de texto libre.
+            <p className="text-xs text-slate-300">
+              Seleccione un ítem del catálogo maestro usando los <strong>accesos rápidos</strong>, buscando directamente en el campo de texto, o usando la <strong>lupa 🔍</strong> especializada.
             </p>
             <ItemSelector onSelectItem={handleSelectItemCatalogo} />
             {politicaCargando && (
@@ -642,7 +896,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                     }}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
                   >
-                    {listasPrecio.map((l) => (
+                    {(listasPrecio || []).map((l) => (
                       <option key={l.uuid} value={l.uuid}>
                         {l.nombre}
                         {l.esPredeterminada ? ' (Predeterminada)' : ''} ({l.porcentajeAjuste >= 0 ? '+' : ''}
@@ -775,7 +1029,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {lineas.map((linea) => {
+                {(lineas || []).map((linea) => {
                   const stockInsuficiente =
                     linea.naturaleza === 'INVENTARIO' &&
                     linea.stockReferencial != null &&
@@ -1064,7 +1318,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    lineas.map((l, i) => (
+                    (lineas || []).map((l, i) => (
                       <tr key={i}>
                         <td className="py-1 font-mono">{l.cantidad}</td>
                         <td className="py-1">

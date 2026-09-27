@@ -21,7 +21,7 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   naturalezaFiltro,
   placeholder = 'Buscar por código o nombre (ej: INV-001, Cuchillo)...',
   habilitarModalBusqueda = true,
-  minimoCaracteres = 3,
+  minimoCaracteres = 0,
   tamanoListado = 10,
 }) => {
   const [query, setQuery] = useState('');
@@ -32,40 +32,46 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   const [paginaListado, setPaginaListado] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setQuery(val);
-    if (val.trim().length < minimoCaracteres) {
-      setItems([]);
-      setIsOpen(false);
+  const ACCESOS_RAPIDOS = [
+    { label: '🔪 Cuchillos', query: 'cuchillo' },
+    { label: '✂️ Tijeras', query: 'tijera' },
+    { label: '🪚 Sierra Circular', query: 'sierra' },
+    { label: '🪓 Machete / Cuchilla', query: 'machete' },
+    { label: '⚙️ Servicios', query: 'SRV' },
+    { label: '📦 Inventario', query: 'INV' },
+  ];
+
+  const fetchItems = async (searchTerm = '') => {
+    setLoading(true);
+    try {
+      const res = await catalogosApi.getItems({
+        q: searchTerm.trim() || undefined,
+        naturaleza: naturalezaFiltro,
+        activo: true,
+      });
+      setItems(res?.items || []);
       setPaginaListado(1);
+      setIsOpen(true);
+    } catch (err) {
+      console.error('Error al buscar ítems en el catálogo:', err);
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Búsqueda desplegable automática desde el tercer dígito (debounce 300ms)
-  useEffect(() => {
-    if (query.trim().length < minimoCaracteres) {
-      return;
-    }
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setQuery(val);
+  };
 
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const res = await catalogosApi.getItems({
-          q: query.trim(),
-          naturaleza: naturalezaFiltro,
-          activo: true,
-        });
-        setItems(res.items || []);
-        setPaginaListado(1);
-        setIsOpen(true);
-      } catch (err) {
-        console.error('Error al buscar ítems en el catálogo:', err);
-        setItems([]);
-      } finally {
-        setLoading(false);
+  // Búsqueda desplegable automática (debounce 250ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (query.length >= minimoCaracteres) {
+        fetchItems(query);
       }
-    }, 300);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [query, naturalezaFiltro, minimoCaracteres]);
@@ -106,6 +112,46 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      {/* Botones de Selección Rápida */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8' }}>
+          Selección Rápida:
+        </span>
+        {ACCESOS_RAPIDOS.map((chip) => (
+          <button
+            key={chip.label}
+            type="button"
+            onClick={() => {
+              setQuery(chip.query);
+              fetchItems(chip.query);
+            }}
+            style={{
+              padding: '2px 8px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              background: '#1e293b',
+              color: '#e2e8f0',
+              border: '1px solid #475569',
+              borderRadius: '9999px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#4338ca';
+              e.currentTarget.style.borderColor = '#6366f1';
+              e.currentTarget.style.color = '#ffffff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#1e293b';
+              e.currentTarget.style.borderColor = '#475569';
+              e.currentTarget.style.color = '#e2e8f0';
+            }}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'stretch', gap: '0.375rem' }}>
         <div style={{ position: 'relative', flex: 1 }}>
           <input
@@ -113,17 +159,21 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
             value={query}
             onChange={handleQueryChange}
             onFocus={() => {
-              if (items.length > 0) setIsOpen(true);
+              if (items.length === 0) {
+                fetchItems(query);
+              } else {
+                setIsOpen(true);
+              }
             }}
             placeholder={placeholder}
             aria-label="Buscar ítem"
             style={{
               width: '100%',
               padding: '0.625rem 0.875rem',
-              borderRadius: '0.375rem',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-bg)',
-              color: 'var(--color-text)',
+              borderRadius: '0.5rem',
+              border: '1px solid #475569',
+              background: '#0f172a',
+              color: '#f8fafc',
               fontSize: '0.9rem',
               outline: 'none',
               boxSizing: 'border-box',
@@ -137,7 +187,7 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
                 top: '50%',
                 transform: 'translateY(-50%)',
                 fontSize: '0.8rem',
-                color: 'var(--color-text-muted)',
+                color: '#94a3b8',
               }}
             >
               Buscando...
@@ -189,10 +239,10 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
             marginTop: '0.25rem',
             maxHeight: '280px',
             overflowY: 'auto',
-            background: 'var(--color-card)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '0.375rem',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+            background: '#1e293b',
+            border: '1px solid #475569',
+            borderRadius: '0.5rem',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
             listStyle: 'none',
             margin: '0.25rem 0 0 0',
             padding: 0,
@@ -202,7 +252,7 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
             <li
               style={{
                 padding: '0.75rem 1rem',
-                color: 'var(--color-text-muted)',
+                color: '#94a3b8',
                 fontSize: '0.875rem',
                 textAlign: 'center',
               }}
@@ -220,21 +270,22 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  padding: '0.65rem 0.85rem',
-                  borderBottom: '1px solid var(--color-border)',
+                  padding: '0.75rem 1rem',
+                  borderBottom: '1px solid #334155',
                   cursor: 'pointer',
                   transition: 'background 0.15s ease',
+                  background: '#1e293b',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                  e.currentTarget.style.background = '#312e81';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.background = '#1e293b';
                 }}
               >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.875rem' }}>
+                    <span style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.875rem' }}>
                       {item.codigoReferencia}
                     </span>
                     <span style={{ color: 'var(--color-text)', fontSize: '0.875rem' }}>{item.nombre}</span>

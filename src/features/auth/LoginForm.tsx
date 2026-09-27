@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Button, Card, Input, Badge } from '@farutech/design-system'
+import { Button, Card, Badge } from '@farutech/design-system'
 import { api } from '../../services/api'
 import type { UsuarioSesion } from '../../types/auth'
 
@@ -85,57 +85,209 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
 
   }
 
+  const [showPassword, setShowPassword] = useState(false)
+
   return (
-    <Card style={{ maxWidth: '420px', margin: '40px auto' }}>
-      <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '6px' }}>Ordeon POS</h2>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-          Afilamos Operaciones · Inicie sesión para comenzar turno
-        </p>
-        <div style={{ marginTop: '10px' }}>
-          <Badge variant="info">Fase A · Fundacional</Badge>
+    <div style={{ maxWidth: '440px', width: '100%', margin: '20px auto' }}>
+      <Card style={{
+        background: '#1e293b',
+        border: '1px solid #334155',
+        borderRadius: '1rem',
+        boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 0 25px rgba(99, 102, 241, 0.1)',
+        padding: '2rem',
+      }}>
+        {/* Logo y Encabezado Design System */}
+        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+          <div style={{ display: 'inline-flex', position: 'relative', marginBottom: '1rem' }}>
+            <div style={{
+              position: 'absolute',
+              inset: '-4px',
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              borderRadius: '1.25rem',
+              filter: 'blur(10px)',
+              opacity: 0.6,
+            }} />
+            <div style={{
+              position: 'relative',
+              width: '4.5rem',
+              height: '4.5rem',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #312e81 100%)',
+              borderRadius: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2.25rem',
+              boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.5)',
+              border: '2px solid rgba(255, 255, 255, 0.15)',
+            }}>
+              ⚙️
+            </div>
+          </div>
+
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#ffffff', margin: 0, letterSpacing: '-0.025em' }}>
+            Afilamos Hermanos
+          </h1>
+          <p style={{ color: '#93c5fd', fontSize: '0.9rem', fontWeight: 600, margin: '4px 0 8px 0' }}>
+            Ordeon POS · Control de Operaciones
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+            <Badge variant="info">v1.0.0</Badge>
+            <Badge variant="success">Sistema Activo</Badge>
+          </div>
         </div>
-      </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <Input
-          label="Código de Operario"
-          placeholder="Ej: CAJERO1 o ADMIN"
-          value={codigo}
-          onChange={(e) => setCodigo(e.target.value)}
-          disabled={cargando}
-          autoFocus
-        />
+        {/* Formulario */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
+              Usuario / Código de Operario / Correo
+            </label>
+            <input
+              type="text"
+              placeholder="Ej: admin o CAJERO1"
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value)}
+              disabled={cargando}
+              autoFocus
+              style={{
+                width: '100%',
+                padding: '0.625rem 0.875rem',
+                background: '#0f172a',
+                border: '1px solid #475569',
+                borderRadius: '0.5rem',
+                color: '#f8fafc',
+                fontSize: '0.9rem',
+                outline: 'none',
+                boxSizing: 'border-box',
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+              onBlur={(e) => e.target.style.borderColor = '#475569'}
+            />
+          </div>
 
-        <Input
-          label="Contraseña"
-          type="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={cargando}
-        />
+          <div>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
+              Contraseña
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={cargando}
+                style={{
+                  width: '100%',
+                  padding: '0.625rem 2.5rem 0.625rem 0.875rem',
+                  background: '#0f172a',
+                  border: '1px solid #475569',
+                  borderRadius: '0.5rem',
+                  color: '#f8fafc',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.2s',
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#6366f1'}
+                onBlur={(e) => e.target.style.borderColor = '#475569'}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                style={{
+                  position: 'absolute',
+                  right: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  padding: '2px',
+                }}
+                title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
+          </div>
 
-        {error && (
-          <div
-            role="alert"
+          {/* Atajo rápido de prueba demo */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'rgba(99, 102, 241, 0.1)',
+            border: '1px dashed #6366f1',
+            borderRadius: '0.5rem',
+            padding: '6px 10px',
+            fontSize: '0.75rem',
+          }}>
+            <span style={{ color: '#c7d2fe' }}>💡 Demo: <strong>admin</strong></span>
+            <button
+              type="button"
+              onClick={() => {
+                setCodigo('admin')
+                setPassword('Admin123*')
+              }}
+              style={{
+                background: '#4f46e5',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '2px 8px',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Autocompletar
+            </button>
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              style={{
+                padding: '10px 12px',
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #ef4444',
+                borderRadius: '0.5rem',
+                color: '#fca5a5',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={cargando}
             style={{
-              padding: '10px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid var(--color-danger)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--color-danger)',
-              fontSize: '0.875rem',
+              marginTop: '4px',
+              width: '100%',
+              padding: '0.75rem',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              border: 'none',
+              borderRadius: '0.5rem',
+              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
+              cursor: cargando ? 'not-allowed' : 'pointer',
             }}
           >
-            {error}
-          </div>
-        )}
-
-        <Button type="submit" disabled={cargando} style={{ marginTop: '8px', width: '100%' }}>
-          {cargando ? 'Iniciando sesión...' : 'Ingresar al Sistema'}
-        </Button>
-      </form>
-    </Card>
+            {cargando ? '🔄 Iniciando sesión...' : '🚀 Ingresar al Sistema'}
+          </Button>
+        </form>
+      </Card>
+    </div>
   )
 }
