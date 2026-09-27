@@ -1,15 +1,15 @@
 const getBaseUrl = (): string => {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
-  }
   if (typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location
     if (hostname.includes('afilamoshermanos.local')) {
-      return `${protocol}//api.ops.afilamoshermanos.local/api/v1`
+      return '/api/v1'
     }
     if (port === '3000' || port === '5173') {
       return `${protocol}//${hostname}:5005/api/v1`
     }
+  }
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
   }
   return 'http://localhost:5000/api/v1'
 }
