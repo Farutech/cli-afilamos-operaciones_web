@@ -9,7 +9,7 @@ import {
   procesarVoBo
 } from '../../services/cajaApi';
 import { catalogosApi } from '../../services/catalogosApi';
-import type { DenominacionEfectivo } from '../../types/catalogos';
+import type { DenominacionEfectivo, Caja } from '../../types/catalogos';
 import { Badge, Button, Card, Input } from '@farutech/design-system';
 
 /** Planilla de conteo por denominación (cantidad + subtotal calculado). */
@@ -54,10 +54,35 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
   userRole = 'Cajero',
   token,
 }) => {
+  const [codigoCajaSeleccionada, setCodigoCajaSeleccionada] = useState<string>(codigoCajaDefault);
+  const [cajasDisponibles, setCajasDisponibles] = useState<Caja[]>([]);
   const [turno, setTurno] = useState<TurnoDto | null>(null);
   const [cargando, setCargando] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Cargar catálogo de cajas configuradas en la base de datos
+  useEffect(() => {
+    let cancelado = false;
+    const cargarCajas = async () => {
+      try {
+        const res = await catalogosApi.getCajas();
+        if (cancelado) return;
+        if (res.cajas && res.cajas.length > 0) {
+          setCajasDisponibles(res.cajas);
+          const existe = res.cajas.find(c => c.activa && c.codigoCaja === codigoCajaDefault);
+          if (existe) {
+            setCodigoCajaSeleccionada(existe.codigoCaja);
+          } else {
+            const primeraActiva = res.cajas.find(c => c.activa);
+            if (primeraActiva) setCodigoCajaSeleccionada(primeraActiva.codigoCaja);
+          }
+        }
+      } catch { }
+    };
+    cargarCajas();
+    return () => { cancelado = true; };
+  }, [codigoCajaDefault]);
 
   // Modal Egreso
   const [mostrarModalEgreso, setMostrarModalEgreso] = useState<boolean>(false);
@@ -133,7 +158,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     setCargando(true);
     setErrorMsg(null);
     try {
-      const data = await obtenerTurnoActivo(codigoCajaDefault, token);
+      const data = await obtenerTurnoActivo(codigoCajaSeleccionada, token);
       setTurno(data);
 
       if (data && data.estado === 'PENDIENTE_VOBO') {
@@ -153,39 +178,11 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     } finally {
       setCargando(false);
     }
-  }, [codigoCajaDefault, token]);
+  }, [codigoCajaSeleccionada, token]);
 
   useEffect(() => {
-    let activo = true;
-    const init = async () => {
-      try {
-        const t = await obtenerTurnoActivo(codigoCajaDefault, token);
-        if (!activo) return;
-        setTurno(t);
-        if (t && t.estado === 'PENDIENTE_VOBO') {
-          try {
-            const det = await obtenerDetalleSupervisor(t.id, token);
-            if (activo) setDetalleSupervisor(det);
-          } catch {
-            if (activo) setDetalleSupervisor(null);
-          }
-        } else {
-          if (activo) setDetalleSupervisor(null);
-        }
-      } catch (err: unknown) {
-        if (activo) {
-          const e = err as Error;
-          setErrorMsg(e.message || 'Error al consultar estado de la caja');
-        }
-      } finally {
-        if (activo) setCargando(false);
-      }
-    };
-    init();
-    return () => {
-      activo = false;
-    };
-  }, [codigoCajaDefault, token]);
+    cargarTurno();
+  }, [cargarTurno]);
 
   const handleAbrirTurno = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,7 +198,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
     try {
       const nuevoTurno = await abrirTurno({
-        codigoCaja: codigoCajaDefault,
+        codigoCaja: codigoCajaSeleccionada,
         baseInicial: monto
       }, token);
       setTurno(nuevoTurno);
@@ -341,9 +338,24 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
           <span className="text-xs font-semibold px-2.5 py-1 rounded bg-gray-800 text-gray-300 border border-white/10">
             Rol: {userRole}
           </span>
-          <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded bg-blue-950 text-blue-300 border border-blue-800/40">
-            {codigoCajaDefault}
-          </span>
+          {cajasDisponibles.length > 0 ? (
+            <select
+              value={codigoCajaSeleccionada}
+              onChange={(e) => setCodigoCajaSeleccionada(e.target.value)}
+              className="text-xs font-semibold uppercase px-2.5 py-1 rounded bg-blue-950 text-blue-200 border border-blue-700/60 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+              title="Seleccionar Terminal de Caja Operativa"
+            >
+              {cajasDisponibles.map((c) => (
+                <option key={c.uuid || c.codigoCaja} value={c.codigoCaja} className="bg-gray-900 text-white">
+                  {c.codigoCaja} - {c.nombre} {!c.activa ? '(Inactiva)' : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded bg-blue-950 text-blue-300 border border-blue-800/40">
+              {codigoCajaSeleccionada}
+            </span>
+          )}
           {turno ? (
             <span
               className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${
@@ -403,7 +415,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
               </p>
               <div className="flex items-center justify-center gap-2 pt-1">
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-blue-950/60 border border-blue-800/50 text-blue-300 font-mono font-bold">
-                  Terminal: {codigoCajaDefault}
+                  Terminal: {codigoCajaSeleccionada}
                 </span>
                 <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-gray-800 border border-white/10 text-gray-300">
                   Operador: {userRole}
