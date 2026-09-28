@@ -3,7 +3,15 @@ import { Card, Button, Badge, Input, Modal, Alert } from '@farutech/design-syste
 import { ItemSelector } from '../catalogos/ItemSelector';
 import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
 import { catalogosApi } from '../../services/catalogosApi';
-import type { ItemCatalogo, Cliente, CanalOrigen, TipoDocumentoIdentidad, PoliticaPrecios, ListaPrecio } from '../../types/catalogos';
+import type {
+  ItemCatalogo,
+  Cliente,
+  CanalOrigen,
+  TipoDocumentoIdentidad,
+  PoliticaPrecios,
+  ListaPrecio,
+  MedioPagoInstrumento,
+} from '../../types/catalogos';
 import type { NaturalezaItem } from '../../types/solicitudes';
 
 export interface LineaDetalleLocal {
@@ -22,6 +30,15 @@ export interface LineaDetalleLocal {
   franjaCompromiso: string;
 }
 
+export interface PagoDistribucionLocal {
+  idTemp: string;
+  instrumentoUuid: string;
+  instrumentoCodigo: string;
+  instrumentoNombre: string;
+  monto: number;
+  referencia: string;
+}
+
 interface SolicitudCapturaMixtaProps {
   canales: CanalOrigen[];
   tiposDocumento: TipoDocumentoIdentidad[];
@@ -32,6 +49,8 @@ interface SolicitudCapturaMixtaProps {
     lineas: LineaDetalleLocal[];
     totalPagadoInventario: number;
     anticipoVoBoAutorizado: boolean;
+    observaciones?: string;
+    pagosAbono?: PagoDistribucionLocal[];
   }) => Promise<void>;
   loading?: boolean;
 }
@@ -70,12 +89,6 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     return d.toISOString().slice(0, 16);
   });
 
-  const aplicarPresetEntrega = (horas: number) => {
-    const d = new Date();
-    d.setHours(d.getHours() + horas);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    setFechaEntrega(d.toISOString().slice(0, 16));
-  };
 
   const textoFechaEntrega = useMemo(() => {
     if (!fechaEntrega) return 'No especificada';
@@ -230,6 +243,36 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     };
   }, []);
 
+  // Listado de medios de pago para abonos
+  const [mediosPago, setMediosPago] = useState<MedioPagoInstrumento[]>([]);
+  const [pagosAbono, setPagosAbono] = useState<PagoDistribucionLocal[]>([]);
+  const [medioSeleccionadoUuid, setMedioSeleccionadoUuid] = useState<string>('');
+  const [montoAbonoInput, setMontoAbonoInput] = useState<number | ''>('');
+  const [referenciaAbonoInput, setReferenciaAbonoInput] = useState<string>('');
+  const [observacionesDocumento, setObservacionesDocumento] = useState<string>('');
+
+  useEffect(() => {
+    let cancelado = false;
+    const fetchMedios = async () => {
+      try {
+        const res = await catalogosApi.getMediosPagoInstrumentos();
+        if (!cancelado && res.instrumentos) {
+          const activas = res.instrumentos.filter((i) => i.activo);
+          setMediosPago(activas);
+          if (activas.length > 0) {
+            setMedioSeleccionadoUuid(activas[0].uuid);
+          }
+        }
+      } catch {
+        if (!cancelado) setMediosPago([]);
+      }
+    };
+    fetchMedios();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
   // Formulario de nueva línea
   const [naturalezaManual, setNaturalezaManual] = useState<NaturalezaItem>('SERVICIO');
   const [descripcionManual, setDescripcionManual] = useState('');
@@ -239,14 +282,23 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const [stockRefActual, setStockRefActual] = useState<number | null>(null);
   const [itemCatIdActual, setItemCatIdActual] = useState<string | undefined>(undefined);
 
-  // Modal VoBo Supervisor
+  // Modal VoBo Supervisor y excepciones
   const [isVoBoModalOpen, setIsVoBoModalOpen] = useState(false);
   const [supervisorCodigo, setSupervisorCodigo] = useState('');
   const [supervisorPin, setSupervisorPin] = useState('');
   const [justificacionVoBo, setJustificacionVoBo] = useState('');
   const [voboError, setVoboError] = useState<string | null>(null);
+  const [voboExcepcionAnticipo, setVoboExcepcionAnticipo] = useState(false);
+  const [voboExcepcionInventario, setVoboExcepcionInventario] = useState(false);
+  const [voboSelectAnticipoCheck, setVoboSelectAnticipoCheck] = useState(true);
+  const [voboSelectInventarioCheck, setVoboSelectInventarioCheck] = useState(true);
 
-  // Cálculos de totales
+  // Cálculos de totales y distribución de abono
+  const totalAbonado = useMemo(
+    () => pagosAbono.reduce((acc, p) => acc + p.monto, 0),
+    [pagosAbono]
+  );
+
   const totalInventario = useMemo(
     () => lineas.filter((l) => l.naturaleza === 'INVENTARIO').reduce((acc, l) => acc + l.subtotal, 0),
     [lineas],
@@ -257,9 +309,25 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     [lineas],
   );
 
+  // Abonos aplicados primero a inventario (exige 100%), el resto a servicios
+  const cobroInventarioEfectivo = useMemo(
+    () => Math.max(totalPagadoInventario, Math.min(totalAbonado, totalInventario)),
+    [totalPagadoInventario, totalAbonado, totalInventario]
+  );
+
+  const abonoRestanteParaServicios = useMemo(
+    () => Math.max(0, totalAbonado - Math.min(totalAbonado, totalInventario)),
+    [totalAbonado, totalInventario]
+  );
+
   const totalAnticipos = useMemo(
-    () => lineas.filter((l) => l.naturaleza === 'SERVICIO').reduce((acc, l) => acc + l.anticipoImputado, 0),
-    [lineas],
+    () => {
+      const anticiposManuales = lineas
+        .filter((l) => l.naturaleza === 'SERVICIO')
+        .reduce((acc, l) => acc + l.anticipoImputado, 0);
+      return Math.max(anticiposManuales, abonoRestanteParaServicios);
+    },
+    [lineas, abonoRestanteParaServicios],
   );
 
   const totalMinimoAnticiposExigido = useMemo(
@@ -271,11 +339,34 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   );
 
   const totalNeto = totalInventario + totalServicios;
-  const saldoPendiente = Math.max(0, totalNeto - (totalPagadoInventario + totalAnticipos));
+  const saldoPendiente = Math.max(0, totalNeto - (cobroInventarioEfectivo + totalAnticipos));
 
   // Invariantes
-  const inventarioImpago = totalInventario > 0 && totalPagadoInventario < totalInventario;
-  const anticipoInsuficiente = totalAnticipos < totalMinimoAnticiposExigido && !voboAutorizado;
+  const inventarioImpago = totalInventario > 0 && cobroInventarioEfectivo < totalInventario && !voboExcepcionInventario;
+  const anticipoInsuficiente = totalMinimoAnticiposExigido > 0 && totalAnticipos < totalMinimoAnticiposExigido && !voboExcepcionAnticipo && !voboAutorizado;
+
+  const handleAgregarPagoAbono = () => {
+    const monto = Number(montoAbonoInput);
+    if (!medioSeleccionadoUuid || !monto || monto <= 0) return;
+    const medio = mediosPago.find((m) => m.uuid === medioSeleccionadoUuid);
+    if (!medio) return;
+
+    const nuevoPago: PagoDistribucionLocal = {
+      idTemp: `pago-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      instrumentoUuid: medio.uuid,
+      instrumentoCodigo: medio.codigo,
+      instrumentoNombre: medio.nombre,
+      monto,
+      referencia: referenciaAbonoInput.trim(),
+    };
+    setPagosAbono((prev) => [...prev, nuevoPago]);
+    setMontoAbonoInput('');
+    setReferenciaAbonoInput('');
+  };
+
+  const handleEliminarPagoAbono = (idTemp: string) => {
+    setPagosAbono((prev) => prev.filter((p) => p.idTemp !== idTemp));
+  };
 
   const handleSelectItemCatalogo = (item: ItemCatalogo) => {
     setItemSeleccionado(item);
@@ -392,8 +483,19 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       setVoboError('Todos los campos son obligatorios para el VoBo de excepción.');
       return;
     }
+    if (!voboSelectAnticipoCheck && !voboSelectInventarioCheck) {
+      setVoboError('Debe seleccionar al menos una excepción a autorizar (anticipo o inventario).');
+      return;
+    }
 
-    setVoboAutorizado(true);
+    if (voboSelectAnticipoCheck) {
+      setVoboExcepcionAnticipo(true);
+      setVoboAutorizado(true);
+    }
+    if (voboSelectInventarioCheck) {
+      setVoboExcepcionInventario(true);
+    }
+
     setIsVoBoModalOpen(false);
     setVoboError(null);
   };
@@ -413,8 +515,10 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       canalUuid: selectedCanal || canales[0]?.uuid,
       clienteUuid: selectedCliente || clientes[0]?.uuid,
       lineas,
-      totalPagadoInventario,
-      anticipoVoBoAutorizado: voboAutorizado,
+      totalPagadoInventario: cobroInventarioEfectivo,
+      anticipoVoBoAutorizado: voboAutorizado || voboExcepcionAnticipo,
+      observaciones: observacionesDocumento,
+      pagosAbono,
     });
   };
 
@@ -624,74 +728,11 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
               <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                📅 Fecha y Franja Prometida de Entrega
+                📅 Fecha y Franja Prometida de Entrega (Taller)
               </span>
-              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => aplicarPresetEntrega(4)}
-                  style={{
-                    padding: '2px 8px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    background: '#1e293b',
-                    color: '#e2e8f0',
-                    border: '1px solid #475569',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  ⚡ +4 Horas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => aplicarPresetEntrega(24)}
-                  style={{
-                    padding: '2px 8px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    background: '#1e293b',
-                    color: '#e2e8f0',
-                    border: '1px solid #475569',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  📅 +24 Horas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => aplicarPresetEntrega(48)}
-                  style={{
-                    padding: '2px 8px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    background: '#1e293b',
-                    color: '#e2e8f0',
-                    border: '1px solid #475569',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  📦 +48 Horas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => aplicarPresetEntrega(72)}
-                  style={{
-                    padding: '2px 8px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    background: '#1e293b',
-                    color: '#e2e8f0',
-                    border: '1px solid #475569',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  🗓️ +72 Horas
-                </button>
-              </div>
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                * Requerida para compromisos de servicio técnico
+              </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -700,13 +741,14 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 value={fechaEntrega}
                 onChange={(e) => setFechaEntrega(e.target.value)}
                 style={{
-                  padding: '0.45rem 0.75rem',
+                  padding: '0.5rem 0.75rem',
                   background: '#020617',
                   border: '1px solid #3b82f6',
                   borderRadius: '0.375rem',
-                  color: '#f8fafc',
+                  color: '#ffffff',
                   fontSize: '0.85rem',
                   cursor: 'pointer',
+                  fontWeight: 600,
                 }}
               />
               <div style={{
@@ -808,6 +850,31 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
             </select>
           </div>
         </div>
+
+        {/* Observaciones Generales del Documento */}
+        <div style={{ marginTop: '1rem', borderTop: '1px solid #334155', paddingTop: '1rem' }}>
+          <label htmlFor="observaciones-doc" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.35rem', color: '#e2e8f0' }}>
+            📝 Observaciones Generales del Documento & Recepción de Herramientas
+          </label>
+          <textarea
+            id="observaciones-doc"
+            rows={2}
+            value={observacionesDocumento}
+            onChange={(e) => setObservacionesDocumento(e.target.value)}
+            placeholder="Ingrese notas sobre el estado inicial de la herramienta, filos dañados, indicaciones especiales del cliente..."
+            style={{
+              width: '100%',
+              padding: '0.65rem 0.85rem',
+              background: '#020617',
+              border: '1px solid #334155',
+              borderRadius: '6px',
+              color: '#f8fafc',
+              fontSize: '0.875rem',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
       </Card>
 
       {/* 2. Captura de Línea (Exclusiva por Catálogo: Autocompletado + Lupa 🔍 Especializada) */}
@@ -819,7 +886,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         {!itemSeleccionado ? (
           <div className="space-y-2">
             <p className="text-xs text-slate-300">
-              Seleccione un ítem del catálogo maestro usando los <strong>accesos rápidos</strong>, buscando directamente en el campo de texto, o usando la <strong>lupa 🔍</strong> especializada.
+              Seleccione un ítem del catálogo maestro usando el buscador predictivo o la <strong>lupa 🔍</strong> especializada.
             </p>
             <ItemSelector onSelectItem={handleSelectItemCatalogo} />
             {politicaCargando && (
@@ -827,42 +894,75 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
             )}
           </div>
         ) : (
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-indigo-500/40 space-y-4 shadow-lg">
+          <div style={{
+            padding: '1.25rem',
+            borderRadius: '0.75rem',
+            background: '#090d16',
+            border: '1px solid #6366f1',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
+          }}>
             {/* Cabecera del Ítem Seleccionado */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded text-xs border border-amber-500/20">
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', paddingBottom: '0.75rem', borderBottom: '1px solid #334155' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  color: '#fbbf24',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  padding: '0.25rem 0.65rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.85rem',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                }}>
                   {itemSeleccionado.codigoReferencia}
                 </span>
-                <span className="font-semibold text-white text-sm">
+                <span style={{ fontWeight: 700, color: '#ffffff', fontSize: '1rem' }}>
                   {itemSeleccionado.nombre}
                 </span>
                 {itemSeleccionado.categoria?.nombre && (
-                  <span className="text-[11px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', background: '#1e293b', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
                     📁 {itemSeleccionado.categoria.rutaCompleta || itemSeleccionado.categoria.nombre}
                   </span>
                 )}
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                  ✓ Datos cargados desde catálogo
+                </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Badge variant={itemSeleccionado.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
                   {itemSeleccionado.naturaleza === 'INVENTARIO' ? 'PRODUCTO (Inventario)' : 'SERVICIO (Taller / OT)'}
                 </Badge>
                 <button
                   type="button"
                   onClick={handleCancelarItemSeleccionado}
-                  className="text-xs text-slate-400 hover:text-rose-400 transition-colors cursor-pointer px-2 py-1 rounded hover:bg-slate-900"
+                  style={{
+                    fontSize: '0.8rem',
+                    color: '#f87171',
+                    background: '#1e293b',
+                    border: '1px solid #475569',
+                    padding: '0.3rem 0.6rem',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
                 >
-                  ✖ Elegir otro ítem
+                  ✖ Cambiar ítem
                 </button>
               </div>
             </div>
 
-            {/* Campos Estructurados del Ítem */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            {/* Campos Estructurados del Ítem con Valores Visibles y de Alto Contraste */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.85rem', alignItems: 'flex-end' }}>
               <div>
-                <label htmlFor="input-cantidad-item" className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  Cantidad *
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                  <label htmlFor="input-cantidad-item" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
+                    Cantidad *
+                  </label>
+                  <span style={{ fontSize: '0.7rem', color: '#60a5fa', fontWeight: 600 }}>Unidades</span>
+                </div>
                 <input
                   id="input-cantidad-item"
                   aria-label="Cantidad"
@@ -870,14 +970,29 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                   min={1}
                   value={cantidadManual}
                   onChange={(e) => setCantidadManual(Math.max(1, Number(e.target.value) || 1))}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:border-indigo-500"
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    background: '#020617',
+                    border: '1px solid #6366f1',
+                    borderRadius: '6px',
+                    color: '#ffffff',
+                    fontFamily: 'monospace',
+                    fontWeight: 700,
+                    fontSize: '1rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  Lista de Precios
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
+                    Lista de Precios
+                  </label>
+                  <span style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: 600 }}>Tarifa</span>
+                </div>
                 {listasPrecio.length > 0 ? (
                   <select
                     value={listaPrecioSeleccionada}
@@ -886,38 +1001,50 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                       setListaPrecioSeleccionada(listaUuid);
                       const lista = listasPrecio.find((l) => l.uuid === listaUuid);
                       if (lista) {
-                        // El ajuste porcentual de la lista lo orquesta el backend:
-                        // el mostrador solo lo aplica sobre el precio base del ítem.
                         const precioConLista = Math.round(
                           precioBaseRef * (1 + lista.porcentajeAjuste / 100)
                         );
                         setPrecioManual(Math.max(0, precioConLista));
                       }
                     }}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      background: '#020617',
+                      border: '1px solid #475569',
+                      borderRadius: '6px',
+                      color: '#ffffff',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      outline: 'none',
+                      cursor: 'pointer',
+                      boxSizing: 'border-box',
+                    }}
                   >
                     {(listasPrecio || []).map((l) => (
                       <option key={l.uuid} value={l.uuid}>
                         {l.nombre}
-                        {l.esPredeterminada ? ' (Predeterminada)' : ''} ({l.porcentajeAjuste >= 0 ? '+' : ''}
+                        {l.esPredeterminada ? ' (Base)' : ''} ({l.porcentajeAjuste >= 0 ? '+' : ''}
                         {l.porcentajeAjuste}%)
                       </option>
                     ))}
                   </select>
                 ) : (
-                  <div className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-400">
-                    Precio Base del Catálogo (sin listas configuradas)
+                  <div style={{ padding: '0.55rem 0.75rem', background: '#020617', border: '1px solid #475569', borderRadius: '6px', fontSize: '0.8rem', color: '#94a3b8' }}>
+                    Precio Base del Catálogo
                   </div>
                 )}
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-semibold text-slate-300 block">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
                     Precio Unit. (COP) *
                   </label>
-                  {!politicaPrecios.permiteModificarPrecio && (
-                    <span className="text-[10px] text-amber-400">Bloqueado</span>
+                  {!politicaPrecios.permiteModificarPrecio ? (
+                    <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 600 }}>🔒 Bloqueado</span>
+                  ) : (
+                    <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 600 }}>✏️ Modificable</span>
                   )}
                 </div>
                 <input
@@ -927,19 +1054,47 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                   disabled={!politicaPrecios.permiteModificarPrecio}
                   value={precioManual}
                   onChange={(e) => setPrecioManual(Math.max(0, Number(e.target.value) || 0))}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold text-sm focus:outline-none focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    background: '#020617',
+                    border: '1px solid #475569',
+                    borderRadius: '6px',
+                    color: '#ffffff',
+                    fontFamily: 'monospace',
+                    fontWeight: 700,
+                    fontSize: '1rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    opacity: !politicaPrecios.permiteModificarPrecio ? 0.85 : 1,
+                  }}
                 />
               </div>
 
               {itemSeleccionado.naturaleza === 'SERVICIO' ? (
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                    Compromiso Taller
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
+                      Compromiso Taller
+                    </label>
+                    <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 600 }}>Franja</span>
+                  </div>
                   <select
                     value={franjaCompromiso}
                     onChange={(e) => setFranjaCompromiso(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      background: '#020617',
+                      border: '1px solid #475569',
+                      borderRadius: '6px',
+                      color: '#ffffff',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      outline: 'none',
+                      cursor: 'pointer',
+                      boxSizing: 'border-box',
+                    }}
                   >
                     <option value="HOY TARDE">Hoy en la Tarde</option>
                     <option value="MAÑANA">Mañana</option>
@@ -950,17 +1105,30 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 </div>
               ) : (
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                    Stock Referencial
-                  </label>
-                  <div className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono font-bold text-slate-200">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
+                      Stock Referencial
+                    </label>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Bodega</span>
+                  </div>
+                  <div style={{
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: '6px',
+                    background: '#020617',
+                    border: '1px solid #475569',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                    fontWeight: 700,
+                    color: '#e2e8f0',
+                    boxSizing: 'border-box',
+                  }}>
                     {stockRefActual != null ? `${stockRefActual} disponibles` : 'N/A'}
                   </div>
                 </div>
               )}
 
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="primary" onClick={handleAgregarLinea} className="w-full py-2 text-xs font-bold">
+              <div>
+                <Button type="button" variant="primary" onClick={handleAgregarLinea} fullWidth style={{ height: '42px', fontWeight: 700, fontSize: '0.85rem' }}>
                   + Agregar Línea
                 </Button>
               </div>
@@ -1105,6 +1273,180 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         )}
       </Card>
 
+      {/* 3B. Distribución de Formas de Pago para Abonos y Anticipos */}
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>
+              💳 Forma de Pago del Abono / Anticipo
+            </h4>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+              Distribuya el monto que el cliente abona hoy entre los diferentes medios de pago configurados en tesorería (Efectivo, Transferencia, Datáfono, etc.).
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.8rem', background: '#020617', border: '1px solid #334155', padding: '0.35rem 0.75rem', borderRadius: '6px', color: '#e2e8f0' }}>
+              Total Abonado: <strong style={{ color: '#10b981', fontFamily: 'monospace' }}>${totalAbonado.toLocaleString()}</strong>
+            </span>
+          </div>
+        </div>
+
+        {/* Formulario para agregar una línea de medio de pago */}
+        <div style={{
+          padding: '1rem',
+          background: '#090d16',
+          borderRadius: '0.5rem',
+          border: '1px solid #334155',
+          marginBottom: '1rem',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '0.75rem',
+          alignItems: 'flex-end',
+        }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
+              Medio de Pago *
+            </label>
+            <select
+              value={medioSeleccionadoUuid}
+              onChange={(e) => setMedioSeleccionadoUuid(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.55rem 0.75rem',
+                background: '#020617',
+                border: '1px solid #475569',
+                borderRadius: '6px',
+                color: '#ffffff',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {mediosPago.length > 0 ? (
+                mediosPago.map((mp) => (
+                  <option key={mp.uuid} value={mp.uuid}>
+                    {mp.nombre} ({mp.categoria || 'GENERAL'})
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="EFECTIVO-01">Efectivo Caja Mostrador</option>
+                  <option value="BANCO-01">Transferencia Bancaria (Bancolombia)</option>
+                  <option value="POS-01">Datáfono / Tarjeta Débito-Crédito</option>
+                  <option value="DIGITAL-01">Billetera Digital (Nequi / Daviplata)</option>
+                </>
+              )}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
+              Monto a Abonar (COP) *
+            </label>
+            <input
+              type="number"
+              min={1}
+              step={1000}
+              placeholder="Ej: 50000"
+              value={montoAbonoInput}
+              onChange={(e) => setMontoAbonoInput(e.target.value === '' ? '' : Number(e.target.value))}
+              style={{
+                width: '100%',
+                padding: '0.55rem 0.75rem',
+                background: '#020617',
+                border: '1px solid #475569',
+                borderRadius: '6px',
+                color: '#ffffff',
+                fontFamily: 'monospace',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
+              Comprobante / Referencia (Opcional)
+            </label>
+            <input
+              type="text"
+              placeholder="Ej: Aprobación #123456"
+              value={referenciaAbonoInput}
+              onChange={(e) => setReferenciaAbonoInput(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.55rem 0.75rem',
+                background: '#020617',
+                border: '1px solid #475569',
+                borderRadius: '6px',
+                color: '#ffffff',
+                fontSize: '0.85rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          <div>
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              onClick={handleAgregarPagoAbono}
+              disabled={!montoAbonoInput || Number(montoAbonoInput) <= 0}
+              style={{ height: '40px', fontWeight: 700, fontSize: '0.85rem' }}
+            >
+              + Agregar Forma de Pago
+            </Button>
+          </div>
+        </div>
+
+        {/* Tabla de Pagos de Abono Agregados */}
+        {pagosAbono.length === 0 ? (
+          <div style={{ padding: '1.25rem', textAlign: 'center', background: '#020617', borderRadius: '6px', border: '1px dashed #334155', color: '#94a3b8', fontSize: '0.85rem' }}>
+            No se han registrado pagos específicos de abono. Si el cliente efectúa un pago parcial o anticipo, regístrelo seleccionando el medio y monto.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #334155', textAlign: 'left', color: '#94a3b8' }}>
+                  <th style={{ padding: '0.5rem' }}>Instrumento de Pago</th>
+                  <th style={{ padding: '0.5rem' }}>Referencia / Soporte</th>
+                  <th style={{ padding: '0.5rem', textAlign: 'right' }}>Monto Abonado</th>
+                  <th style={{ padding: '0.5rem', textAlign: 'center' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagosAbono.map((pago) => (
+                  <tr key={pago.idTemp} style={{ borderBottom: '1px solid #1e293b' }}>
+                    <td style={{ padding: '0.5rem', fontWeight: 600, color: '#f8fafc' }}>
+                      {pago.instrumentoNombre}
+                    </td>
+                    <td style={{ padding: '0.5rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                      {pago.referencia || '— (Cobro directo)'}
+                    </td>
+                    <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: '#34d399', fontFamily: 'monospace' }}>
+                      ${pago.monto.toLocaleString()}
+                    </td>
+                    <td style={{ padding: '0.5rem', textAlign: 'center' }}>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleEliminarPagoAbono(pago.idTemp)}
+                      >
+                        ✕ Quitar
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
       {/* 4. Resumen Financiero e Invariantes */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem' }}>
@@ -1123,14 +1465,25 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 }}
               >
                 <strong>Invariante #1:</strong> El inventario (${totalInventario.toLocaleString()}) debe estar
-                pagado al 100% para asentar la solicitud. Actualmente pagado: ${totalPagadoInventario.toLocaleString()}.
-                <div style={{ marginTop: '0.5rem' }}>
+                pagado al 100% para asentar la solicitud. Actualmente pagado: ${cobroInventarioEfectivo.toLocaleString()}.
+                <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setTotalPagadoInventario(totalInventario)}
                   >
                     Simular Cobro Total de Inventario ($ {totalInventario.toLocaleString()})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setVoboSelectInventarioCheck(true);
+                      setVoboSelectAnticipoCheck(false);
+                      setIsVoBoModalOpen(true);
+                    }}
+                  >
+                    Solicitar VoBo Supervisor (Excepción)
                   </Button>
                 </div>
               </div>
@@ -1154,7 +1507,11 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsVoBoModalOpen(true)}
+                    onClick={() => {
+                      setVoboSelectAnticipoCheck(true);
+                      setVoboSelectInventarioCheck(false);
+                      setIsVoBoModalOpen(true);
+                    }}
                   >
                     Solicitar VoBo Supervisor (Excepción)
                   </Button>
@@ -1162,7 +1519,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
               </div>
             )}
 
-            {voboAutorizado && (
+            {(voboAutorizado || voboExcepcionAnticipo) && (
               <div
                 style={{
                   padding: '0.5rem',
@@ -1174,6 +1531,21 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 }}
               >
                 ✓ Excepción de anticipo autorizada por Supervisor.
+              </div>
+            )}
+
+            {voboExcepcionInventario && (
+              <div
+                style={{
+                  padding: '0.5rem',
+                  background: '#eff6ff',
+                  borderLeft: '4px solid #3b82f6',
+                  borderRadius: '4px',
+                  fontSize: '0.8125rem',
+                  color: '#1e40af',
+                }}
+              >
+                ✓ Excepción de entrega de inventario sin pago 100% autorizada por Supervisor.
               </div>
             )}
           </div>
@@ -1386,14 +1758,35 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         isOpen={isVoBoModalOpen}
         onClose={() => setIsVoBoModalOpen(false)}
         title="VoBo Excepción Anticipo"
-        size="sm"
+        size="md"
       >
         <div className="p-4 space-y-4">
-          <p className="text-xs text-gray-400">
-            Autorización de supervisor para asentar solicitud de servicio con anticipo menor al mínimo requerido (40%).
+          <p className="text-xs text-gray-300">
+            Autorización de supervisor para asentar solicitud con excepciones comerciales. Seleccione cuáles condiciones autoriza con su clave:
           </p>
           {voboError && <Alert variant="danger">{voboError}</Alert>}
           <form onSubmit={handleAprobarVoBo} className="space-y-4">
+            <div style={{ padding: '0.75rem', background: '#090d16', borderRadius: '8px', border: '1px solid #334155' }} className="space-y-2">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#ffffff' }}>
+                <input
+                  type="checkbox"
+                  checked={voboSelectAnticipoCheck}
+                  onChange={(e) => setVoboSelectAnticipoCheck(e.target.checked)}
+                  style={{ width: '16px', height: '16px', accentColor: '#6366f1' }}
+                />
+                <span><strong>Excepción Anticipo Servicios:</strong> Autorizar anticipo menor al mínimo requerido (40%)</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#ffffff' }}>
+                <input
+                  type="checkbox"
+                  checked={voboSelectInventarioCheck}
+                  onChange={(e) => setVoboSelectInventarioCheck(e.target.checked)}
+                  style={{ width: '16px', height: '16px', accentColor: '#6366f1' }}
+                />
+                <span><strong>Excepción Pago Total Inventario:</strong> Autorizar entrega sin cubrir el 100% de productos</span>
+              </label>
+            </div>
+
             <Input
               id="vobo-supervisor"
               label="Código de Supervisor *"

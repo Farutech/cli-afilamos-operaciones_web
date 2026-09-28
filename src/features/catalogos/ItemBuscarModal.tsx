@@ -208,13 +208,14 @@ export function ItemBuscarModal({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Lista paginada */}
           <div className="lg:col-span-2 space-y-3">
-            <div className="overflow-hidden border border-slate-800 rounded-xl">
+            <div className="overflow-hidden border border-slate-800 rounded-xl shadow-md">
               <table className="w-full text-xs">
                 <thead className="bg-slate-950/90 text-slate-400 uppercase tracking-wider">
                   <tr>
                     <th className="px-3 py-2.5 text-left font-semibold">Código</th>
-                    <th className="px-3 py-2.5 text-left font-semibold">Ítem / Servicio</th>
+                    <th className="px-3 py-2.5 text-left font-semibold">Ítem / Servicio & Categoría</th>
                     <th className="px-3 py-2.5 text-center font-semibold">Naturaleza</th>
+                    <th className="px-3 py-2.5 text-center font-semibold">Unidad / Stock</th>
                     <th className="px-3 py-2.5 text-right font-semibold">Precio</th>
                     <th className="px-3 py-2.5 text-center font-semibold">Acción</th>
                   </tr>
@@ -222,13 +223,13 @@ export function ItemBuscarModal({
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="px-3 py-8 text-center text-slate-400">
+                      <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
                         Consultando catálogo...
                       </td>
                     </tr>
                   ) : itemsPagina.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-3 py-8 text-center text-slate-500">
+                      <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
                         No se encontraron ítems con los filtros aplicados.
                       </td>
                     </tr>
@@ -248,10 +249,15 @@ export function ItemBuscarModal({
                             {it.codigoReferencia}
                           </td>
                           <td className="px-3 py-2.5 text-slate-200">
-                            <div className="font-medium">{it.nombre}</div>
+                            <div className="font-semibold text-white">{it.nombre}</div>
+                            {it.descripcion && (
+                              <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                                {it.descripcion}
+                              </div>
+                            )}
                             {it.categoria?.nombre && (
-                              <div className="text-[10px] text-slate-500">
-                                {it.categoria.rutaCompleta || it.categoria.nombre}
+                              <div className="text-[10px] text-indigo-400 font-medium mt-0.5">
+                                📁 {it.categoria.rutaCompleta || it.categoria.nombre}
                               </div>
                             )}
                           </td>
@@ -260,8 +266,31 @@ export function ItemBuscarModal({
                               {it.naturaleza}
                             </Badge>
                           </td>
+                          <td className="px-3 py-2.5 text-center">
+                            {it.naturaleza === 'INVENTARIO' ? (
+                              <div>
+                                <span className="font-mono font-bold text-emerald-400 text-xs block">
+                                  {it.stockReferencial ?? 0}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  {it.unidadPresentacion?.abreviatura || 'UND'}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-slate-400 font-mono">
+                                Taller ({it.unidadPresentacion?.abreviatura || 'UND'})
+                              </div>
+                            )}
+                          </td>
                           <td className="px-3 py-2.5 text-right font-mono text-slate-200">
-                            {formatPrecio(it.precioConLista ?? it.precioBase)}
+                            <span className="font-bold text-emerald-400 block">
+                              {formatPrecio(it.precioConLista ?? it.precioBase)}
+                            </span>
+                            {it.precioConLista && it.precioConLista !== it.precioBase && (
+                              <span className="text-[10px] text-slate-500 line-through block">
+                                {formatPrecio(it.precioBase)}
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <button

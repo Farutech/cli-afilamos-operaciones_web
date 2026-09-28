@@ -527,12 +527,31 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
   const [mediosPagoInstrumentos, setMediosPagoInstrumentos] = useState<MedioPagoInstrumento[]>([]);
   const [loadingMediosPago, setLoadingMediosPago] = useState(false);
   const [mostrarModalInstrumento, setMostrarModalInstrumento] = useState(false);
-  const [nuevoInstrumento, setNuevoInstrumento] = useState({
+  const [nuevoInstrumento, setNuevoInstrumento] = useState<{
+    codigoCategoria: string;
+    codigo: string;
+    nombre: string;
+    requiereReferencia: boolean;
+    diasCredito?: number;
+  }>({
     codigoCategoria: 'EFECTIVO',
     codigo: '',
     nombre: '',
     requiereReferencia: false,
+    diasCredito: 30,
   });
+
+  const [categoriasExpandidas, setCategoriasExpandidas] = useState<Record<string, boolean>>({
+    EFECTIVO: true,
+    BANCOS: true,
+    TARJETAS: true,
+    BILLETERAS: true,
+    CREDITO: true,
+    OTROS: true,
+  });
+  const toggleCategoriaExpandida = (codigo: string) => {
+    setCategoriasExpandidas((prev) => ({ ...prev, [codigo]: !prev[codigo] }));
+  };
 
   const [cuentaBancaria, setCuentaBancaria] = useState<CuentaBancariaConfigDto>({
     banco: '',
@@ -1099,10 +1118,16 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
     e.preventDefault();
     setErrorMsg(null);
     try {
-      await catalogosApi.crearMedioPagoInstrumento(nuevoInstrumento);
+      await catalogosApi.crearMedioPagoInstrumento({
+        codigoCategoria: nuevoInstrumento.codigoCategoria,
+        codigo: nuevoInstrumento.codigo,
+        nombre: nuevoInstrumento.nombre,
+        requiereReferencia: nuevoInstrumento.requiereReferencia,
+        diasCredito: nuevoInstrumento.codigoCategoria === 'CREDITO' ? (nuevoInstrumento.diasCredito || 30) : undefined,
+      } as any);
       setSuccessMsg(`Medio de pago '${nuevoInstrumento.nombre}' creado exitosamente.`);
       setMostrarModalInstrumento(false);
-      setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false });
+      setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false, diasCredito: 30 });
       cargarSubCatalogo('medios_pago');
     } catch (err: unknown) {
       setErrorMsg((err as Error).message || 'Error al crear instrumento de pago');
@@ -2356,16 +2381,30 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
       {/* 4.2 FORMAS & MEDIOS DE PAGO (ÁRBOL JERÁRQUICO) */}
       {subCat === 'medios_pago' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-xl shadow-lg">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span>🌳</span> Estructura Jerárquica de Formas de Pago
+                <span>🌳</span> Árbol Jerárquico de Formas & Instrumentos de Pago
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Clasificación de medios de pago por categoría ({mediosPagoCategorias.length || 5} ramas) e instrumentos transaccionales hijos.
+                Estructura de dos niveles: {mediosPagoCategorias.length || 6} categorías macro (padres) e instrumentos transaccionales (hijos) habilitados para POS y tesorería.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const todosExpandidos = Object.values(categoriasExpandidas).every(Boolean);
+                  const nuevoEstado: Record<string, boolean> = {};
+                  ['EFECTIVO', 'BANCOS', 'TARJETAS', 'BILLETERAS', 'CREDITO', 'OTROS'].forEach((k) => {
+                    nuevoEstado[k] = !todosExpandidos;
+                  });
+                  setCategoriasExpandidas(nuevoEstado);
+                }}
+              >
+                {Object.values(categoriasExpandidas).every(Boolean) ? '📁 Colapsar Todo' : '📂 Expandir Todo'}
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -2399,12 +2438,15 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                   }
                 }}
               >
-                💵 Configurar Monedas de Caja
+                💵 Monedas de Caja
               </Button>
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => setMostrarModalInstrumento(true)}
+                onClick={() => {
+                  setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false, diasCredito: 30 });
+                  setMostrarModalInstrumento(true);
+                }}
               >
                 + Nuevo Instrumento de Pago
               </Button>
@@ -2416,94 +2458,145 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
           ) : (
             <div className="space-y-3">
               {[
-                { codigo: 'EFECTIVO', nombre: 'Efectivo & Caja Menor', icono: '💵', desc: 'Conteo por denominación física en arqueos y cierres Z' },
-                { codigo: 'BANCOS', nombre: 'Transferencias Bancarias & Consignaciones', icono: '🏦', desc: 'Validación por comprobante y referencia de transferencia' },
-              { codigo: 'TARJETAS', nombre: 'Tarjetas Débito & Crédito (Datáfonos)', icono: '💳', desc: 'Vouchers físicos y aprobación electrónica en datáfono' },
-              { codigo: 'BILLETERAS', nombre: 'Billeteras Digitales (Nequi / Daviplata)', icono: '📱', desc: 'Recaudo por QR dinámico o número de teléfono celular' },
-              { codigo: 'OTROS', nombre: 'Otros Instrumentos & Crédito Comercial', icono: '📄', desc: 'Cheques, bonos y notas crédito de mostrador' },
-            ].map((catDef) => {
-              const instrumentosCat = mediosPagoInstrumentos.filter((inst) => {
-                const c = (inst.categoria || '').toUpperCase();
-                const cod = inst.codigo.toUpperCase();
-                if (catDef.codigo === 'EFECTIVO') return c.includes('EFECTIVO') || cod.includes('EFE');
-                if (catDef.codigo === 'BANCOS') return c.includes('BANCO') || c.includes('TRANSF') || cod.includes('BAN') || cod.includes('TRA');
-                if (catDef.codigo === 'TARJETAS') return c.includes('TARJETA') || c.includes('DATA') || cod.includes('TAR') || cod.includes('POS');
-                if (catDef.codigo === 'BILLETERAS') return c.includes('BILLETERA') || c.includes('NEQUI') || c.includes('DAVI') || cod.includes('DIG');
-                return !c.includes('EFECTIVO') && !c.includes('BANCO') && !c.includes('TARJETA') && !c.includes('BILLETERA');
-              });
+                { codigo: 'EFECTIVO', nombre: 'Efectivo & Caja Menor', icono: '💵', desc: 'Conteo físico por denominación en arqueos y cierres Z' },
+                { codigo: 'BANCOS', nombre: 'Transferencias Bancarias & Consignaciones', icono: '🏦', desc: 'Validación por comprobante y cuenta receptora' },
+                { codigo: 'TARJETAS', nombre: 'Tarjetas Débito & Crédito (Datáfonos)', icono: '💳', desc: 'Vouchers y autorizaciones electrónicas de datáfono' },
+                { codigo: 'BILLETERAS', nombre: 'Billeteras Digitales (Nequi / Daviplata)', icono: '📱', desc: 'Recaudo por QR dinámico o número de teléfono celular' },
+                { codigo: 'CREDITO', nombre: 'Crédito Comercial (Cuentas por Cobrar)', icono: '⏱️', desc: 'Otorgamiento de plazo de pago con control de días de crédito' },
+                { codigo: 'OTROS', nombre: 'Otros Instrumentos & Papelería', icono: '📄', desc: 'Cheques, bonos y notas crédito de mostrador' },
+              ].map((catDef) => {
+                const estaExpandido = categoriasExpandidas[catDef.codigo] !== false;
+                const instrumentosCat = mediosPagoInstrumentos.filter((inst) => {
+                  const c = (inst.categoria || '').toUpperCase();
+                  const cod = inst.codigo.toUpperCase();
+                  if (catDef.codigo === 'EFECTIVO') return c.includes('EFECTIVO') || cod.includes('EFE');
+                  if (catDef.codigo === 'BANCOS') return c.includes('BANCO') || c.includes('TRANSF') || cod.includes('BAN') || cod.includes('TRA');
+                  if (catDef.codigo === 'TARJETAS') return c.includes('TARJETA') || c.includes('DATA') || cod.includes('TAR') || cod.includes('POS');
+                  if (catDef.codigo === 'BILLETERAS') return c.includes('BILLETERA') || c.includes('NEQUI') || c.includes('DAVI') || cod.includes('DIG');
+                  if (catDef.codigo === 'CREDITO') return c.includes('CRED') || cod.includes('CRE') || inst.diasCredito !== undefined;
+                  return !c.includes('EFECTIVO') && !c.includes('BANCO') && !c.includes('TARJETA') && !c.includes('BILLETERA') && !c.includes('CRED') && !cod.includes('CRE');
+                });
 
-              return (
-                <div
-                  key={catDef.codigo}
-                  className="border border-slate-800 rounded-xl bg-slate-900/60 overflow-hidden shadow-sm"
-                >
-                  <div className="p-3.5 bg-slate-950/80 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-lg">{catDef.icono}</span>
-                      <div>
-                        <span className="font-bold text-white text-sm block">{catDef.nombre}</span>
-                        <span className="text-[11px] text-slate-400">{catDef.desc}</span>
+                return (
+                  <div
+                    key={catDef.codigo}
+                    className="border border-slate-800 rounded-xl bg-slate-900/60 overflow-hidden shadow-sm transition-all"
+                  >
+                    {/* Rama Padre (Categoría) con toggle expandible */}
+                    <div
+                      onClick={() => toggleCategoriaExpandida(catDef.codigo)}
+                      className="p-3.5 bg-slate-950/90 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 cursor-pointer hover:bg-slate-900/80 transition-colors select-none"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400 text-xs w-4 text-center font-bold">
+                          {estaExpandido ? '▼' : '▶'}
+                        </span>
+                        <span className="text-lg">{catDef.icono}</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-sm">{catDef.nombre}</span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">
+                              Rama: {catDef.codigo}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 block mt-0.5">{catDef.desc}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
-                        {instrumentosCat.length} instrumentos
-                      </span>
-                      {catDef.codigo === 'EFECTIVO' && (
+
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                          {instrumentosCat.length} hijos
+                        </span>
+                        {catDef.codigo === 'EFECTIVO' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const param = parametros.find((p) => p.clave === 'denominaciones_efectivo');
+                              if (param) setParametroTarget(param);
+                            }}
+                            className="text-[11px] text-amber-400 hover:underline cursor-pointer font-semibold"
+                          >
+                            Monedas ➔
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
-                            const param = parametros.find((p) => p.clave === 'denominaciones_efectivo');
-                            if (param) setParametroTarget(param);
+                            setNuevoInstrumento({
+                              codigoCategoria: catDef.codigo,
+                              codigo: '',
+                              nombre: '',
+                              requiereReferencia: catDef.codigo !== 'EFECTIVO',
+                              diasCredito: catDef.codigo === 'CREDITO' ? 30 : undefined,
+                            });
+                            setMostrarModalInstrumento(true);
                           }}
-                          className="text-[11px] text-amber-400 hover:underline cursor-pointer font-semibold"
+                          className="px-2 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 rounded font-semibold transition-colors cursor-pointer"
                         >
-                          Configurar Monedas ➔
+                          + Añadir a {catDef.codigo}
                         </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="p-3">
-                    {instrumentosCat.length === 0 ? (
-                      <div className="text-xs text-slate-500 py-2 px-3 text-center italic">
-                        No hay instrumentos específicos en esta categoría.
                       </div>
-                    ) : (
-                      <div className="divide-y divide-slate-800/60">
-                        {instrumentosCat.map((inst) => (
-                          <div
-                            key={inst.uuid}
-                            className="py-2 px-3 flex flex-wrap items-center justify-between gap-2 hover:bg-slate-800/40 rounded-lg transition-colors"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <span className="font-mono font-bold text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                {inst.codigo}
-                              </span>
-                              <span className="text-xs font-semibold text-white">{inst.nombre}</span>
-                              {inst.requiereReferencia ? (
-                                <span className="text-[10px] text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-700/40">
-                                  Exige Referencia / Voucher
-                                </span>
-                              ) : (
-                                <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                                  Cobro Directo
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={inst.activo ? 'success' : 'neutral'}>
-                                {inst.activo ? 'Activo' : 'Inactivo'}
-                              </Badge>
-                            </div>
+                    </div>
+
+                    {/* Hijos (Hojas / Instrumentos de la Rama) */}
+                    {estaExpandido && (
+                      <div className="p-3 bg-slate-950/40">
+                        {instrumentosCat.length === 0 ? (
+                          <div className="text-xs text-slate-500 py-3 px-4 text-center italic border border-dashed border-slate-800 rounded-lg">
+                            No hay instrumentos configurados en esta rama. Haga clic en "+ Añadir a {catDef.codigo}" para registrar el primero.
                           </div>
-                        ))}
+                        ) : (
+                          <div className="space-y-1.5 pl-4 border-l-2 border-indigo-500/30 ml-3 my-1">
+                            {instrumentosCat.map((inst, idx) => {
+                              const esUltimo = idx === instrumentosCat.length - 1;
+                              return (
+                                <div
+                                  key={inst.uuid}
+                                  className="relative py-2 px-3 flex flex-wrap items-center justify-between gap-2 bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 rounded-lg transition-colors"
+                                >
+                                  {/* Conector visual de rama */}
+                                  <span className="text-indigo-400/50 font-mono text-xs select-none mr-1">
+                                    {esUltimo ? '└─' : '├─'}
+                                  </span>
+
+                                  <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                                    <span className="font-mono font-bold text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                      {inst.codigo}
+                                    </span>
+                                    <span className="text-xs font-semibold text-white">{inst.nombre}</span>
+
+                                    {(catDef.codigo === 'CREDITO' || inst.diasCredito) && (
+                                      <span className="text-[11px] font-bold text-yellow-300 bg-yellow-950/60 px-2 py-0.5 rounded border border-yellow-700/50">
+                                        ⏱ Plazo: {inst.diasCredito || 30} días de crédito
+                                      </span>
+                                    )}
+
+                                    {inst.requiereReferencia ? (
+                                      <span className="text-[10px] text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-700/40">
+                                        Exige Referencia / Voucher
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                                        Cobro Directo
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={inst.activo ? 'success' : 'neutral'}>
+                                      {inst.activo ? 'Activo' : 'Inactivo'}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
             </div>
           )}
         </div>
@@ -2966,120 +3059,141 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         title={itemEditando ? `✏️ Editar Ítem: ${itemEditando.codigoReferencia}` : 'Nuevo Ítem o Servicio'}
         size="lg"
       >
-        <form onSubmit={handleGuardarItem} className="space-y-4 p-4">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleGuardarItem} className="space-y-4 p-2">
+          {/* Sección 1: Identificación Básica */}
+          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+              <span>📋</span> 1. Identificación Básica del Ítem
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="Código de Referencia *"
+                required
+                placeholder="Ej: SRV-AFIL-CIRCULAR"
+                value={nuevoItem.codigoReferencia}
+                disabled={Boolean(itemEditando)}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, codigoReferencia: e.target.value.toUpperCase() })}
+                fullWidth
+              />
+              <Select
+                label="Naturaleza del Ítem *"
+                value={nuevoItem.naturaleza}
+                disabled={Boolean(itemEditando)}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, naturaleza: e.target.value as any })}
+                options={[
+                  { label: '🛠️ SERVICIO (Taller / OTs de Afilado)', value: 'SERVICIO' },
+                  { label: '📦 INVENTARIO (Producto Físico Comercial)', value: 'INVENTARIO' },
+                ]}
+                fullWidth
+              />
+            </div>
+
             <Input
-              label="Código de Referencia"
+              label="Nombre Comercial *"
               required
-              placeholder="Ej: SRV-AFIL-CIRCULAR"
-              value={nuevoItem.codigoReferencia}
-              disabled={Boolean(itemEditando)}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, codigoReferencia: e.target.value.toUpperCase() })}
+              placeholder="Ej: Afilado de Disco de Sierra Widia 10''"
+              value={nuevoItem.nombre}
+              onChange={(e) => setNuevoItem({ ...nuevoItem, nombre: e.target.value })}
               fullWidth
             />
-            <Select
-              label="Naturaleza"
-              value={nuevoItem.naturaleza}
-              disabled={Boolean(itemEditando)}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, naturaleza: e.target.value as any })}
-              options={[
-                { label: 'SERVICIO (Taller / OTs)', value: 'SERVICIO' },
-                { label: 'INVENTARIO (Producto Físico)', value: 'INVENTARIO' },
-              ]}
-              fullWidth
-            />
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Descripción / Especificaciones Técnicas
+              </label>
+              <textarea
+                placeholder="Detalles sobre ángulo, diámetro, desbaste o características del producto..."
+                value={nuevoItem.descripcion}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, descripcion: e.target.value })}
+                rows={2}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white resize-y focus:outline-none focus:border-indigo-500"
+              />
+            </div>
           </div>
 
-          <Input
-            label="Nombre Comercial"
-            required
-            placeholder="Ej: Afilado de Disco de Sierra"
-            value={nuevoItem.nombre}
-            onChange={(e) => setNuevoItem({ ...nuevoItem, nombre: e.target.value })}
-            fullWidth
-          />
+          {/* Sección 2: Precios y Presentación */}
+          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+              <span>🏷️</span> 2. Categorización & Precios Comerciales
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Select
+                label="Categoría del Catálogo"
+                value={nuevoItem.categoriaUuid}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, categoriaUuid: e.target.value })}
+                options={[
+                  { label: '— Sin categoría principal —', value: '' },
+                  ...categoriasItems.map((c) => ({
+                    label: `${'—'.repeat(c.nivel - 1)} ${c.nombre} (${c.codigo})`,
+                    value: c.uuid,
+                  })),
+                ]}
+                fullWidth
+              />
+              <Select
+                label="Lista de Precios Predeterminada"
+                value={nuevoItem.listaPrecioUuid}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, listaPrecioUuid: e.target.value })}
+                options={[
+                  { label: 'Precio General Estándar (Sin Ajuste)', value: '' },
+                  ...listasPrecio.map((lp) => ({
+                    label: `${lp.nombre} (${lp.codigo}) ${lp.porcentajeAjuste >= 0 ? `(+${lp.porcentajeAjuste}%)` : `(${lp.porcentajeAjuste}%)`}`,
+                    value: lp.uuid,
+                  })),
+                ]}
+                fullWidth
+              />
+            </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Descripción</label>
-            <textarea
-              placeholder="Detalles del servicio o especificaciones técnicas..."
-              value={nuevoItem.descripcion}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, descripcion: e.target.value })}
-              className="w-full bg-gray-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white h-16 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Select
+                label="Unidad de Presentación *"
+                value={nuevoItem.uuidUnidadPresentacion}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, uuidUnidadPresentacion: e.target.value })}
+                options={(unidades || []).map((u) => ({ label: `${u.nombre} (${u.abreviatura})`, value: u.uuid }))}
+                fullWidth
+              />
+              <Input
+                type="number"
+                min="0"
+                step="500"
+                label="Precio Base sin Impuestos (COP) *"
+                required
+                value={nuevoItem.precioBase}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, precioBase: Number(e.target.value) })}
+                fullWidth
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Categoría"
-              value={nuevoItem.categoriaUuid}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, categoriaUuid: e.target.value })}
-              options={[
-                { label: 'Sin categoría principal', value: '' },
-                ...categoriasItems.map((c) => ({
-                  label: `${'—'.repeat(c.nivel - 1)} ${c.nombre} (${c.codigo})`,
-                  value: c.uuid,
-                })),
-              ]}
-              fullWidth
-            />
-            <Select
-              label="Lista de Precios Asignada"
-              value={nuevoItem.listaPrecioUuid}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, listaPrecioUuid: e.target.value })}
-              options={[
-                { label: 'Precio General Estándar', value: '' },
-                ...listasPrecio.map((lp) => ({
-                  label: `${lp.nombre} (${lp.codigo}) ${lp.porcentajeAjuste >= 0 ? `(+${lp.porcentajeAjuste}%)` : `(${lp.porcentajeAjuste}%)`}`,
-                  value: lp.uuid,
-                })),
-              ]}
-              fullWidth
-            />
+          {/* Sección 3: Parámetros Operativos */}
+          <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <span>⚙️</span> 3. Parámetros Operativos & Taller
+            </h4>
+            {nuevoItem.naturaleza === 'SERVICIO' ? (
+              <Select
+                label="Workflow de Etapas en Taller *"
+                value={nuevoItem.workflowDefinicionUuid}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, workflowDefinicionUuid: e.target.value })}
+                options={[
+                  { label: 'Flujo Estándar de Taller (Recepción -> Afilado -> Control -> Entrega)', value: '' },
+                  ...workflows.map((w) => ({ label: `${w.codigo} - ${w.nombre} (v${w.versionNumero})`, value: w.uuid }))
+                ]}
+                fullWidth
+              />
+            ) : (
+              <Input
+                type="number"
+                min="0"
+                label="Stock Referencial Físico Inicial"
+                placeholder="0"
+                value={nuevoItem.stockReferencial ?? ''}
+                onChange={(e) => setNuevoItem({ ...nuevoItem, stockReferencial: e.target.value ? Number(e.target.value) : undefined })}
+                fullWidth
+              />
+            )}
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Unidad de Medida"
-              value={nuevoItem.uuidUnidadPresentacion}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, uuidUnidadPresentacion: e.target.value })}
-              options={(unidades || []).map((u) => ({ label: `${u.nombre} (${u.abreviatura})`, value: u.uuid }))}
-              fullWidth
-            />
-            <Input
-              type="number"
-              min="0"
-              step="500"
-              label="Precio Base (COP)"
-              required
-              value={nuevoItem.precioBase}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, precioBase: Number(e.target.value) })}
-              fullWidth
-            />
-          </div>
-
-          {nuevoItem.naturaleza === 'SERVICIO' ? (
-            <Select
-              label="Workflow de Taller Asociado"
-              value={nuevoItem.workflowDefinicionUuid}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, workflowDefinicionUuid: e.target.value })}
-              options={[
-                { label: 'Flujo Estándar de Taller', value: '' },
-                ...workflows.map((w) => ({ label: `${w.codigo} - ${w.nombre} (v${w.versionNumero})`, value: w.uuid }))
-              ]}
-              fullWidth
-            />
-          ) : (
-            <Input
-              type="number"
-              min="0"
-              label="Stock Referencial Inicial"
-              placeholder="0"
-              value={nuevoItem.stockReferencial ?? ''}
-              onChange={(e) => setNuevoItem({ ...nuevoItem, stockReferencial: e.target.value ? Number(e.target.value) : undefined })}
-              fullWidth
-            />
-          )}
 
           <div className="pt-3 flex justify-end gap-2">
             <Button
@@ -3272,33 +3386,59 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
       >
         <form onSubmit={handleCrearInstrumento} className="space-y-4 p-4">
           <Select
-            label="Categoría Base"
+            label="Categoría Base (Rama del Árbol)"
             value={nuevoInstrumento.codigoCategoria}
-            onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, codigoCategoria: e.target.value })}
+            onChange={(e) => setNuevoInstrumento({
+              ...nuevoInstrumento,
+              codigoCategoria: e.target.value,
+              diasCredito: e.target.value === 'CREDITO' ? (nuevoInstrumento.diasCredito || 30) : undefined,
+              requiereReferencia: e.target.value !== 'EFECTIVO'
+            })}
             options={[
-              { label: 'Efectivo', value: 'EFECTIVO' },
-              { label: 'Consignación / Transferencia', value: 'CONSIGNACION_TRANSFERENCIA' },
-              { label: 'Tarjeta Débito / Crédito', value: 'TARJETA' },
-              { label: 'Otro Medio', value: 'OTRO' },
+              { label: 'Efectivo & Caja Menor', value: 'EFECTIVO' },
+              { label: 'Consignación / Transferencia Bancaria', value: 'BANCOS' },
+              { label: 'Tarjeta Débito / Crédito (Datáfono)', value: 'TARJETAS' },
+              { label: 'Billetera Digital (Nequi / Daviplata)', value: 'BILLETERAS' },
+              { label: 'Crédito Comercial (Plazo en Días)', value: 'CREDITO' },
+              { label: 'Otro Medio / Papelería', value: 'OTROS' },
             ]}
             fullWidth
           />
           <Input
-            label="Código"
+            label="Código del Instrumento"
             required
-            placeholder="Ej: DAVIPLATA"
+            placeholder="Ej: DAVIPLATA, CRED-30D"
             value={nuevoInstrumento.codigo}
             onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, codigo: e.target.value.toUpperCase() })}
             fullWidth
           />
           <Input
-            label="Nombre"
+            label="Nombre Descriptivo"
             required
-            placeholder="Ej: Billetera Daviplata"
+            placeholder="Ej: Billetera Daviplata, Crédito 30 Días"
             value={nuevoInstrumento.nombre}
             onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, nombre: e.target.value })}
             fullWidth
           />
+
+          {nuevoInstrumento.codigoCategoria === 'CREDITO' && (
+            <div style={{ background: '#020617', border: '1px solid #334155', borderRadius: '8px', padding: '12px' }} className="space-y-2">
+              <Input
+                label="Días de Crédito Disponibles *"
+                type="number"
+                min={1}
+                max={365}
+                required
+                value={nuevoInstrumento.diasCredito ?? 30}
+                onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, diasCredito: parseInt(e.target.value, 10) || 0 })}
+                fullWidth
+              />
+              <p className="text-[11px] text-amber-300">
+                Define el número máximo de días calendario otorgados al cliente para cancelar el saldo pendiente de la factura.
+              </p>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 pt-1">
             <input
               type="checkbox"

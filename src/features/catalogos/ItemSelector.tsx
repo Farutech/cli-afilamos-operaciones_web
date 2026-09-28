@@ -32,15 +32,6 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   const [paginaListado, setPaginaListado] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const ACCESOS_RAPIDOS = [
-    { label: '🔪 Cuchillos', query: 'cuchillo' },
-    { label: '✂️ Tijeras', query: 'tijera' },
-    { label: '🪚 Sierra Circular', query: 'sierra' },
-    { label: '🪓 Machete / Cuchilla', query: 'machete' },
-    { label: '⚙️ Servicios', query: 'SRV' },
-    { label: '📦 Inventario', query: 'INV' },
-  ];
-
   const fetchItems = async (searchTerm = '') => {
     setLoading(true);
     try {
@@ -112,45 +103,6 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
-      {/* Botones de Selección Rápida */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8' }}>
-          Selección Rápida:
-        </span>
-        {ACCESOS_RAPIDOS.map((chip) => (
-          <button
-            key={chip.label}
-            type="button"
-            onClick={() => {
-              setQuery(chip.query);
-              fetchItems(chip.query);
-            }}
-            style={{
-              padding: '2px 8px',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              background: '#1e293b',
-              color: '#e2e8f0',
-              border: '1px solid #475569',
-              borderRadius: '9999px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#4338ca';
-              e.currentTarget.style.borderColor = '#6366f1';
-              e.currentTarget.style.color = '#ffffff';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#1e293b';
-              e.currentTarget.style.borderColor = '#475569';
-              e.currentTarget.style.color = '#e2e8f0';
-            }}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
 
       <div style={{ display: 'flex', alignItems: 'stretch', gap: '0.375rem' }}>
         <div style={{ position: 'relative', flex: 1 }}>
