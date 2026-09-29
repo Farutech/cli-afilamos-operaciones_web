@@ -1,0 +1,12 @@
+apiVersion: farutech.io/v1
+kind: ContractsLock
+# Ver comentario en cli-afilamos-operaciones_api/contracts.lock.
+metadata:
+  component: "cli-afilamos-operaciones_web"
+spec:
+  contracts:
+    - id: "afilamos-operaciones/api"
+      version: "1.0.0"
+      tag: "contracts/afilamos-operaciones/api@1.0.0"
+      role: "consumer"
+      status: "draft"

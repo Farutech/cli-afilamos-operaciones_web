@@ -42,7 +42,7 @@ governance:
     - "ADR-005: Repos de componentes y aislamiento de agentes"
   # Los tipos del contrato se generan desde openapi.yaml del orquestador.
   contract_ownership: "read-only"
-  contract_source: "cli-afilamos-operaciones/contracts/openapi.yaml"
+  contract_source: "engineering-hub/contracts/afilamos-operaciones/api.openapi.yaml"
 
 architecture:
   style: "SPA sobre la raíz del repo (sin monorepo)"

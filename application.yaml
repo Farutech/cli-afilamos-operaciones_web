@@ -35,7 +35,7 @@ cloud_platform:
       owned_by: "cli-afilamos-operaciones_worker"
   api_documentation:
     # El frontend no publica documentación de API; la consume.
-    contract: "cli-afilamos-operaciones/contracts/openapi.yaml"
+    contract: "engineering-hub/contracts/afilamos-operaciones/api.openapi.yaml"
     consumes: true
     owns: false
 
