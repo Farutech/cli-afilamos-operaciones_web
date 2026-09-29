@@ -1,0 +1,92 @@
+name: CI
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PR gate del componente. Invariante 1 y 6 del plan de multirepo:
+#   - NUNCA hace checkout de otro repositorio.
+#   - NUNCA corre E2E (viven en el orquestador: atraviesan los tres componentes).
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build + test (React + Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # El Dockerfile usa node:22-alpine; se mantiene la misma major.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # @farutech/design-system vive en GitHub Packages. El .npmrc declara
+      # ${NPM_TOKEN}; sin esto, npm install no podria autenticarse.
+      - name: Autenticación en GitHub Packages
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Type check
+        run: npx tsc -b --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Verificar contrato declarado
+        run: |
+          set -euo pipefail
+          test -f contracts.lock || { echo "FALTA contracts.lock"; exit 1; }
+          grep -q 'afilamos-operaciones/api' contracts.lock \
+            || { echo "contracts.lock no declara el contrato que consume"; exit 1; }
+          echo "contracts.lock declara el contrato esperado"
+
+  # Las imagenes se construyen con el ARG que espera el Dockerfile. El valor por
+  # defecto apunta a la API local, que es lo que se usa en desarrollo.
+  publish-image:
+    name: Publicar imagen
+    needs: build-test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Calcular etiquetas
+        id: meta
+        run: |
+          sha="${GITHUB_SHA::7}"
+          branch="${GITHUB_REF#refs/heads/}"
+          echo "tags=ghcr.io/${{ github.repository }}:$branch-$sha,ghcr.io/${{ github.repository }}:$branch" >> "$GITHUB_OUTPUT"
+      - name: Build y push a GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL || 'https://api.ops.afilamoshermanos.local/api/v1' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

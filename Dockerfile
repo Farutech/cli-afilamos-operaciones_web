@@ -1,9 +1,11 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 
-COPY package*.json .npmrc* ./
-COPY packages/ ./packages/
-RUN npm install
+# .npmrc va aparte porque empieza por punto: no lo cubre el wildcard package*.json.
+COPY package.json package-lock.json .npmrc ./
+# Los tarballs de packages/ se eliminaron a proposito: el design system se
+# instala desde GitHub Packages, no desde un .tgz vendorizado.
+RUN npm ci
 
 COPY . .
 
