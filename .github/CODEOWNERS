@@ -1,0 +1,5 @@
+# .github/CODEOWNERS de cli-afilamos-operaciones-web
+*             @Farutech/ui-team
+.npmrc        @Farutech/architecture
+package-lock.json @Farutech/ui-team
+.github/      @Farutech/architecture
