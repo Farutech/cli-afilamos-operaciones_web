@@ -1,0 +1,54 @@
+# ==============================================================================
+# FaruTech Client Project Application Runtime Contract
+# Template Version: 1.0.0 (templates/client-app/application.yaml.template)
+# Target: Farutech/cli-afilamos-operaciones_web
+# ==============================================================================
+
+schema_version: "1.0.0"
+application:
+  key: "cli-afilamos-operaciones_web"
+  name: "Ordeon POS — Web"
+  tier: "standard"
+  business_criticality: "business-critical"
+  orchestrator: "cli-afilamos-operaciones"
+  component_role: "web"
+
+cloud_platform:
+  isolation_mode: "Shared"
+  subdomain_template: "operaciones.afilamos.farutech.app"
+  custom_domain: ""
+  database_profile:
+    engine: "PostgreSQL 17"
+    owned_by: "cli-afilamos-operaciones_api"
+  runtime:
+    # Este repo sirve SOLO el frontend. La imagen final es nginx estático.
+    frontend:
+      framework: "React 19 + Vite 8 + TypeScript"
+      node_version: "20"
+      port: 3000
+      served_as: "nginx (SPA con fallback a index.html)"
+    backend:
+      enabled: false
+      owned_by: "cli-afilamos-operaciones_api"
+    worker:
+      enabled: false
+      owned_by: "cli-afilamos-operaciones_worker"
+  api_documentation:
+    # El frontend no publica documentación de API; la consume.
+    contract: "cli-afilamos-operaciones/contracts/openapi.yaml"
+    consumes: true
+    owns: false
+
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+
+references:
+  - name: "AGENTS.md — carriles del agente UI"
+    path: "AGENTS.md"
+  - name: "Registro de paquetes FaruTech"
+    path: ".npmrc"

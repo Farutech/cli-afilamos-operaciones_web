@@ -1,0 +1,71 @@
+# ==============================================================================
+# FaruTech Client Project Repository Contract
+# Template Version: 1.0.0 (templates/client-app/repository.yaml.template)
+# Target: Farutech/cli-afilamos-operaciones_web
+# Componente extraído del orquestador según ADR-005.
+# ==============================================================================
+
+schema_version: "1.0.0"
+metadata:
+  name: "cli-afilamos-operaciones_web"
+  repository: "Farutech/cli-afilamos-operaciones_web"
+  description: "Frontend React + Vite de Ordeon POS (Afilamos). Componente extraído del repo orquestador para aislamiento físico de agentes IA (ADR-005)."
+  type: "client-project-component"
+  domain: "clients/afilamos"
+  status: "active"
+  tier: "standard"
+  orchestrator: "cli-afilamos-operaciones"
+  component_role: "web"
+  tags:
+    - client-app
+    - afilamos
+    - ordeon-pos
+    - react
+    - vite
+    - typescript
+    - design-system
+    - governance
+
+ownership:
+  client: "Afilamos"
+  delivery_team: "Farutech/solutions-delivery"
+  project_lead: "Farid Maloof"
+  technical_contact: "dev@farutech.com"
+
+governance:
+  compliance:
+    - "Universal-App-Structure"
+    - "FEKS-Standards"
+    - "Spec-Driven-Development"
+  adr:
+    - "ADR-004: Repository and Application Contracts"
+    - "ADR-005: Repos de componentes y aislamiento de agentes"
+  # Los tipos del contrato se generan desde openapi.yaml del orquestador.
+  contract_ownership: "read-only"
+  contract_source: "cli-afilamos-operaciones/contracts/openapi.yaml"
+
+architecture:
+  style: "SPA sobre la raíz del repo (sin monorepo)"
+  framework: "React 19 + Vite 8 + TypeScript"
+  build_command: "npm run build"
+  test_command: "npm run test"
+  lint_command: "npm run lint"
+  served_by: "nginx (Dockerfile multi-stage)"
+
+dependencies:
+  internal:
+    - name: "@farutech/design-system"
+      type: "npm"
+      version: "1.0.0"
+      registry: "GitHub Packages (@farutech scope)"
+  # Sin paquete NuGet: el frontend no consume .NET.
+
+agent_isolation:
+  entry_point: "AGENTS.md"
+  scope: "solo-este-repo"
+  forbidden:
+    - "Editar .npmrc (contiene el token de GitHub Packages)."
+    - "Editar package-lock.json a mano; se regenera con npm install."
+    - "Editar .github/workflows/."
+    - "Editar src/types/ si lo genera el contrato automáticamente."
+    - "Acceder a rutas fuera de este repositorio."
