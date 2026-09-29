@@ -92,9 +92,21 @@ jobs:
         run: |
           sha="${GITHUB_SHA::7}"
           branch="${GITHUB_REF#refs/heads/}"
-          echo "tags=ghcr.io/${{ github.repository }}:$branch-$sha,ghcr.io/${{ github.repository }}:$branch" >> "$GITHUB_OUTPUT"
+          # ghcr exige minusculas en el nombre de repositorio y la org
+          # Farutech lleva F mayuscula. ${GITHUB_REPOSITORY,,} la pasa a minuscula.
+          repo="${GITHUB_REPOSITORY,,}"
+          echo "tags=ghcr.io/$repo:$branch-$sha,ghcr.io/$repo:$branch" >> "$GITHUB_OUTPUT"
       # El driver docker por defecto no soporta exportar la cache de GHA y
       # falla con "Cache export is not supported for the docker driver".
+      # Autenticacion en GHCR. Sin esto el push falla con 403 al pedir el
+      # token: el builder intenta hacerlo de forma anonima.
+      - name: Login en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Crear builder
         uses: docker/setup-buildx-action@v3
       - name: Build y push a GHCR
