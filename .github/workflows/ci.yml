@@ -22,9 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Necesario para descargar @farutech/design-system de GitHub Packages.
-      # Sin este permiso, el GITHUB_TOKEN devuelve 401 en npm ci.
       packages: read
+    env:
+      # @farutech/design-system se publica desde pkg-ts-design-system, que es
+      # otro repositorio. El GITHUB_TOKEN de este workflow solo accede a los
+      # paquetes vinculados a SU propio repo, asi que con el da 401 al
+      # descargar el design system. Se necesita un PAT con read:packages.
+      # Secret esperado: NPM_TOKEN (Settings > Secrets > Actions).
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,13 +41,16 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      # @farutech/design-system vive en GitHub Packages. El .npmrc declara
-      # ${NPM_TOKEN}; sin esto, npm no podria autenticarse.
-      # Sin read:packages el GITHUB_TOKEN devuelve 401 al descargar el paquete.
+      # El token llega del env del job (secrets.NPM_TOKEN). El .npmrc del repo
+      # declara ${NPM_TOKEN}, por eso se inyecta con esa forma. Sin el secret, el
+      # paso falla aqui en vez de dejar que npm devuelva un 401 difcil de leer.
       - name: Autenticación en GitHub Packages
-        env:
-          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+        run: |
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "::error::Falta el secret NPM_TOKEN. Se necesita un PAT con read:packages"
+            exit 1
+          fi
+          echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
 
       - name: Instalar dependencias
         run: npm ci
