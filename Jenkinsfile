@@ -6,15 +6,15 @@
 
 farutechPipeline(
   lang: 'node',
-  image: 'cli-afilamos-operaciones-web',
+  image: 'cli-afilamos-operaciones_web',
   app: 'web',
   tenant: 'afilamoshermanos',
   port: 8080,
   tier: 'public',
   health: '/health',
   hosts: [
-    dev:  'ops.dev.afilamoshermanos.com',
-    qa:   'ops.qa.afilamoshermanos.com',
+    dev:  'dev-ops.afilamoshermanos.com',
+    qa:   'qa-ops.afilamoshermanos.com',
     prod: 'ops.afilamoshermanos.com'
   ]
 )
