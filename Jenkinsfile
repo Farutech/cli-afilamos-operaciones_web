@@ -9,7 +9,7 @@ farutechPipeline(
   image: 'cli-afilamos-operaciones-web',
   app: 'web',
   tenant: 'afilamoshermanos',
-  port: 80,
+  port: 8080,
   tier: 'public',
   health: '/health',
   hosts: [
