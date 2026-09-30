@@ -1,18 +1,38 @@
 const getBaseUrl = (): string => {
-  if (typeof window !== 'undefined') {
-    const { protocol, hostname, port } = window.location
-    if (hostname.includes('afilamoshermanos.local')) {
-      return '/api/v1'
-    }
-    if (port === '3000' || port === '5173') {
-      return `${protocol}//${hostname}:5005/api/v1`
-    }
-  }
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL
   }
-  return 'http://localhost:5000/api/v1'
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname, port } = window.location
+
+    // Desarrollo local con puerto estándar de frontend
+    if (port === '3000' || port === '5173') {
+      return `${protocol}//${hostname}:5005/api/v1`
+    }
+
+    // Entornos dev, qa y producción sobre afilamoshermanos.com
+    if (hostname.includes('dev-ops') || hostname.includes('dev-api') || hostname.includes('.dev.') || hostname.startsWith('dev.')) {
+      if (hostname.includes('dev-ops')) {
+        return `${protocol}//dev-api.afilamoshermanos.com/api/v1`
+      }
+      return `${protocol}//api.ops.dev.afilamoshermanos.com/api/v1`
+    }
+    if (hostname.includes('qa-ops') || hostname.includes('qa-api') || hostname.includes('.qa.') || hostname.startsWith('qa.')) {
+      if (hostname.includes('qa-ops')) {
+        return `${protocol}//qa-api.afilamoshermanos.com/api/v1`
+      }
+      return `${protocol}//api.ops.qa.afilamoshermanos.com/api/v1`
+    }
+    if (hostname.includes('afilamoshermanos.com')) {
+      return `${protocol}//api-ops.afilamoshermanos.com/api/v1`
+    }
+
+  }
+
+  return 'https://api.ops.afilamoshermanos.com/api/v1'
 }
+
 
 const BASE_URL = getBaseUrl()
 
