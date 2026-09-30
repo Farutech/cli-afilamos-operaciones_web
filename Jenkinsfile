@@ -13,8 +13,8 @@ farutechPipeline(
   tier: 'public',
   health: '/health',
   hosts: [
-    dev:  'ops.dev.afilamoshermanos.com',
-    qa:   'ops.qa.afilamoshermanos.com',
+    dev:  'ops-dev.afilamoshermanos.com',
+    qa:   'ops-qa.afilamoshermanos.com',
     prod: 'ops.afilamoshermanos.com'
   ]
 )
