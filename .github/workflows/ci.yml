@@ -30,6 +30,7 @@ jobs:
       # descargar el design system. Se necesita un PAT con read:packages.
       # Secret esperado: NPM_TOKEN (Settings > Secrets > Actions).
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -117,6 +118,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
-            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL || 'https://api.ops.afilamoshermanos.local/api/v1' }}
+            NODE_AUTH_TOKEN=${{ secrets.NPM_TOKEN }}
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL || 'https://api.ops.afilamoshermanos.com/api/v1' }}
+          secrets: |
+            npmrc=//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
