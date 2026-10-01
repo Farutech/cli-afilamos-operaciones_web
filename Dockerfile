@@ -12,14 +12,17 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 
 COPY . .
 
-ARG VITE_API_BASE_URL=https://api-ops.afilamoshermanos.com/api/v1
+ARG VITE_API_BASE_URL=""
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS final
-COPY --from=build /app/dist /usr/share/nginx/html
+USER root
+COPY --chown=101:101 --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=755 docker-entrypoint.d/99-runtime-env.sh /docker-entrypoint.d/99-runtime-env.sh
+USER 101
 
 EXPOSE 8080
 

@@ -1,8 +1,31 @@
+declare global {
+  interface Window {
+    __ENV__?: {
+      VITE_API_BASE_URL?: string
+      API_BASE_URL?: string
+    }
+  }
+}
+
 const getBaseUrl = (): string => {
+  // 1. Prioridad: Inyección en tiempo de ejecución (ConfigMap, Secret o variable de entorno de pod/contenedor)
+  if (typeof window !== 'undefined') {
+    const runtimeUrl = window.__ENV__?.VITE_API_BASE_URL || window.__ENV__?.API_BASE_URL
+    if (runtimeUrl && runtimeUrl.trim() !== '') {
+      return runtimeUrl.trim()
+    }
+  }
+
+  // 2. Prioridad: Variable en tiempo de compilación (.env local de Vite)
+  if (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim() !== '') {
+    return import.meta.env.VITE_API_BASE_URL.trim()
+  }
+
+  // 3. Prioridad: Detección inteligente por ambiente según el dominio del navegador (Zero-Config para dev/qa/staging/prod)
   if (typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location
 
-    // Entornos sobre afilamoshermanos.com (detección dinámica por host)
+    // Entornos sobre afilamoshermanos.com
     if (hostname.includes('afilamoshermanos.com')) {
       if (hostname.includes('.dev.') || hostname.includes('-dev') || hostname.startsWith('dev.') || hostname.includes('dev-')) {
         return 'https://api-ops.dev.afilamoshermanos.com/api/v1'
@@ -18,17 +41,11 @@ const getBaseUrl = (): string => {
 
     // Desarrollo local con puerto estándar de frontend
     if (hostname === 'localhost' || hostname === '127.0.0.1' || port === '3000' || port === '5173') {
-      if (import.meta.env.VITE_API_BASE_URL) {
-        return import.meta.env.VITE_API_BASE_URL
-      }
       return `${protocol}//${hostname}:5000/api/v1`
     }
   }
 
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
-  }
-
+  // 4. Fallback estándar
   return 'https://api-ops.afilamoshermanos.com/api/v1'
 }
 
