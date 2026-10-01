@@ -12,7 +12,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 
 COPY . .
 
-ARG VITE_API_BASE_URL=https://api.ops.afilamoshermanos.com/api/v1
+ARG VITE_API_BASE_URL=https://api-ops.afilamoshermanos.com/api/v1
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 
 RUN npm run build
