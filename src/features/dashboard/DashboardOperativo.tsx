@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ArrowPathIcon, BanknotesIcon, ClipboardDocumentListIcon, CubeIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
 import { dashboardApi } from '../../services/dashboardApi';
 import type { DashboardMetricasDto } from '../../types/dashboard';
 import { Card, Badge, Button, StatsCard, StatsCardGroup } from '@farutech/design-system';
@@ -75,7 +76,8 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
               Taller
             </label>
             <Button variant="secondary" size="sm" onClick={cargarMetricas}>
-              🔄 Actualizar
+              <ArrowPathIcon aria-hidden="true" data-icon="inline-start" />
+              Actualizar
             </Button>
           </div>
         </div>
@@ -98,7 +100,7 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
             <StatsCard
               title="Solicitudes con Saldo Activo"
               value={metricas.solicitudesActivasCount}
-              icon={<span style={{ fontSize: '1.25rem' }}>📋</span>}
+              icon={<ClipboardDocumentListIcon aria-hidden="true" />}
               variant="primary"
               description="En proceso de anticipo o taller"
               onClick={onNavigateTab ? () => onNavigateTab('solicitudes') : undefined}
@@ -106,7 +108,7 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
             <StatsCard
               title="Ítems en Taller (OT)"
               value={metricas.itemsEnTallerCount}
-              icon={<span style={{ fontSize: '1.25rem' }}>🛠️</span>}
+              icon={<WrenchScrewdriverIcon aria-hidden="true" />}
               variant="warning"
               description="En etapas técnicas activas"
               onClick={onNavigateTab ? () => onNavigateTab('taller') : undefined}
@@ -114,7 +116,7 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
             <StatsCard
               title="Listos para Entrega"
               value={metricas.itemsListosEntregaCount}
-              icon={<span style={{ fontSize: '1.25rem' }}>📦</span>}
+              icon={<CubeIcon aria-hidden="true" />}
               variant="success"
               description="Listos en mostrador para remisión"
               onClick={onNavigateTab ? () => onNavigateTab('entregas') : undefined}
@@ -122,7 +124,7 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
             <StatsCard
               title="Recaudo Diario en Caja"
               value={`$${metricas.totalRecaudosHoy.toLocaleString('es-CO')}`}
-              icon={<span style={{ fontSize: '1.25rem' }}>💰</span>}
+              icon={<BanknotesIcon aria-hidden="true" />}
               variant="info"
               description={metricas.cajaAbierta ? `Turno Activo (${metricas.codigoCaja ?? 'CAJA-01'})` : 'Caja Cerrada'}
               onClick={onNavigateTab ? () => onNavigateTab('caja') : undefined}
@@ -174,7 +176,7 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
                 {metricas.ultimasSolicitudes.length === 0 ? (
                   <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No hay solicitudes registradas.</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="dashboard-records-scroll" role="region" aria-label="Últimas solicitudes" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {metricas.ultimasSolicitudes.map((s) => (
                       <div
                         key={s.uuid}
@@ -213,12 +215,19 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
               <Card>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Trabajos en Taller (OT Satélite)</h3>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Prioridad / Franja</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {onNavigateTab && (
+                      <Button variant="secondary" size="sm" onClick={() => onNavigateTab('taller')}>
+                        Ir a cola de taller →
+                      </Button>
+                    )}
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Prioridad / Franja</span>
+                  </div>
                 </div>
                 {metricas.itemsEnTaller.length === 0 ? (
                   <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No hay trabajos activos en taller.</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="dashboard-records-scroll" role="region" aria-label="Trabajos activos en taller" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {metricas.itemsEnTaller.map((it) => (
                       <div
                         key={it.itemUuid}

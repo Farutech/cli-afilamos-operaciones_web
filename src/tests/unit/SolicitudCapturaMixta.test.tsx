@@ -99,7 +99,7 @@ describe('SolicitudCapturaMixta Component', () => {
     const cantInput = screen.getByLabelText('Cantidad')
     fireEvent.change(cantInput, { target: { value: '5' } })
 
-    fireEvent.click(screen.getByRole('button', { name: /\+ Agregar/i }))
+    fireEvent.click(screen.getByRole('button', { name: /\+ Agregar Línea/i }))
 
     // Verificar que la línea aparece en la tabla
     expect(screen.getByText('Tijera Quirúrgica')).toBeInTheDocument()
@@ -145,7 +145,7 @@ describe('SolicitudCapturaMixta Component', () => {
 
     // Agregar un servicio
     fireEvent.click(screen.getByText('Seleccionar Afilado'))
-    fireEvent.click(screen.getByRole('button', { name: /\+ Agregar/i }))
+    fireEvent.click(screen.getByRole('button', { name: /\+ Agregar Línea/i }))
 
     expect(screen.getByText('Afilado Cuchillo')).toBeInTheDocument()
     expect(screen.getAllByText('SERVICIO').length).toBeGreaterThanOrEqual(1)
@@ -176,7 +176,7 @@ describe('SolicitudCapturaMixta Component', () => {
 
     // Agregar un servicio
     fireEvent.click(screen.getByText('Seleccionar Afilado'))
-    fireEvent.click(screen.getByRole('button', { name: /\+ Agregar/i }))
+    fireEvent.click(screen.getByRole('button', { name: /\+ Agregar Línea/i }))
 
     // Abrir modal de VoBo
     fireEvent.click(screen.getByRole('button', { name: /Solicitar VoBo Supervisor/i }))

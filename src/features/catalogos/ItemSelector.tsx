@@ -104,8 +104,8 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
 
-      <div style={{ display: 'flex', alignItems: 'stretch', gap: '0.375rem' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
+      <div className="item-selector__toolbar">
+        <div className="item-selector__input-wrap">
           <input
             type="text"
             value={query}
@@ -119,17 +119,7 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
             }}
             placeholder={placeholder}
             aria-label="Buscar ítem"
-            style={{
-              width: '100%',
-              padding: '0.625rem 0.875rem',
-              borderRadius: '0.5rem',
-              border: '1px solid #475569',
-              background: '#0f172a',
-              color: '#f8fafc',
-              fontSize: '0.9rem',
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
+            className="item-selector__input"
           />
           {loading && (
             <span

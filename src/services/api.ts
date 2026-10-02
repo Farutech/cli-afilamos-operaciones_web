@@ -7,6 +7,24 @@ declare global {
   }
 }
 
+const API_URLS = {
+  dev: 'https://api-ops.dev.afilamoshermanos.com/api/v1',
+  qa: 'https://api-ops.qa.afilamoshermanos.com/api/v1',
+  staging: 'https://api-ops.staging.afilamoshermanos.com/api/v1',
+  prod: 'https://api-ops.afilamoshermanos.com/api/v1',
+} as const
+
+type ApiEnvironment = keyof typeof API_URLS
+
+const normalizeEnvironment = (value?: string): ApiEnvironment | undefined => {
+  const environment = value?.trim().toLowerCase()
+  if (environment === 'development' || environment === 'dev') return 'dev'
+  if (environment === 'qa' || environment === 'quality') return 'qa'
+  if (environment === 'staging' || environment === 'stage' || environment === 'stg') return 'staging'
+  if (environment === 'production' || environment === 'prod') return 'prod'
+  return undefined
+}
+
 const getBaseUrl = (): string => {
   // 1. Prioridad: Inyección en tiempo de ejecución (ConfigMap, Secret o variable de entorno de pod/contenedor)
   if (typeof window !== 'undefined') {
@@ -21,32 +39,32 @@ const getBaseUrl = (): string => {
     return import.meta.env.VITE_API_BASE_URL.trim()
   }
 
-  // 3. Prioridad: Detección inteligente por ambiente según el dominio del navegador (Zero-Config para dev/qa/staging/prod)
-  if (typeof window !== 'undefined') {
-    const { protocol, hostname, port } = window.location
+  // 3. Ambiente explícito del despliegue (VITE_APP_ENV), ideal para ConfigMaps por namespace.
+  const configuredEnvironment = normalizeEnvironment(import.meta.env.VITE_APP_ENV)
+  if (configuredEnvironment) {
+    return API_URLS[configuredEnvironment]
+  }
 
-    // Entornos sobre afilamoshermanos.com
+  // 4. Detección zero-config por hostname del frontend.
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location
+
     if (hostname.includes('afilamoshermanos.com')) {
       if (hostname.includes('.dev.') || hostname.includes('-dev') || hostname.startsWith('dev.') || hostname.includes('dev-')) {
-        return 'https://api-ops.dev.afilamoshermanos.com/api/v1'
+        return API_URLS.dev
       }
       if (hostname.includes('.qa.') || hostname.includes('-qa') || hostname.startsWith('qa.') || hostname.includes('qa-')) {
-        return 'https://api-ops.qa.afilamoshermanos.com/api/v1'
+        return API_URLS.qa
       }
       if (hostname.includes('.staging.') || hostname.includes('-staging') || hostname.startsWith('staging.') || hostname.includes('staging-') || hostname.includes('stg')) {
-        return 'https://api-ops.staging.afilamoshermanos.com/api/v1'
+        return API_URLS.staging
       }
-      return 'https://api-ops.afilamoshermanos.com/api/v1'
-    }
-
-    // Desarrollo local con puerto estándar de frontend
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || port === '3000' || port === '5173') {
-      return `${protocol}//${hostname}:5000/api/v1`
+      return API_URLS.prod
     }
   }
 
-  // 4. Fallback estándar
-  return 'https://api-ops.afilamoshermanos.com/api/v1'
+  // 5. Localhost y cualquier fallback no identificado validan contra DEV.
+  return API_URLS.dev
 }
 
 
@@ -68,6 +86,7 @@ export async function apiClient<T>(
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     headers,
+    signal: options.signal,
   })
 
   if (!response.ok) {
