@@ -1,6 +1,151 @@
 @import '@farutech/design-system/styles.css';
 
 /* =============================================================================
+   Ordeon UI patterns — compact, accessible, and aligned with the design system.
+   ============================================================================= */
+.item-selector__toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.item-selector__input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.item-selector__input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.item-selector__input::placeholder { color: var(--color-text-muted); }
+.item-selector__input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 18%);
+}
+
+.dashboard-records-scroll {
+  max-height: 18rem;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+  scrollbar-width: thin;
+  scrollbar-color: #475569 transparent;
+}
+
+.dashboard-records-scroll::-webkit-scrollbar { width: 0.35rem; }
+.dashboard-records-scroll::-webkit-scrollbar-track { background: transparent; }
+.dashboard-records-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 999px; }
+.dashboard-records-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+.login-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(25rem, 0.92fr);
+  min-height: 100vh;
+  background: #09111f;
+}
+
+.login-visual {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100vh;
+  padding: clamp(2rem, 6vw, 5.5rem);
+  color: #f8fafc;
+  background:
+    linear-gradient(135deg, rgb(8 18 34 / 98%), rgb(16 35 62 / 92%)),
+    radial-gradient(circle at 20% 15%, rgb(46 137 204 / 28%), transparent 34rem);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-visual::after,
+.login-visual::before { display: none; }
+
+.login-visual__content,
+.login-visual__footer { position: relative; z-index: 1; }
+
+.ordeon-blade {
+  position: absolute;
+  top: clamp(2rem, 7vh, 5rem);
+  right: clamp(2rem, 7vw, 7rem);
+  width: clamp(9rem, 15vw, 13rem);
+  aspect-ratio: 1;
+  opacity: .96;
+  filter: drop-shadow(0 1rem 2rem rgb(0 0 0 / 26%));
+  transition: transform .35s ease, filter .35s ease;
+}
+.ordeon-blade:hover { transform: scale(1.06); filter: drop-shadow(0 1rem 2rem rgb(0 0 0 / 32%)); }
+.blade-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.blade-spin { transform-origin: 100px 100px; animation: blade-rotation 14s linear infinite; }
+.ordeon-blade:hover .blade-spin { animation-duration: 3.5s; }
+.blade-sparks circle { fill: #f6c453; opacity: 0; transform-box: fill-box; transform-origin: center; animation: blade-spark 3.2s ease-in-out infinite; }
+.blade-sparks circle:nth-child(2) { animation-delay: .8s; }
+.blade-sparks circle:nth-child(3) { animation-delay: 1.6s; }
+.blade-sparks circle:nth-child(4) { animation-delay: 2.4s; }
+@keyframes blade-rotation { to { transform: rotate(360deg); } }
+@keyframes blade-spark { 0%, 68%, 100% { opacity: 0; transform: scale(.4); } 74% { opacity: 1; transform: scale(1.8); } 84% { opacity: .2; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) {
+  .blade-spin, .blade-sparks circle { animation: none; }
+  .blade-sparks circle { opacity: .55; }
+}
+.login-brand__logo { width: min(15rem, 70%); height: auto; object-fit: contain; object-position: left center; }
+.login-visual__rule { width: 3rem; height: 3px; margin: clamp(3rem, 11vh, 8rem) 0 1.5rem; background: #60a5fa; }
+.login-visual__eyebrow, .login-heading__eyebrow { margin: 0 0 .75rem; color: #7dd3fc; font-size: .75rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.login-visual h1 { max-width: 32rem; margin: 0; font-size: clamp(2.2rem, 4vw, 4rem); line-height: 1.06; letter-spacing: -.045em; }
+.login-visual__description { max-width: 28rem; margin: 1.5rem 0 0; color: #b5c4d7; font-size: 1.05rem; line-height: 1.7; }
+.login-visual__status { display: inline-flex; align-items: center; gap: .55rem; margin-top: 2.25rem; color: #dbeafe; font-size: .82rem; }
+.login-status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 .25rem rgb(52 211 153 / 14%); }
+.login-visual__footer { color: #71859d; font-size: .75rem; }
+
+.login-panel { display: flex; align-items: center; justify-content: center; padding: clamp(1.25rem, 5vw, 4rem); background: #f7f9fc; }
+.login-card { width: min(100%, 27rem); padding: clamp(1.5rem, 4vw, 2.5rem); border: 1px solid #dbe3ee !important; border-radius: 1.25rem; background: #fff !important; box-shadow: 0 1.5rem 4rem rgb(15 35 61 / 12%); color: #122033 !important; }
+.login-heading__brand { display: flex; align-items: center; gap: .65rem; margin-bottom: 2.25rem; color: #183451; font-size: .78rem; font-weight: 800; letter-spacing: .16em; }
+.login-heading__mark { display: block; width: 2rem; height: 2rem; object-fit: contain; }
+.login-heading__wordmark { letter-spacing: .16em; }
+.login-heading h2 { margin: 0; color: #122033; font-size: clamp(1.65rem, 3vw, 2rem); line-height: 1.15; letter-spacing: -.035em; }
+.login-heading > p:last-child { margin: .65rem 0 0; color: #64748b; font-size: .9rem; line-height: 1.55; }
+.login-form { display: flex; flex-direction: column; gap: 1.15rem; margin-top: 2rem; }
+.login-field { display: flex; flex-direction: column; gap: .45rem; }
+.login-field label { color: #25364b; font-size: .78rem; font-weight: 700; }
+.login-field__label-row { display: flex; align-items: center; justify-content: space-between; }
+.login-field__hint { color: #94a3b8; font-size: .7rem; }
+.login-field input { width: 100%; min-height: 2.9rem; padding: .7rem .8rem; border: 1px solid #cbd5e1; border-radius: .6rem; background: #fff; color: #122033; font-size: .88rem; }
+.login-field input::placeholder { color: #94a3b8; }
+.login-field input:focus { border-color: #3578ad; box-shadow: 0 0 0 3px rgb(53 120 173 / 14%); }
+.login-password { position: relative; }
+.login-password input { padding-right: 4.6rem; }
+.login-password__toggle { position: absolute; top: 50%; right: .7rem; transform: translateY(-50%); padding: .25rem; border: 0; background: transparent; color: #3578ad; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.login-error { padding: .7rem .8rem; border: 1px solid #fecaca; border-radius: .6rem; background: #fff1f2; color: #b42318; font-size: .8rem; }
+.login-submit { width: 100%; min-height: 2.9rem; margin-top: .25rem; border-radius: .6rem; background: #183451; box-shadow: 0 .5rem 1rem rgb(24 52 81 / 18%); }
+.login-submit:hover { background: #254f76; }
+.login-card__meta { display: flex; align-items: center; justify-content: space-between; margin-top: 1.5rem; color: #94a3b8; font-size: .7rem; }
+.login-card__meta::after { content: 'Creado por Farutech'; color: #64748b; font-weight: 600; }
+
+@media (max-width: 760px) {
+  .login-page { display: block; }
+  .login-visual { min-height: auto; padding: 1.5rem; }
+  .login-visual__rule { margin-top: 2.5rem; }
+  .login-visual h1 { font-size: 2rem; }
+  .login-visual__description, .login-visual__status { display: none; }
+  .login-visual__footer { margin-top: 2.5rem; }
+  .login-panel { min-height: calc(100vh - 13rem); padding: 1.25rem; }
+}
+
+@media (max-width: 520px) {
+  .item-selector__toolbar { gap: 0.375rem; }
+  .item-selector__toolbar > button { padding-inline: 0.75rem !important; }
+}
+
+/* =============================================================================
    FARUTECH DESIGN SYSTEM - CORE TOKENS & STYLES
    Repositorio fuente: pkg-ts-design-system
    ============================================================================= */

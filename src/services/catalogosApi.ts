@@ -76,6 +76,8 @@ export const catalogosApi = {
     precioBase: number;
     stockReferencial?: number;
     workflowDefinicionUuid?: string;
+    categoriaUuid: string;
+    listaPrecioUuid?: string | null;
   }): Promise<ItemCatalogo> {
     return api.post<ItemCatalogo>('/items', dto);
   },
@@ -392,7 +394,17 @@ export const catalogosApi = {
   },
 
   async getCategoriasItem(): Promise<{ categorias: CategoriaItem[] }> {
-    return { categorias: [] };
+    const res = await api.get<any>('/catalogs/categories?tree=false');
+    const raw = Array.isArray(res) ? res : (res?.categories || res?.categorias || res?.items || []);
+    return {
+      categorias: raw.map((c: any) => ({
+        uuid: c.id || c.uuid,
+        codigo: c.code || c.codigo,
+        nombre: c.name || c.nombre,
+        nivel: c.level ?? c.nivel ?? 1,
+        activo: c.active ?? c.activo ?? true,
+      })),
+    };
   },
 
   async crearCategoriaItem(dto: {
@@ -400,12 +412,18 @@ export const catalogosApi = {
     nombre: string;
     categoriaPadreUuid?: string | null;
   }): Promise<CategoriaItem> {
-    return {
-      uuid: 'cat-' + Date.now(),
+    const res = await api.post<any>('/catalogs/categories', {
+      code: dto.codigo,
       codigo: dto.codigo,
-      nombre: dto.nombre,
-      nivel: 1,
-      activo: true,
+      name: dto.nombre,
+      parentId: dto.categoriaPadreUuid || null,
+    });
+    return {
+      uuid: res.id || res.uuid,
+      codigo: res.code || res.codigo || dto.codigo,
+      nombre: res.name || res.nombre || dto.nombre,
+      nivel: res.level ?? res.nivel ?? 1,
+      activo: res.active ?? true,
     };
   },
 
@@ -511,17 +529,23 @@ export const catalogosApi = {
     uuid: string,
     dto: { nombre: string; nivel: number; categoriaPadreUuid?: string | null }
   ): Promise<CategoriaItem> {
+    const res = await api.put<any>(`/categories/${uuid}`, {
+      code: 'CAT',
+      name: dto.nombre,
+      parentId: dto.categoriaPadreUuid || null,
+      sortOrder: dto.nivel,
+    });
     return {
-      uuid,
-      codigo: 'CAT',
-      nombre: dto.nombre,
-      nivel: dto.nivel,
-      activo: true,
+      uuid: res?.id || uuid,
+      codigo: res?.code || 'CAT',
+      nombre: res?.name || dto.nombre,
+      nivel: res?.level ?? dto.nivel,
+      activo: res?.active ?? true,
     };
   },
 
-  async setCategoriaItemActivo(_uuid: string, _activo: boolean): Promise<void> {
-    // Ok
+  async setCategoriaItemActivo(uuid: string, activo: boolean): Promise<void> {
+    await api.patch<void>(`/categories/${uuid}/status`, { active: activo });
   },
 
   async getConfiguracionDenominaciones(): Promise<ConfiguracionDenominaciones> {

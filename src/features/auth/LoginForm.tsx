@@ -2,10 +2,40 @@ import React, { useState } from 'react'
 import { Button, Card, Badge } from '@farutech/design-system'
 import { api } from '../../services/api'
 import type { UsuarioSesion } from '../../types/auth'
+import { isCashier, normalizePermissionList, normalizeRoles, primaryRole } from '../../types/permissions'
 
 export interface LoginFormProps {
   onLoginSuccess?: (sesion: UsuarioSesion) => void
 }
+
+const OrdeonBlade: React.FC = () => (
+  <div className="ordeon-blade" aria-label="Ordeon" role="img">
+    <svg className="blade-svg" viewBox="0 0 200 200" aria-hidden="true">
+      <defs>
+        <clipPath id="blade-center-clip"><circle cx="100" cy="100" r="23" /></clipPath>
+      </defs>
+      <g className="blade-spin">
+        <circle cx="100" cy="100" r="86" fill="none" stroke="#c9d4dc" strokeWidth="16" strokeDasharray="9 7" />
+        <circle cx="100" cy="100" r="74" fill="#2b2f34" stroke="#4a5158" strokeWidth="2" />
+        <circle cx="100" cy="100" r="70" fill="none" stroke="#3a4046" strokeWidth="1" />
+        <circle cx="100" cy="58" r="5" fill="#14161a" stroke="#4a5158" />
+        <circle cx="100" cy="142" r="5" fill="#14161a" stroke="#4a5158" />
+        <circle cx="58" cy="100" r="5" fill="#14161a" stroke="#4a5158" />
+        <circle cx="142" cy="100" r="5" fill="#14161a" stroke="#4a5158" />
+        <path d="M100 30 L104 44 L96 44 Z" fill="#c9d4dc" />
+        <path d="M100 170 L104 156 L96 156 Z" fill="#c9d4dc" />
+        <path d="M30 100 L44 96 L44 104 Z" fill="#c9d4dc" />
+        <path d="M170 100 L156 96 L156 104 Z" fill="#c9d4dc" />
+      </g>
+      <g className="blade-sparks" aria-hidden="true">
+        <circle cx="100" cy="30" r="2" /><circle cx="170" cy="100" r="2" />
+        <circle cx="100" cy="170" r="2" /><circle cx="30" cy="100" r="2" />
+      </g>
+      <circle cx="100" cy="100" r="25" fill="#ffffff" stroke="#c9d4dc" strokeWidth="2" />
+      <image href="/ordeon-mark.png" x="77" y="77" width="46" height="46" clipPath="url(#blade-center-clip)" preserveAspectRatio="xMidYMid slice" />
+    </svg>
+  </div>
+)
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
   const [codigo, setCodigo] = useState('')
@@ -30,26 +60,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
       const token = res?.token || res?.accessToken || ''
 
       // Extraer y normalizar rol
-      const rawRole = (
-        res?.user?.roles?.[0] ||
-        res?.roles?.[0] ||
-        res?.rol ||
-        'Administrador'
-      ).toString()
-
-      let mappedRol: UsuarioSesion['rol'] = 'Administrador'
-      const upperRole = rawRole.toUpperCase()
-      if (upperRole.includes('ADMIN')) {
-        mappedRol = 'Administrador'
-      } else if (upperRole.includes('CAJ')) {
-        mappedRol = 'Cajero'
-      } else if (upperRole.includes('OPER')) {
-        mappedRol = 'Operario'
-      } else if (upperRole.includes('AUDIT')) {
-        mappedRol = 'Auditor'
-      } else {
-        mappedRol = 'Administrador'
-      }
+      const roles = normalizeRoles(res?.user?.roles || res?.roles || (res?.rol ? [res.rol] : []))
+      const permissions = normalizePermissionList(res?.user?.permissions || res?.permissions)
+      const mappedRol = primaryRole(roles.length ? roles : ['Operario'])
 
       const sesion: UsuarioSesion = {
         publicId: res?.user?.id || res?.publicId || 'usr-default',
@@ -57,17 +70,17 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
         nombreCompleto: res?.user?.fullName || res?.nombreCompleto || res?.user?.username || codigo,
         email: res?.user?.email || res?.email || '',
         rol: mappedRol,
-        token: token,
+        roles,
+        permissions,
+        isCashier: isCashier({ roles, permissions }),
+        token,
+        expiresAt: res?.expiresAt,
       }
 
-      // Persistir token y sesión para que no se pierdan al recargar la página
+      // La sesión se conserva solo para restaurar la interfaz; el backend sigue siendo la fuente de autorización.
       localStorage.setItem('ordeon_token', sesion.token)
       localStorage.setItem('ordeon_sesion', JSON.stringify(sesion))
-
-      const permissions = res?.user?.permissions || res?.permissions
-      if (permissions && Array.isArray(permissions)) {
-        localStorage.setItem('ordeon_permissions', JSON.stringify(permissions))
-      }
+      localStorage.setItem('ordeon_permissions', JSON.stringify(permissions))
 
       if (onLoginSuccess) {
         onLoginSuccess(sesion)
@@ -88,206 +101,96 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false)
 
   return (
-    <div style={{ maxWidth: '440px', width: '100%', margin: '20px auto' }}>
-      <Card style={{
-        background: '#1e293b',
-        border: '1px solid #334155',
-        borderRadius: '1rem',
-        boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 0 25px rgba(99, 102, 241, 0.1)',
-        padding: '2rem',
-      }}>
-        {/* Logo y Encabezado Design System */}
-        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div style={{ display: 'inline-flex', position: 'relative', marginBottom: '1rem' }}>
-            <div style={{
-              position: 'absolute',
-              inset: '-4px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-              borderRadius: '1.25rem',
-              filter: 'blur(10px)',
-              opacity: 0.6,
-            }} />
-            <div style={{
-              position: 'relative',
-              width: '4.5rem',
-              height: '4.5rem',
-              background: 'linear-gradient(135deg, #4f46e5 0%, #312e81 100%)',
-              borderRadius: '1.25rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '2.25rem',
-              boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.5)',
-              border: '2px solid rgba(255, 255, 255, 0.15)',
-            }}>
-              ⚙️
-            </div>
-          </div>
-
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#ffffff', margin: 0, letterSpacing: '-0.025em' }}>
-            Afilamos Hermanos
-          </h1>
-          <p style={{ color: '#93c5fd', fontSize: '0.9rem', fontWeight: 600, margin: '4px 0 8px 0' }}>
-            Ordeon POS · Control de Operaciones
+    <main className="login-page">
+      <section className="login-visual" aria-label="Afilamos Hermanos">
+        <OrdeonBlade />
+        <div className="login-visual__content">
+          <img
+            className="login-brand__logo"
+            src="https://afilamoshermanos.com/assets/logo_principal-Bvhb_YuS.png"
+            alt="Afilamos Hermanos"
+          />
+          <div className="login-visual__rule" />
+          <p className="login-visual__eyebrow">Operaciones en un solo lugar</p>
+          <h1>Control claro para decisiones rápidas.</h1>
+          <p className="login-visual__description">
+            Ordeon conecta tu operación diaria con la información que necesitas para trabajar mejor.
           </p>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-            <Badge variant="info">v1.0.0</Badge>
-            <Badge variant="success">Sistema Activo</Badge>
+          <div className="login-visual__status">
+            <span className="login-status-dot" aria-hidden="true" />
+            Plataforma operativa disponible
           </div>
         </div>
+        <p className="login-visual__footer">Ordeon POS · Un producto de Farutech para Afilamos Hermanos</p>
+      </section>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-              Usuario / Código de Operario / Correo
-            </label>
-            <input
-              type="text"
-              placeholder="Ej: admin o CAJERO1"
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              disabled={cargando}
-              autoFocus
-              style={{
-                width: '100%',
-                padding: '0.625rem 0.875rem',
-                background: '#0f172a',
-                border: '1px solid #475569',
-                borderRadius: '0.5rem',
-                color: '#f8fafc',
-                fontSize: '0.9rem',
-                outline: 'none',
-                boxSizing: 'border-box',
-                transition: 'border-color 0.2s',
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-              onBlur={(e) => e.target.style.borderColor = '#475569'}
-            />
+      <section className="login-panel">
+        <Card className="login-card">
+          <div className="login-heading">
+            <div className="login-heading__brand" aria-label="Ordeon, producto de Farutech">
+              <img className="login-heading__mark" src="/ordeon-mark.png" alt="" aria-hidden="true" />
+              <span className="login-heading__wordmark">ORDEON</span>
+            </div>
+            <p className="login-heading__eyebrow">Acceso seguro</p>
+            <h2>Bienvenido de nuevo</h2>
+            <p>Ingresa tus credenciales para continuar con tus operaciones.</p>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
-              Contraseña
-            </label>
-            <div style={{ position: 'relative' }}>
+          <form onSubmit={handleSubmit} className="login-form">
+            <div className="login-field">
+              <label htmlFor="login-codigo">Usuario o código de operario</label>
               <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                id="login-codigo"
+                type="text"
+                placeholder="Ej. admin o CAJERO1"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
                 disabled={cargando}
-                style={{
-                  width: '100%',
-                  padding: '0.625rem 2.5rem 0.625rem 0.875rem',
-                  background: '#0f172a',
-                  border: '1px solid #475569',
-                  borderRadius: '0.5rem',
-                  color: '#f8fafc',
-                  fontSize: '0.9rem',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  transition: 'border-color 0.2s',
-                }}
-                onFocus={(e) => e.target.style.borderColor = '#6366f1'}
-                onBlur={(e) => e.target.style.borderColor = '#475569'}
+                autoFocus
+                autoComplete="username"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
-                style={{
-                  position: 'absolute',
-                  right: '0.75rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  padding: '2px',
-                }}
-                title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
-              >
-                {showPassword ? '🙈' : '👁️'}
-              </button>
             </div>
-          </div>
 
-          {/* Atajo rápido de prueba demo */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: 'rgba(99, 102, 241, 0.1)',
-            border: '1px dashed #6366f1',
-            borderRadius: '0.5rem',
-            padding: '6px 10px',
-            fontSize: '0.75rem',
-          }}>
-            <span style={{ color: '#c7d2fe' }}>💡 Demo: <strong>admin</strong></span>
-            <button
-              type="button"
-              onClick={() => {
-                setCodigo('admin')
-                setPassword('Admin123*')
-              }}
-              style={{
-                background: '#4f46e5',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '2px 8px',
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Autocompletar
-            </button>
-          </div>
-
-          {error && (
-            <div
-              role="alert"
-              style={{
-                padding: '10px 12px',
-                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid #ef4444',
-                borderRadius: '0.5rem',
-                color: '#fca5a5',
-                fontSize: '0.85rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <span>⚠️</span>
-              <span>{error}</span>
+            <div className="login-field">
+              <div className="login-field__label-row">
+                <label htmlFor="login-password">Contraseña</label>
+                <span className="login-field__hint">Protegida</span>
+              </div>
+              <div className="login-password">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Ingresa tu contraseña"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={cargando}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="login-password__toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showPassword ? 'Ocultar' : 'Mostrar'}
+                </button>
+              </div>
             </div>
-          )}
 
-          <Button
-            type="submit"
-            disabled={cargando}
-            style={{
-              marginTop: '4px',
-              width: '100%',
-              padding: '0.75rem',
-              fontWeight: 700,
-              fontSize: '0.95rem',
-              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-              border: 'none',
-              borderRadius: '0.5rem',
-              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
-              cursor: cargando ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {cargando ? '🔄 Iniciando sesión...' : '🚀 Ingresar al Sistema'}
-          </Button>
-        </form>
-      </Card>
-    </div>
+            {error && <div className="login-error" role="alert">{error}</div>}
+
+            <Button type="submit" disabled={cargando} className="login-submit">
+              {cargando ? 'Validando acceso…' : 'Ingresar a Ordeon'}
+            </Button>
+          </form>
+
+          <div className="login-card__meta">
+            <Badge variant="success">Sistema activo</Badge>
+            <span>v1.0.0</span>
+          </div>
+        </Card>
+      </section>
+    </main>
   )
 }

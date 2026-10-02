@@ -971,9 +971,13 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
 
   // --- Items & Listas de Precios ---
   const handleGuardarItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    try {
+  e.preventDefault();
+  setErrorMsg(null);
+  if (!nuevoItem.categoriaUuid) {
+    setErrorMsg('Selecciona una categoría para el ítem antes de guardarlo.');
+    return;
+  }
+  try {
       if (itemEditando) {
         await catalogosApi.actualizarItem(itemEditando.uuid, {
           nombre: nuevoItem.nombre,
@@ -996,8 +1000,10 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
           uuidUnidadPresentacion: nuevoItem.uuidUnidadPresentacion,
           precioBase: Number(nuevoItem.precioBase),
           stockReferencial: nuevoItem.naturaleza === 'INVENTARIO' ? Number(nuevoItem.stockReferencial ?? 0) : undefined,
-          workflowDefinicionUuid: nuevoItem.naturaleza === 'SERVICIO' && nuevoItem.workflowDefinicionUuid ? nuevoItem.workflowDefinicionUuid : undefined,
-        });
+                  workflowDefinicionUuid: nuevoItem.naturaleza === 'SERVICIO' && nuevoItem.workflowDefinicionUuid ? nuevoItem.workflowDefinicionUuid : undefined,
+                  categoriaUuid: nuevoItem.categoriaUuid,
+                  listaPrecioUuid: nuevoItem.listaPrecioUuid || null,
+                });
         setSuccessMsg(`Ítem '${nuevoItem.nombre}' creado exitosamente.`);
       }
       setMostrarModalItem(false);

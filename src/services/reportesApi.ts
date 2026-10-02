@@ -41,4 +41,22 @@ export const reportesApi = {
     }
     return res.json();
   },
+
+  exportarCsv: async (tipo: 'consolidated' | 'cash' | 'payments' = 'consolidated', desde?: string, hasta?: string, token?: string): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('ordeon_token') : null);
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
+
+    const params = new URLSearchParams({ type: tipo, format: 'csv' });
+    if (desde) params.append('from', desde);
+    if (hasta) params.append('to', hasta);
+
+    const res = await fetch(`${API_BASE}/export?${params.toString()}`, { headers });
+    if (!res.ok) {
+      throw new Error('Error al descargar exportación CSV');
+    }
+    return res.blob();
+  },
 };

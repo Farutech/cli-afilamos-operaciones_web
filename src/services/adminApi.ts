@@ -10,6 +10,19 @@ import type {
   CrearTransicionDto,
 } from '../types/admin';
 
+function mapUsuario(u: any, fallbackId?: string): UsuarioAdminDto {
+  return {
+    uuid: u?.id || u?.uuid || fallbackId || '',
+    codigo: u?.username || u?.code || 'USR',
+    nombreCompleto: u?.fullName || u?.name || u?.username || 'Usuario',
+    email: u?.email || '',
+    rol: u?.role || (u?.canSuperviseCash ? 'SUPERVISOR' : (u?.canBeCashier ? 'CAJERO' : 'ADMIN')),
+    activo: u?.isActive ?? u?.active ?? true,
+    tienePin: u?.hasPinConfigured ?? Boolean(u?.pin),
+    creadoEn: u?.createdAt || new Date().toISOString(),
+  };
+}
+
 export const adminApi = {
   // ─── Usuarios y Roles ───────────────────────────────────────────────────────
 
@@ -32,34 +45,49 @@ export const adminApi = {
     }
   },
 
-  async crearUsuario(dto: CrearUsuarioDto, _token?: string): Promise<UsuarioAdminDto> {
-    return {
-      uuid: 'user-' + Date.now(),
-      codigo: dto.codigo,
-      nombreCompleto: dto.nombreCompleto,
-      email: dto.email,
-      rol: dto.rol,
-      activo: true,
-      tienePin: !!dto.pin,
-      creadoEn: new Date().toISOString(),
-    };
+  async crearUsuario(dto: CrearUsuarioDto, token?: string): Promise<UsuarioAdminDto> {
+    const res = await apiClient<any>('/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: dto.codigo,
+        fullName: dto.nombreCompleto,
+        email: dto.email,
+        password: dto.password,
+        role: dto.rol,
+        pin: dto.pin || null,
+        documentNumber: '',
+        phone: '',
+        canBeCashier: dto.rol === 'CAJERO',
+        canSuperviseCash: dto.rol === 'SUPERVISOR' || dto.rol === 'ADMIN',
+        canForceCloseCash: dto.rol === 'ADMIN',
+        canApproveAdvanceWaiver: dto.rol === 'SUPERVISOR' || dto.rol === 'ADMIN',
+        canApproveDelivery: dto.rol === 'SUPERVISOR' || dto.rol === 'ADMIN',
+      }),
+    }, token);
+    return mapUsuario(res);
   },
 
   async actualizarUsuario(
     uuid: string,
     dto: ActualizarUsuarioDto,
-    _token?: string,
+    token?: string,
   ): Promise<UsuarioAdminDto> {
-    return {
-      uuid,
-      codigo: 'USR',
-      nombreCompleto: dto.nombreCompleto || 'Usuario',
-      email: dto.email || 'usuario@afilamos.local',
-      rol: dto.rol || 'ADMIN',
-      activo: true,
-      tienePin: false,
-      creadoEn: new Date().toISOString(),
-    };
+    const res = await apiClient<any>(`/users/${uuid}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        fullName: dto.nombreCompleto,
+        email: dto.email,
+        role: dto.rol,
+        documentNumber: '',
+        phone: '',
+        canBeCashier: dto.rol === 'CAJERO',
+        canSuperviseCash: dto.rol === 'SUPERVISOR' || dto.rol === 'ADMIN',
+        canForceCloseCash: dto.rol === 'ADMIN',
+        canApproveAdvanceWaiver: dto.rol === 'SUPERVISOR' || dto.rol === 'ADMIN',
+        canApproveDelivery: dto.rol === 'SUPERVISOR' || dto.rol === 'ADMIN',
+      }),
+    }, token);
+    return mapUsuario(res, uuid);
   },
 
   async cambiarEstadoUsuario(

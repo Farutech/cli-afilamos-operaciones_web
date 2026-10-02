@@ -1,6 +1,53 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Badge } from '@farutech/design-system';
+import {
+  ArchiveBoxIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowRightOnRectangleIcon,
+  BanknotesIcon,
+  Bars3BottomLeftIcon,
+  ChartBarIcon,
+  CheckBadgeIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ClipboardDocumentListIcon,
+  Cog6ToothIcon,
+  CubeIcon,
+  CurrencyDollarIcon,
+  DocumentChartBarIcon,
+  DocumentTextIcon,
+  HomeIcon,
+  IdentificationIcon,
+  InboxArrowDownIcon,
+  LockClosedIcon,
+  PencilSquareIcon,
+  RectangleStackIcon,
+  ShieldCheckIcon,
+  ShoppingBagIcon,
+  TruckIcon,
+  UserGroupIcon,
+  UserIcon,
+  WrenchScrewdriverIcon,
+} from '@heroicons/react/24/outline';
 import type { UsuarioSesion } from '../../types/auth';
+
+type NavIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const NAV_ICONS: Record<string, NavIcon> = {
+  '📊': ChartBarIcon, '📝': PencilSquareIcon, '⚡': CheckBadgeIcon, '📋': ClipboardDocumentListIcon,
+  '🛠️': WrenchScrewdriverIcon, '⏳': ArchiveBoxIcon, '📌': RectangleStackIcon, '📦': CubeIcon,
+  '📫': InboxArrowDownIcon, '🚚': TruckIcon, '💰': BanknotesIcon, '🔐': LockClosedIcon,
+  '💸': CurrencyDollarIcon, '⚖️': CheckBadgeIcon, '👥': UserGroupIcon, '📈': ChartBarIcon,
+  '💵': CurrencyDollarIcon, '📜': DocumentTextIcon, '🛡️': ShieldCheckIcon, '🔑': LockClosedIcon,
+  '👤': UserIcon, '🏷️': ShoppingBagIcon, '🌐': HomeIcon, '🪪': IdentificationIcon,
+  '⚙️': Cog6ToothIcon, '🔄': ArrowRightIcon, '🏦': BanknotesIcon, '🏧': BanknotesIcon,
+  '💳': CurrencyDollarIcon, '🏛️': BanknotesIcon, '📄': DocumentTextIcon, '📑': DocumentChartBarIcon,
+};
+
+function NavigationIcon({ name }: { name: string }) {
+  const Icon = NAV_ICONS[name] ?? Bars3BottomLeftIcon;
+  return <Icon aria-hidden="true" className="size-4 shrink-0" />;
+}
 
 export type ViewRoute =
   | 'dashboard'
@@ -335,9 +382,7 @@ export function AppLayout({
         <div className="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950/40">
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-extrabold text-lg shadow-lg shadow-indigo-600/30">
-                O
-              </div>
+              <img src="/ordeon-mark.png" alt="Ordeon" className="size-9 rounded-xl object-cover shadow-lg shadow-cyan-600/20" />
               <div className="overflow-hidden">
                 <h1 className="font-extrabold text-white text-base leading-none tracking-tight">
                   Ordeon POS
@@ -359,7 +404,7 @@ export function AppLayout({
             className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
             title={sidebarCollapsed ? 'Expandir menú' : 'Colapsar menú'}
           >
-            {sidebarCollapsed ? '➔' : '◀'}
+            {sidebarCollapsed ? <ArrowRightIcon aria-hidden="true" className="size-4" /> : <ArrowLeftIcon aria-hidden="true" className="size-4" />}
           </button>
         </div>
 
@@ -412,13 +457,13 @@ export function AppLayout({
                       } ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
                     >
                       <div className="flex items-center gap-3 truncate">
-                        <span className="text-base shrink-0">{item.icon}</span>
+<NavigationIcon name={item.icon} />
                         {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
                       </div>
 
                       {!sidebarCollapsed && (
                         <span className="text-[10px] text-slate-500 transition-transform duration-200">
-                          {isGroupOpen ? '▼' : '▶'}
+                          {isGroupOpen ? <ChevronDownIcon aria-hidden="true" className="size-3.5" /> : <ChevronRightIcon aria-hidden="true" className="size-3.5" />}
                         </span>
                       )}
                     </button>
@@ -440,7 +485,7 @@ export function AppLayout({
                               }`}
                             >
                               <div className="flex items-center gap-2 truncate">
-                                <span className="text-xs">{child.icon}</span>
+                                <NavigationIcon name={child.icon} />
                                 <span className="truncate">{child.label}</span>
                               </div>
 
@@ -462,7 +507,8 @@ export function AppLayout({
         </nav>
 
         {/* Footer Sidebar / Perfil de Usuario */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/60">
+        <div className="border-t border-slate-800 bg-slate-950/60 p-3">
+          <p className="mb-3 text-center text-[10px] tracking-wide text-slate-500">Producto creado por <span className="font-semibold text-slate-300">Farutech</span></p>
           {!sidebarCollapsed ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -503,7 +549,7 @@ export function AppLayout({
               className="w-full flex justify-center py-2 text-slate-400 hover:text-rose-400 transition-colors"
               title="Cerrar sesión"
             >
-              🚪
+              <ArrowRightOnRectangleIcon aria-hidden="true" className="size-5" />
             </button>
           )}
         </div>
@@ -552,7 +598,7 @@ export function AppLayout({
               onClick={() => onRouteChange('solicitudes_nueva')}
               className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/30 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
-              <span>⚡</span>
+              <CheckBadgeIcon aria-hidden="true" className="size-4" />
               <span>+ Nueva Solicitud</span>
             </button>
           </div>
