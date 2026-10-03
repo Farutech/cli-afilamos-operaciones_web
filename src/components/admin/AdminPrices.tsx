@@ -166,7 +166,7 @@ export default function AdminPrices({ token }: { token?: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
+        {loading && priceLists.length === 0 ? (
           <div className="empty-state">Cargando listas de precio…</div>
         ) : visible.length === 0 ? (
           <div className="empty-state">No hay listas de precio registradas.</div>

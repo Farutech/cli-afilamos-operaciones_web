@@ -117,7 +117,7 @@ export default function AdminTaxDiscount({ token }: { token?: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
+        {loading && params.length === 0 ? (
           <div className="empty-state">Cargando parámetros…</div>
         ) : visible.length === 0 ? (
           <div className="empty-state">No hay parámetros coincidentes.</div>

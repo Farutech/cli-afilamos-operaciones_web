@@ -93,7 +93,9 @@ export default function AdminClients({ token }: { token: string }) {
   const [totalItems, setTotalItems] = useState(FALLBACK_CUSTOMERS.length);
   const [modal, setModal] = useState<Customer | 'new' | null>(null);
   const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [hasInitialLoaded, setHasInitialLoaded] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -101,7 +103,11 @@ export default function AdminClients({ token }: { token: string }) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   async function loadCustomers() {
-    setLoading(true);
+    if (!hasInitialLoaded && customers.length === 0) {
+      setIsInitialLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
     setError('');
     try {
       const params = new URLSearchParams({
@@ -131,7 +137,9 @@ export default function AdminClients({ token }: { token: string }) {
       setCustomers(FALLBACK_CUSTOMERS);
       setTotalItems(FALLBACK_CUSTOMERS.length);
     } finally {
-      setLoading(false);
+      setIsInitialLoading(false);
+      setIsRefreshing(false);
+      setHasInitialLoaded(true);
     }
   }
 
@@ -281,6 +289,13 @@ export default function AdminClients({ token }: { token: string }) {
               placeholder="Buscar por nombre, teléfono o correo"
               aria-label="Buscar clientes"
             />
+            {isRefreshing && (
+              <span
+                className="spinner-sm"
+                title="Actualizando directorio..."
+                style={{ width: '13px', height: '13px', borderTopColor: '#a78bfa' }}
+              />
+            )}
           </div>
         </div>
 
@@ -295,7 +310,7 @@ export default function AdminClients({ token }: { token: string }) {
           </p>
         )}
 
-        {/* Encabezado de Columnas Básicas y Necesarias */}
+        {/* Encabezado de Columnas Básicas y Necesarias (Siempre visible) */}
         <div className="client-table-head">
           <span>CLIENTE</span>
           <span>CONTACTO</span>
@@ -304,12 +319,25 @@ export default function AdminClients({ token }: { token: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
-          <div className="empty-state">Cargando clientes…</div>
+        {isInitialLoading && !hasInitialLoaded && customers.length === 0 ? (
+          <div className="empty-state">
+            <span className="spinner-sm inline-block mr-2" /> Cargando clientes…
+          </div>
         ) : visible.length === 0 ? (
-          <div className="empty-state">No hay clientes para mostrar.</div>
+          <div className="empty-state">
+            {query.trim()
+              ? 'No se encontraron clientes que coincidan con la búsqueda.'
+              : 'No hay clientes para mostrar.'}
+          </div>
         ) : (
-          <div className="client-list">
+          <div
+            className="client-list"
+            style={{
+              opacity: isRefreshing ? 0.65 : 1,
+              transition: 'opacity 0.16s ease',
+              pointerEvents: isRefreshing ? 'none' : 'auto',
+            }}
+          >
             {visible.map((customer) => (
               <div className="client-row" key={customer.id}>
                 <div className="client-avatar">

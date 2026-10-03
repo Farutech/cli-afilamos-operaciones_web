@@ -194,7 +194,7 @@ export default function AdminProducts({ token }: { token?: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
+        {loading && products.length === 0 ? (
           <div className="empty-state">Cargando inventario…</div>
         ) : visible.length === 0 ? (
           <div className="empty-state">No hay productos que coincidan con la búsqueda.</div>

@@ -135,7 +135,7 @@ export default function AdminApprovals({ token }: { token?: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
+        {loading && approvals.length === 0 ? (
           <div className="empty-state">Consultando autorizaciones pendientes…</div>
         ) : visible.length === 0 ? (
           <div className="empty-state">No hay aprobaciones pendientes en este momento.</div>

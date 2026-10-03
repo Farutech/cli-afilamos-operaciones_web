@@ -197,7 +197,7 @@ export default function AdminServices({ token }: { token?: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
+        {loading && services.length === 0 ? (
           <div className="empty-state">Cargando servicios…</div>
         ) : visible.length === 0 ? (
           <div className="empty-state">No hay servicios que coincidan con la búsqueda.</div>

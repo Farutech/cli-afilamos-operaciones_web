@@ -106,7 +106,7 @@ export default function AdminAuditLogs({ token }: { token?: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
+        {loading && logs.length === 0 ? (
           <div className="empty-state">Consultando bitácora…</div>
         ) : visible.length === 0 ? (
           <div className="empty-state">No hay eventos coincidentes en el periodo.</div>

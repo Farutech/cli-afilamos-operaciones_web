@@ -88,6 +88,12 @@ export interface AppShellProps {
   children: ReactNode;
 }
 
+interface FloatingSubmenuState {
+  label: string;
+  children: string[];
+  top: number;
+}
+
 export function AppShell({
   userName,
   active,
@@ -102,26 +108,71 @@ export function AppShell({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     Clientes: true,
   });
+  const [floatingMenu, setFloatingMenu] = useState<FloatingSubmenuState | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
 
   const navRef = useRef<HTMLElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const floatingRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const scheduleClose = (delay = 200) => {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(() => {
+      setFloatingMenu(null);
+    }, delay);
+  };
+
+  const openSubmenuFor = (item: NavItem, element: HTMLElement) => {
+    clearCloseTimer();
+    if (!item.children || item.children.length === 0) {
+      setFloatingMenu(null);
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    const menuHeight = item.children.length * 36 + 44;
+    const maxTop = Math.max(12, window.innerHeight - menuHeight - 16);
+    const top = Math.min(rect.top, maxTop);
+    setFloatingMenu({
+      label: item.label,
+      children: item.children,
+      top,
+    });
+  };
+
+  // Close floating menu when sidebar expands/collapses
   useEffect(() => {
-    function closeFloatingMenus(event: PointerEvent) {
+    clearCloseTimer();
+    setFloatingMenu(null);
+  }, [sidebarCollapsed]);
+
+  // Click outside listener: removes floating menu immediately on outside pointerdown
+  useEffect(() => {
+    function handlePointerDownOutside(event: PointerEvent) {
       const target = event.target as Node;
-      if (!navRef.current?.contains(target)) {
-        if (sidebarCollapsed) setExpandedGroups({});
+      const isInsideFlyout = floatingRef.current?.contains(target);
+      const isInsideNav = navRef.current?.contains(target);
+
+      if (!isInsideFlyout && !isInsideNav) {
+        clearCloseTimer();
+        setFloatingMenu(null);
       }
-      if (!profileRef.current?.contains(target)) {
+      if (profileRef.current && !profileRef.current.contains(target)) {
         setProfileOpen(false);
       }
     }
-    document.addEventListener('pointerdown', closeFloatingMenus);
-    return () => document.removeEventListener('pointerdown', closeFloatingMenus);
-  }, [sidebarCollapsed]);
+    document.addEventListener('pointerdown', handlePointerDownOutside);
+    return () => document.removeEventListener('pointerdown', handlePointerDownOutside);
+  }, []);
 
   // Keyboard shortcut ⌘K / Ctrl+K
   useEffect(() => {
@@ -167,56 +218,76 @@ export function AppShell({
               <p className="nav-label">{group.label}</p>
               {group.items.map((item) => {
                 const Icon = item.icon;
+                const hasChildren = Boolean(item.children && item.children.length > 0);
                 const isDirectActive = active === item.label;
                 const isChildActive = item.children?.includes(active);
-                const isExpanded = !!expandedGroups[item.label];
+                const isExpanded = !sidebarCollapsed && !!expandedGroups[item.label];
+                const isFlyoutOpen = sidebarCollapsed && floatingMenu?.label === item.label;
 
                 return (
                   <div className="nav-tree" key={item.label}>
                     <button
                       className={`nav-item ${
-                        isDirectActive || isChildActive ? 'active' : ''
+                        isDirectActive || isChildActive || isFlyoutOpen ? 'active' : ''
                       }`}
-                      onClick={() => {
-                        onNavigate(item.label);
-                        if (item.children) {
-                          setExpandedGroups((current) => ({
-                            ...current,
-                            [item.label]: !current[item.label],
-                          }));
+                      onMouseEnter={(e) => {
+                        if (sidebarCollapsed) {
+                          if (hasChildren) {
+                            openSubmenuFor(item, e.currentTarget);
+                          } else {
+                            clearCloseTimer();
+                            setFloatingMenu(null);
+                          }
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        if (sidebarCollapsed && hasChildren) {
+                          scheduleClose(220);
+                        }
+                      }}
+                      onClick={(e) => {
+                        if (hasChildren) {
+                          // Solo el submenú carga páginas. El ítem padre solo expande o abre el flyout.
+                          e.preventDefault();
+                          if (sidebarCollapsed) {
+                            openSubmenuFor(item, e.currentTarget);
+                          } else {
+                            setExpandedGroups((current) => ({
+                              ...current,
+                              [item.label]: !current[item.label],
+                            }));
+                          }
                         } else {
-                          setExpandedGroups({});
+                          // No tiene submenú: navega directamente
+                          clearCloseTimer();
+                          setFloatingMenu(null);
+                          onNavigate(item.label);
                           setMenuOpen(false);
                         }
                       }}
                       title={item.label}
-                      aria-expanded={item.children ? isExpanded : undefined}
+                      aria-expanded={hasChildren ? (sidebarCollapsed ? isFlyoutOpen : isExpanded) : undefined}
                     >
                       <Icon className="w-4 h-4 shrink-0" />
                       <span>{item.label}</span>
                       {item.count && <b>{item.count}</b>}
-                      {item.children && (
+                      {hasChildren && !sidebarCollapsed && (
                         <ChevronRight
                           className={`nav-expand ${isExpanded ? 'is-open' : ''}`}
                         />
                       )}
                     </button>
 
-                    {item.children && isExpanded && (
-                      <div
-                        className={`nav-children ${
-                          sidebarCollapsed ? 'nav-children-floating' : ''
-                        }`}
-                        role="menu"
-                      >
-                        {item.children.map((child) => (
+                    {/* Submenú en modo expandido (accordion clásico) */}
+                    {hasChildren && !sidebarCollapsed && isExpanded && (
+                      <div className="nav-children" role="menu">
+                        {item.children!.map((child) => (
                           <button
                             className={`nav-child ${active === child ? 'font-bold text-white' : ''}`}
                             key={child}
                             role="menuitem"
                             onClick={() => {
                               onNavigate(child);
-                              if (sidebarCollapsed) setExpandedGroups({});
                               setMenuOpen(false);
                             }}
                           >
@@ -282,6 +353,43 @@ export function AppShell({
           </p>
         </div>
       </aside>
+
+      {/* Submenú Flotante Único (Modo Colapsado con Hover-Intent y Hit-Bridge) */}
+      {sidebarCollapsed && floatingMenu && (
+        <div
+          ref={floatingRef}
+          className="sidebar-floating-flyout"
+          style={{ top: `${floatingMenu.top}px` }}
+          onMouseEnter={clearCloseTimer}
+          onMouseLeave={() => scheduleClose(200)}
+          role="menu"
+          aria-label={`Submenú ${floatingMenu.label}`}
+        >
+          <div className="floating-flyout-header">
+            <span>{floatingMenu.label}</span>
+          </div>
+          <div className="floating-flyout-items">
+            {floatingMenu.children.map((child) => {
+              const isChildActive = active === child;
+              return (
+                <button
+                  key={child}
+                  className={`floating-flyout-item ${isChildActive ? 'is-active' : ''}`}
+                  role="menuitem"
+                  onClick={() => {
+                    clearCloseTimer();
+                    setFloatingMenu(null);
+                    onNavigate(child);
+                    setMenuOpen(false);
+                  }}
+                >
+                  <span>{child}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Área Principal de Contenido */}
       <section className="main-content">

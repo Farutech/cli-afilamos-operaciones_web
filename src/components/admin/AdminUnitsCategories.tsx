@@ -212,7 +212,7 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
+        {loading && items.length === 0 ? (
           <div className="empty-state">Cargando registros…</div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">No hay registros que coincidan con el filtro.</div>

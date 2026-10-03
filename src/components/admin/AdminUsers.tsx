@@ -180,7 +180,7 @@ export default function AdminUsers({ token }: { token?: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {loading ? (
+        {loading && users.length === 0 ? (
           <div className="empty-state">Consultando personal…</div>
         ) : visible.length === 0 ? (
           <div className="empty-state">No hay usuarios que coincidan con la búsqueda.</div>
