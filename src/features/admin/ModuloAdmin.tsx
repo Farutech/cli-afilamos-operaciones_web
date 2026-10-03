@@ -2918,7 +2918,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                 <Select
                   label="Tipo de Cuenta"
                   value={cuentaBancaria.tipoCuenta}
-                  onChange={(e) => setCuentaBancaria({ ...cuentaBancaria, tipoCuenta: e.target.value })}
+                  onChange={(val: any) => setCuentaBancaria({ ...cuentaBancaria, tipoCuenta: val?.target?.value ?? val })}
                   options={[
                     { label: 'Ahorros', value: 'Ahorros' },
                     { label: 'Corriente', value: 'Corriente' },
@@ -3204,7 +3204,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
           <Select
             label="Rol Asignado"
             value={nuevoUsuario.rol}
-            onChange={(e) => setNuevoUsuario({ ...nuevoUsuario, rol: e.target.value })}
+            onChange={(val: any) => setNuevoUsuario({ ...nuevoUsuario, rol: val?.target?.value ?? val })}
             options={roles.map((r) => ({ label: r, value: r }))}
             fullWidth
           />
@@ -3361,7 +3361,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                 label="Naturaleza del Ítem *"
                 value={nuevoItem.naturaleza}
                 disabled={Boolean(itemEditando)}
-                onChange={(e) => setNuevoItem({ ...nuevoItem, naturaleza: e.target.value as any })}
+                onChange={(val: any) => setNuevoItem({ ...nuevoItem, naturaleza: (val?.target?.value ?? val) as any })}
                 options={[
                   { label: '🛠️ SERVICIO (Taller / OTs de Afilado)', value: 'SERVICIO' },
                   { label: '📦 INVENTARIO (Producto Físico Comercial)', value: 'INVENTARIO' },
@@ -3402,7 +3402,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
               <Select
                 label="Categoría del Catálogo"
                 value={nuevoItem.categoriaUuid}
-                onChange={(e) => setNuevoItem({ ...nuevoItem, categoriaUuid: e.target.value })}
+                onChange={(val: any) => setNuevoItem({ ...nuevoItem, categoriaUuid: val?.target?.value ?? val })}
                 options={[
                   { label: '— Sin categoría principal —', value: '' },
                   ...categoriasItems.map((c) => ({
@@ -3415,7 +3415,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
               <Select
                 label="Lista de Precios Predeterminada"
                 value={nuevoItem.listaPrecioUuid}
-                onChange={(e) => setNuevoItem({ ...nuevoItem, listaPrecioUuid: e.target.value })}
+                onChange={(val: any) => setNuevoItem({ ...nuevoItem, listaPrecioUuid: val?.target?.value ?? val })}
                 options={[
                   { label: 'Precio General Estándar (Sin Ajuste)', value: '' },
                   ...listasPrecio.map((lp) => ({
@@ -3431,7 +3431,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
               <Select
                 label="Unidad de Presentación *"
                 value={nuevoItem.uuidUnidadPresentacion}
-                onChange={(e) => setNuevoItem({ ...nuevoItem, uuidUnidadPresentacion: e.target.value })}
+                onChange={(val: any) => setNuevoItem({ ...nuevoItem, uuidUnidadPresentacion: val?.target?.value ?? val })}
                 options={(unidades || []).map((u) => ({ label: `${u.nombre} (${u.abreviatura})`, value: u.uuid }))}
                 fullWidth
               />
@@ -3457,7 +3457,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
               <Select
                 label="Workflow de Etapas en Taller *"
                 value={nuevoItem.workflowDefinicionUuid}
-                onChange={(e) => setNuevoItem({ ...nuevoItem, workflowDefinicionUuid: e.target.value })}
+                onChange={(val: any) => setNuevoItem({ ...nuevoItem, workflowDefinicionUuid: val?.target?.value ?? val })}
                 options={[
                   { label: 'Flujo Estándar de Taller (Recepción -> Afilado -> Control -> Entrega)', value: '' },
                   ...workflows.map((w) => ({ label: `${w.codigo} - ${w.nombre} (v${w.versionNumero})`, value: w.uuid }))
@@ -3509,7 +3509,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
           <Select
             label="Lista de Precios a Incrementar"
             value={aumentoListaForm.listaUuid}
-            onChange={(e) => setAumentoListaForm({ ...aumentoListaForm, listaUuid: e.target.value })}
+            onChange={(val: any) => setAumentoListaForm({ ...aumentoListaForm, listaUuid: val?.target?.value ?? val })}
             options={listasPrecio.map((lp) => ({
               label: `${lp.nombre} (${lp.codigo}) ${lp.porcentajeAjuste >= 0 ? `(+${lp.porcentajeAjuste}%)` : `(${lp.porcentajeAjuste}%)`}`,
               value: lp.uuid,
@@ -3670,12 +3670,15 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
           <Select
             label="Categoría Base (Rama del Árbol)"
             value={nuevoInstrumento.codigoCategoria}
-            onChange={(e) => setNuevoInstrumento({
-              ...nuevoInstrumento,
-              codigoCategoria: e.target.value,
-              diasCredito: e.target.value === 'CREDITO' ? (nuevoInstrumento.diasCredito || 30) : undefined,
-              requiereReferencia: e.target.value !== 'EFECTIVO'
-            })}
+            onChange={(val: any) => {
+              const v = typeof val === 'string' ? val : val?.target?.value;
+              setNuevoInstrumento({
+                ...nuevoInstrumento,
+                codigoCategoria: v,
+                diasCredito: v === 'CREDITO' ? (nuevoInstrumento.diasCredito || 30) : undefined,
+                requiereReferencia: v !== 'EFECTIVO',
+              });
+            }}
             options={[
               { label: 'Efectivo & Caja Menor', value: 'EFECTIVO' },
               { label: 'Consignación / Transferencia Bancaria', value: 'BANCOS' },
@@ -3755,7 +3758,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
           <Select
             label="Tipo Base"
             value={uuidTipoBaseTarget}
-            onChange={(e) => setUuidTipoBaseTarget(e.target.value)}
+            onChange={(val: any) => setUuidTipoBaseTarget(val?.target?.value ?? val)}
             options={tiposDocBase.map((tb) => ({ label: `${tb.codigoBase} - ${tb.nombre}`, value: tb.uuid }))}
             fullWidth
           />
@@ -3789,7 +3792,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             <Select
               label="Formato Papel"
               value={nuevoSubtipo.formatoPapel}
-              onChange={(e) => setNuevoSubtipo({ ...nuevoSubtipo, formatoPapel: e.target.value })}
+              onChange={(val: any) => setNuevoSubtipo({ ...nuevoSubtipo, formatoPapel: val?.target?.value ?? val })}
               options={[
                 { label: 'Tirilla POS 80mm', value: 'TIRILLA' },
                 { label: 'Media Carta', value: 'MEDIA_CARTA' },
@@ -3874,7 +3877,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
           <Select
             label="Aplica Persona"
             value={nuevoTipoDocId.aplicaPersona}
-            onChange={(e) => setNuevoTipoDocId({ ...nuevoTipoDocId, aplicaPersona: e.target.value as any })}
+            onChange={(val: any) => setNuevoTipoDocId({ ...nuevoTipoDocId, aplicaPersona: (typeof val === 'string' ? val : val?.target?.value) as any })}
             options={[
               { label: 'Persona Natural', value: 'NATURAL' },
               { label: 'Persona Jurídica', value: 'JURIDICA' },
@@ -4154,7 +4157,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             <Select
               label="Distintivo Visual (Badge)"
               value={nuevoRolForm.badge}
-              onChange={(e) => setNuevoRolForm({ ...nuevoRolForm, badge: e.target.value as any })}
+              onChange={(val: any) => setNuevoRolForm({ ...nuevoRolForm, badge: (val?.target?.value ?? val) as any })}
               options={[
                 { label: 'Información (Azul)', value: 'info' },
                 { label: 'Éxito (Verde)', value: 'success' },
@@ -4167,7 +4170,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             <Select
               label="Ícono Representativo"
               value={nuevoRolForm.icono}
-              onChange={(e) => setNuevoRolForm({ ...nuevoRolForm, icono: e.target.value })}
+              onChange={(val: any) => setNuevoRolForm({ ...nuevoRolForm, icono: val?.target?.value ?? val })}
               options={[
                 { label: '🛡️ Escudo', value: '🛡️' },
                 { label: '⭐ Estrella', value: '⭐' },
@@ -4472,7 +4475,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                     <Select
                       label="Seleccionar Servicio del Catálogo"
                       value={servicioParaVincular}
-                      onChange={(e) => setServicioParaVincular(e.target.value)}
+                      onChange={(val: any) => setServicioParaVincular(val?.target?.value ?? val)}
                       options={[
                         { label: '-- Selecciona un servicio para asociar --', value: '' },
                         ...items
@@ -4606,7 +4609,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             <Select
               label="Rol Responsable (Autorizado)"
               value={formPaso.rolRequerido || 'TALLER'}
-              onChange={(e) => setFormPaso({ ...formPaso, rolRequerido: e.target.value })}
+              onChange={(val: any) => setFormPaso({ ...formPaso, rolRequerido: val?.target?.value ?? val })}
               options={[
                 { label: '🛠️ Personal de Taller General (TALLER)', value: 'TALLER' },
                 { label: '⚙️ Operario Técnico Especialista (OPERARIO)', value: 'OPERARIO' },

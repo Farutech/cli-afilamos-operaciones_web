@@ -11,13 +11,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@farutech/design-system": "1.0.0",
+    "@farutech/design-system": "^1.1.0",
     "@headlessui/react": "^2.2.10",
     "@heroicons/react": "^2.2.0",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "lucide-react": "^1.16.0",
     "react": "^19.2.8",
     "react-aria": "^3.52.1",
     "react-dom": "^19.2.8",
+    "sonner": "^2.0.8",
+    "tailwind-merge": "^3.3.1",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

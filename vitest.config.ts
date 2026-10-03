@@ -1,10 +1,17 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
-// Configuracion de Vitest. Sin este fichero, `npm test` (vitest run) no
-// encuentra los tests de componentes porque falta el entorno DOM.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   test: {
     globals: true,
     environment: 'happy-dom',

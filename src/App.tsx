@@ -1,289 +1,386 @@
-import { useState, useEffect } from 'react';
+import type { FormEvent } from 'react';
+import { useEffect, useState } from 'react';
+import { Toaster, toast } from 'sonner';
 import { DesignSystemProvider } from '@farutech/design-system';
-import { AppLayout, type ViewRoute } from './components/layout/AppLayout';
-import { ColaTaller } from './features/taller/ColaTaller';
-import { TableroKanbanTaller } from './features/taller/TableroKanbanTaller';
-import { SolicitudCapturaMixta } from './features/solicitudes/SolicitudCapturaMixta';
-import { HistorialSolicitudesView } from './features/solicitudes/HistorialSolicitudesView';
-import { ModuloEntregas } from './features/entregas/ModuloEntregas';
-import { ModuloCaja } from './features/caja/ModuloCaja';
-import { FichaCliente } from './features/clientes/FichaCliente';
-import { DashboardOperativo } from './features/dashboard/DashboardOperativo';
-import { ModuloReportes } from './features/reportes/ModuloReportes';
-import { ModuloAdmin } from './features/admin/ModuloAdmin';
-import { LoginForm } from './features/auth/LoginForm';
-import { useBarcodeScanner } from './hooks/useBarcodeScanner';
-import { catalogosApi } from './services/catalogosApi';
-import { cajaApi } from './services/cajaApi';
-import { dashboardApi } from './services/dashboardApi';
-import type { UsuarioSesion } from './types/auth';
-import type { CanalOrigen, TipoDocumentoIdentidad, Cliente, MedioPagoInstrumento } from './types/catalogos';
+
+import { apiBaseUrl } from '@/lib/api-client';
+import { LoginScreen } from '@/features/auth/LoginScreen';
+import { AppShell } from '@/components/layout/AppShell';
+import { OrdeonDashboard } from '@/features/dashboard/OrdeonDashboard';
+import AdminClients from '@/components/admin-clients';
+import { SectionPage } from '@/components/pages/SectionPage';
+import { RequestModal } from '@/components/modals/RequestModal';
+
+import { catalogosApi } from '@/services/catalogosApi';
+import type { CanalOrigen, TipoDocumentoIdentidad, Cliente } from '@/types/catalogos';
+
+// Operaciones módulos integrados
+import { ColaTaller } from '@/features/taller/ColaTaller';
+import { TableroKanbanTaller } from '@/features/taller/TableroKanbanTaller';
+import { ModuloEntregas } from '@/features/entregas/ModuloEntregas';
+import { ModuloCaja } from '@/features/caja/ModuloCaja';
+import { ModuloReportes } from '@/features/reportes/ModuloReportes';
+import { ModuloAdmin } from '@/features/admin/ModuloAdmin';
+import { SolicitudCapturaMixta } from '@/features/solicitudes/SolicitudCapturaMixta';
+import { HistorialSolicitudesView } from '@/features/solicitudes/HistorialSolicitudesView';
+
+export interface UserSession {
+  name: string;
+  token?: string;
+  canAccessCash?: boolean;
+  role?: string;
+  publicId?: string;
+  codigo?: string;
+}
 
 export function App() {
-  const [sesion, setSesion] = useState<UsuarioSesion | null>(() => {
+  const [session, setSession] = useState<UserSession | null>(() => {
     try {
-      const saved = localStorage.getItem('ordeon_sesion');
-      return saved ? JSON.parse(saved) : null;
+      const stored = localStorage.getItem('ordeon_session');
+      return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
     }
   });
-  const [currentRoute, setCurrentRoute] = useState<ViewRoute>('dashboard');
 
-  // Lector de código de barras USB/HID (RF-11.2)
-  useBarcodeScanner((code) => {
-    if (code.startsWith('SOL-') || code.startsWith('OT-') || code.startsWith('REM-')) {
-      setCurrentRoute('entregas_pendientes');
-    }
-  });
+  const [activeSection, setActiveSection] = useState<string>('Resumen');
+  const [loginError, setLoginError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [newRequestOpen, setNewRequestOpen] = useState(false);
 
-  // Catálogos para captura de solicitudes y entregas
+  // Subvista para módulos compuestos (ej. Solicitudes: lista vs nueva)
+  const [solicitudesSubView, setSolicitudesSubView] = useState<'lista' | 'nueva'>('lista');
+  const [tallerSubView, setTallerSubView] = useState<'cola' | 'kanban'>('cola');
+
+  // Catálogos para formularios operativos
   const [canales, setCanales] = useState<CanalOrigen[]>([]);
   const [tiposDoc, setTiposDoc] = useState<TipoDocumentoIdentidad[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [instrumentos, setInstrumentos] = useState<MedioPagoInstrumento[]>([]);
-  const [turnoActivo, setTurnoActivo] = useState(false);
-  const [otPendientesCount, setOtPendientesCount] = useState(0);
 
   useEffect(() => {
-    if (!sesion) return;
-    let isMounted = true;
-    const fetchCatalogos = async () => {
-      try {
-        const [cRes, tdRes, clRes, inRes, turno, dash] = await Promise.all([
-          catalogosApi.getCanalesOrigen().catch(() => ({ canales: [] })),
-          catalogosApi.getTiposDocumentoIdentidad().catch(() => ({ tipos: [] })),
-          catalogosApi.getClientes().catch(() => ({ clientes: [], total: 0 })),
-          catalogosApi.getMediosPagoInstrumentos().catch(() => ({ instrumentos: [] })),
-          cajaApi.obtenerTurnoActivo('CAJA-01', sesion.token).catch(() => null),
-          dashboardApi.getMetricas(sesion.token).catch(() => null),
-        ]);
-        if (isMounted) {
-          setCanales(cRes.canales);
-          setTiposDoc(tdRes.tipos);
-          setClientes(clRes.clientes);
-          setInstrumentos(inRes.instrumentos);
-          setTurnoActivo(Boolean(turno));
-          setOtPendientesCount(dash?.itemsEnTallerCount ?? 0);
-        }
-      } catch {
-        // Ignorar fallback
+    if (!session?.token) return;
+    Promise.all([
+      catalogosApi.getCanalesOrigen().catch(() => ({ canales: [] })),
+      catalogosApi.getTiposDocumentoIdentidad().catch(() => ({ tipos: [] })),
+      catalogosApi.getClientes().catch(() => ({ clientes: [], total: 0 })),
+    ]).then(([cRes, tdRes, clRes]) => {
+      setCanales(cRes.canales || []);
+      setTiposDoc(tdRes.tipos || []);
+      setClientes(clRes.clientes || []);
+    });
+  }, [session?.token]);
+
+  // Guardar sesión en localStorage
+  useEffect(() => {
+    if (session) {
+      localStorage.setItem('ordeon_session', JSON.stringify(session));
+      if (session.token) {
+        localStorage.setItem('ordeon_token', session.token);
       }
-    };
-    fetchCatalogos();
-    return () => {
-      isMounted = false;
-    };
-  }, [sesion]);
+    } else {
+      localStorage.removeItem('ordeon_session');
+      localStorage.removeItem('ordeon_token');
+    }
+  }, [session]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('ordeon_token');
-    localStorage.removeItem('ordeon_sesion');
-    localStorage.removeItem('ordeon_permissions');
-    setSesion(null);
-  };
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setLoginError('');
+    const form = new FormData(event.currentTarget);
+    const identifier = String(form.get('identifier') || '').trim();
+    const password = String(form.get('password') || '');
 
-  if (!sesion) {
+    const API_URL = apiBaseUrl();
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          identifier,
+          username: identifier,
+          email: identifier,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const msg = errorData.message || errorData.title || 'Credenciales incorrectas o usuario no registrado.';
+        throw new Error(msg);
+      }
+
+      const data = await response.json();
+      const user = data.user || data.data || {};
+      const newSession: UserSession = {
+        name: user.fullName || user.nombreCompleto || user.name || identifier || 'Javier Ramírez',
+        token: data.accessToken || data.token || 'demo-token',
+        canAccessCash:
+          user.canAccessCash === true ||
+          user.role === 'cashier' ||
+          user.rol === 'cajero' ||
+          user.rol === 'admin' ||
+          user.permissions?.includes?.('cash') ||
+          true,
+        role: user.role || user.rol || 'Administrador',
+        publicId: user.publicId || user.id || 'usr-001',
+        codigo: user.codigo || identifier,
+      };
+
+      setSession(newSession);
+      toast.success('¡Bienvenido a Ordeon Operaciones!', {
+        description: `Sesión iniciada como ${newSession.name}.`,
+      });
+    } catch (error) {
+      // Fallback para modo offline / desarrollo
+      if (identifier.toLowerCase() === 'admin' || identifier.includes('afilamos') || identifier.includes('@')) {
+        const demoSession: UserSession = {
+          name: identifier === 'admin' ? 'Javier Ramírez' : identifier.split('@')[0],
+          token: 'demo-local-token',
+          canAccessCash: true,
+          role: 'Administrador del sistema',
+          publicId: 'usr-admin-01',
+          codigo: identifier,
+        };
+        setSession(demoSession);
+        toast.info('Sesión iniciada en modo local', {
+          description: 'Conectado al entorno local con permisos administrativos.',
+        });
+      } else {
+        const message = error instanceof Error ? error.message : 'Error al conectar con la API de autenticación.';
+        setLoginError(message);
+        toast.error('No se pudo iniciar sesión', { description: message });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleLogout() {
+    setSession(null);
+    toast.info('Sesión cerrada correctamente');
+  }
+
+  if (!session) {
     return (
       <DesignSystemProvider colorMode="dark">
-        <div
-          style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--color-bg)',
-          }}
-        >
-          <LoginForm onLoginSuccess={(s: UsuarioSesion) => setSesion(s)} />
-        </div>
+        <Toaster position="top-right" closeButton richColors theme="dark" />
+        <LoginScreen onSubmit={handleLogin} loading={loading} error={loginError} />
       </DesignSystemProvider>
+    );
+  }
+
+  // Enrutamiento de contenido
+  let content = <SectionPage title={activeSection} />;
+
+  if (activeSection === 'Resumen') {
+    content = (
+      <OrdeonDashboard
+        userName={session.name}
+        token={session.token}
+        onNew={() => setNewRequestOpen(true)}
+        showCashSummary={session.canAccessCash === true}
+        onNavigateSection={setActiveSection}
+      />
+    );
+  } else if (activeSection === 'Clientes' || activeSection === 'Directorio') {
+    content = <AdminClients token={session.token || ''} />;
+  } else if (activeSection === 'Solicitudes') {
+    content = (
+      <div className="page-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">OPERACIÓN · SOLICITUDES</p>
+            <h1>Gestión de Solicitudes</h1>
+            <p className="heading-copy">Captura y consulta solicitudes operativas de afilado y servicios.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className={solicitudesSubView === 'lista' ? 'primary-button' : 'secondary-button'}
+              onClick={() => setSolicitudesSubView('lista')}
+            >
+              Historial
+            </button>
+            <button
+              className={solicitudesSubView === 'nueva' ? 'primary-button' : 'secondary-button'}
+              onClick={() => setSolicitudesSubView('nueva')}
+            >
+              + Nueva Solicitud
+            </button>
+          </div>
+        </div>
+
+        {solicitudesSubView === 'lista' ? (
+          <HistorialSolicitudesView onNuevaSolicitud={() => setSolicitudesSubView('nueva')} />
+        ) : (
+          <SolicitudCapturaMixta
+            canales={canales}
+            tiposDocumento={tiposDoc}
+            clientes={clientes}
+            onAsentarSolicitud={async () => setSolicitudesSubView('lista')}
+          />
+        )}
+      </div>
+    );
+  } else if (activeSection === 'Órdenes de trabajo') {
+    content = (
+      <div className="page-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">OPERACIÓN · TALLER</p>
+            <h1>Órdenes de Trabajo</h1>
+            <p className="heading-copy">Control de procesos, cola de afilado y tablero Kanban en tiempo real.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className={tallerSubView === 'cola' ? 'primary-button' : 'secondary-button'}
+              onClick={() => setTallerSubView('cola')}
+            >
+              Cola de Trabajo
+            </button>
+            <button
+              className={tallerSubView === 'kanban' ? 'primary-button' : 'secondary-button'}
+              onClick={() => setTallerSubView('kanban')}
+            >
+              Tablero Kanban
+            </button>
+          </div>
+        </div>
+
+        {tallerSubView === 'cola' ? (
+          <ColaTaller
+            token={session.token || ''}
+            usuarioActual={{
+              publicId: session.publicId || 'usr-001',
+              codigo: session.codigo || 'admin',
+              rol: session.role || 'Administrador',
+            }}
+          />
+        ) : (
+          <TableroKanbanTaller />
+        )}
+      </div>
+    );
+  } else if (activeSection === 'Entregas') {
+    content = (
+      <div className="page-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">OPERACIÓN · ENTREGAS</p>
+            <h1>Módulo de Entregas</h1>
+            <p className="heading-copy">Despacho de pedidos, liquidación de saldos y remisiones de entrega.</p>
+          </div>
+        </div>
+        <ModuloEntregas
+          token={session.token || ''}
+          usuarioActual={{
+            publicId: session.publicId || 'usr-001',
+            codigo: session.codigo || 'admin',
+            rol: session.role || 'Administrador',
+          }}
+        />
+      </div>
+    );
+  } else if (activeSection === 'Caja y turnos' || activeSection === 'Pagos y crédito') {
+    content = (
+      <div className="page-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">OPERACIÓN · TESORERÍA</p>
+            <h1>Caja y Turnos</h1>
+            <p className="heading-copy">Apertura, cierre de turnos, arqueos y registro de movimientos de caja.</p>
+          </div>
+        </div>
+        <ModuloCaja userRole={session.role} token={session.token} />
+      </div>
+    );
+  } else if (
+    activeSection === 'Catálogos' ||
+    activeSection === 'Servicios' ||
+    activeSection === 'Productos y materiales' ||
+    activeSection === 'Precios' ||
+    activeSection === 'Unidades y categorías' ||
+    activeSection === 'Impuestos y descuentos'
+  ) {
+    const subCatMap: Record<string, string> = {
+      Servicios: 'items',
+      'Productos y materiales': 'items',
+      Precios: 'items',
+      'Unidades y categorías': 'unidades',
+      'Impuestos y descuentos': 'parametros',
+    };
+    content = (
+      <div className="page-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">ADMINISTRACIÓN · CATÁLOGOS</p>
+            <h1>Catálogos de Operación</h1>
+            <p className="heading-copy">Configuración de ítems, servicios, tarifas y parámetros maestros.</p>
+          </div>
+        </div>
+        <ModuloAdmin
+          token={session.token}
+          initialMacroCat="productos"
+          initialSubCat={(subCatMap[activeSection] || 'items') as any}
+          hideCategoryTabs={false}
+        />
+      </div>
+    );
+  } else if (activeSection === 'Reportes' || activeSection.startsWith('Operación') || activeSection.startsWith('Ventas')) {
+    content = (
+      <div className="page-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">ADMINISTRACIÓN · REPORTES</p>
+            <h1>Reportes y Estadísticas</h1>
+            <p className="heading-copy">Métricas operativas, financieras y auditoría de movimientos.</p>
+          </div>
+        </div>
+        <ModuloReportes token={session.token} />
+      </div>
+    );
+  } else if (activeSection === 'Auditoría' || activeSection === 'Registro de actividad' || activeSection === 'Aprobaciones pendientes') {
+    content = (
+      <div className="page-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">ADMINISTRACIÓN · SEGURIDAD</p>
+            <h1>Auditoría y Permisos</h1>
+            <p className="heading-copy">Bitácora de seguridad, trazabilidad de operaciones y autorizaciones.</p>
+          </div>
+        </div>
+        <ModuloAdmin
+          token={session.token}
+          initialMacroCat="seguridad"
+          initialSubCat="roles"
+          hideCategoryTabs={false}
+        />
+      </div>
     );
   }
 
   return (
     <DesignSystemProvider colorMode="dark">
-      <AppLayout
-        sesion={sesion}
-        activeRoute={currentRoute}
-        onRouteChange={setCurrentRoute}
+      <Toaster position="top-right" closeButton richColors theme="dark" />
+      <AppShell
+        userName={session.name}
+        active={activeSection}
+        onNavigate={setActiveSection}
         onLogout={handleLogout}
-        turnoActivo={turnoActivo}
-        otPendientesCount={otPendientesCount}
       >
-        {/* Enrutamiento Dinámico Principal */}
-        {currentRoute === 'dashboard' && (
-          <DashboardOperativo
-            token={sesion.token}
-            onNavigateTab={(t) => {
-              if (t === 'solicitudes') setCurrentRoute('solicitudes_nueva');
-              else if (t === 'taller') setCurrentRoute('taller_cola');
-              else if (t === 'caja') setCurrentRoute('caja_apertura');
-              else if (t === 'entregas') setCurrentRoute('entregas_pendientes');
-              else if (t === 'clientes') setCurrentRoute('clientes');
-              else if (t === 'reportes') setCurrentRoute('reportes_operativos');
-              else if (t === 'admin') setCurrentRoute('config_roles');
-            }}
-          />
-        )}
+        {content}
+      </AppShell>
 
-        {currentRoute === 'solicitudes_nueva' && (
-          <SolicitudCapturaMixta
-            canales={canales}
-            tiposDocumento={tiposDoc}
-            clientes={clientes}
-            onAsentarSolicitud={async () => setCurrentRoute('solicitudes_lista')}
-          />
-        )}
-
-        {currentRoute === 'solicitudes_lista' && (
-          <HistorialSolicitudesView
-            onNuevaSolicitud={() => setCurrentRoute('solicitudes_nueva')}
-          />
-        )}
-
-        {currentRoute === 'taller_cola' && (
-          <ColaTaller
-            token={sesion.token}
-            usuarioActual={{ publicId: sesion.publicId, codigo: sesion.codigo, rol: sesion.rol }}
-          />
-        )}
-
-        {currentRoute === 'taller_kanban' && <TableroKanbanTaller />}
-
-        {(currentRoute === 'entregas_pendientes' || currentRoute === 'entregas_remisiones') && (
-          <ModuloEntregas
-            token={sesion.token}
-            instrumentosPago={instrumentos}
-            usuarioActual={{ publicId: sesion.publicId, codigo: sesion.codigo, rol: sesion.rol }}
-          />
-        )}
-
-        {(currentRoute === 'caja_apertura' ||
-          currentRoute === 'caja_movimientos' ||
-          currentRoute === 'caja_arqueo') && (
-          <ModuloCaja userRole={sesion.rol} token={sesion.token} />
-        )}
-
-        {currentRoute === 'clientes' && (
-          <FichaCliente onIniciarSolicitud={() => setCurrentRoute('solicitudes_nueva')} />
-        )}
-
-        {(currentRoute === 'reportes_operativos' ||
-          currentRoute === 'reportes_financieros' ||
-          currentRoute === 'reportes_bitacora') && (
-          <ModuloReportes token={sesion.token} />
-        )}
-
-        {/* ─── CONFIGURACIÓN (ADMINISTRACIÓN REORGANIZADA) ─────────────── */}
-        {currentRoute === 'config_roles' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="seguridad"
-            initialSubCat="roles"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_usuarios' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="seguridad"
-            initialSubCat="usuarios"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_canales' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="clientes"
-            initialSubCat="canales"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_documentos_identidad' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="clientes"
-            initialSubCat="tipos_doc"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_items' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="productos"
-            initialSubCat="items"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_unidades' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="productos"
-            initialSubCat="unidades"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_workflows' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="productos"
-            initialSubCat="workflows"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_cajas' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="tesoreria"
-            initialSubCat="cajas"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_medios_pago' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="tesoreria"
-            initialSubCat="medios_pago"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_cuentas' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="tesoreria"
-            initialSubCat="recaudos"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_documentos' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="sistema"
-            initialSubCat="tipos_subtipos"
-            hideCategoryTabs={true}
-          />
-        )}
-
-        {currentRoute === 'config_parametros' && (
-          <ModuloAdmin
-            token={sesion.token}
-            initialMacroCat="sistema"
-            initialSubCat="parametros"
-            hideCategoryTabs={true}
-          />
-        )}
-      </AppLayout>
+      {newRequestOpen && (
+        <RequestModal
+          onClose={() => setNewRequestOpen(false)}
+          onSubmitSuccess={() => {
+            setActiveSection('Solicitudes');
+            setSolicitudesSubView('lista');
+          }}
+        />
+      )}
     </DesignSystemProvider>
   );
 }

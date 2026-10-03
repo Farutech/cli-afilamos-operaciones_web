@@ -102,7 +102,7 @@ export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
           <Select
             label="Tipo de Documento *"
             value={uuidTipoDoc}
-            onChange={(e) => setUuidTipoDoc(e.target.value)}
+            onChange={(val: any) => setUuidTipoDoc(typeof val === 'string' ? val : val?.target?.value || '')}
             options={tiposDoc.map((td) => ({
               value: td.uuid,
               label: `${td.codigo} - ${td.nombre}`,
