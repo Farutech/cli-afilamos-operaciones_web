@@ -17,7 +17,10 @@ import type {
   CrearUsuarioDto,
   CuentaBancariaConfigDto,
   WorkflowDefinicionAdminDto,
+  WorkflowEtapaAdminDto,
   CrearWorkflowBorradorDto,
+  ActualizarWorkflowDto,
+  CrearEtapaDto,
 } from '../../types/admin';
 import type {
   ItemCatalogo,
@@ -514,8 +517,32 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
   const [workflows, setWorkflows] = useState<WorkflowDefinicionAdminDto[]>([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   const [workflowSeleccionado, setWorkflowSeleccionado] = useState<WorkflowDefinicionAdminDto | null>(null);
+  const [loadingDetalleWf, setLoadingDetalleWf] = useState(false);
   const [mostrarModalNuevoWf, setMostrarModalNuevoWf] = useState(false);
   const [nuevoWf, setNuevoWf] = useState<CrearWorkflowBorradorDto>({ codigo: '', nombre: '', descripcion: '' });
+
+  // Estados interactivos para Workflow Avanzado (tipo Jira / DevOps)
+  const [editandoInfoWf, setEditandoInfoWf] = useState(false);
+  const [formEditarWf, setFormEditarWf] = useState<ActualizarWorkflowDto>({ nombre: '', descripcion: '', activo: true });
+  const [pestañaWf, setPestañaWf] = useState<'etapas' | 'servicios'>('etapas');
+
+  // Modal y formulario para Agregar / Editar Etapa
+  const [mostrarModalPaso, setMostrarModalPaso] = useState(false);
+  const [pasoEditando, setPasoEditando] = useState<WorkflowEtapaAdminDto | null>(null);
+  const [formPaso, setFormPaso] = useState<CrearEtapaDto>({
+    codigo: '',
+    nombre: '',
+    orden: 1,
+    rolRequerido: 'TALLER',
+    tiempoEstimadoMinutos: 30,
+    descripcion: '',
+    esFinal: false,
+  });
+  const [guardandoPaso, setGuardandoPaso] = useState(false);
+
+  // Vinculación de servicios
+  const [servicioParaVincular, setServicioParaVincular] = useState<string>('');
+  const [guardandoServicioWf, setGuardandoServicioWf] = useState(false);
 
   // --- CAJA & TESORERÍA ---
   const [cajas, setCajas] = useState<Caja[]>([]);
@@ -1068,6 +1095,41 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
   };
 
   // --- Workflows ---
+  // --- Workflows (Gestión Integral tipo Jira / Azure DevOps) ---
+  const handleCargarDetalleWorkflow = async (uuid: string) => {
+    setLoadingDetalleWf(true);
+    try {
+      const wf = await adminApi.getWorkflowById(uuid, token);
+      setWorkflowSeleccionado(wf);
+      setFormEditarWf({
+        nombre: wf.nombre,
+        descripcion: wf.descripcion,
+        activo: wf.activo,
+      });
+      setWorkflows((prev) => prev.map((w) => (w.uuid === uuid ? wf : w)));
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al obtener detalle del workflow');
+    } finally {
+      setLoadingDetalleWf(false);
+    }
+  };
+
+  const handleSeleccionarWorkflow = (wf: WorkflowDefinicionAdminDto) => {
+    setWorkflowSeleccionado(wf);
+    setFormEditarWf({
+      nombre: wf.nombre,
+      descripcion: wf.descripcion,
+      activo: wf.activo,
+    });
+    setEditandoInfoWf(false);
+    setPestañaWf('etapas');
+    setMostrarModalDetalleWf(true);
+    handleCargarDetalleWorkflow(wf.uuid);
+    if (items.length === 0) {
+      catalogosApi.getItems().then((res) => setItems(res.items || [])).catch(() => {});
+    }
+  };
+
   const handleCrearWorkflowBorrador = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -1077,19 +1139,201 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
       setMostrarModalNuevoWf(false);
       setNuevoWf({ codigo: '', nombre: '', descripcion: '' });
       cargarSubCatalogo('workflows');
+      handleSeleccionarWorkflow(creado);
     } catch (err: unknown) {
       setErrorMsg((err as Error).message || 'Error al crear workflow borrador');
+    }
+  };
+
+  const handleGuardarInfoWorkflow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workflowSeleccionado) return;
+    setErrorMsg(null);
+    try {
+      const actualizado = await adminApi.actualizarWorkflow(workflowSeleccionado.uuid, formEditarWf, token);
+      setWorkflowSeleccionado(actualizado);
+      setEditandoInfoWf(false);
+      setSuccessMsg(`Workflow '${actualizado.codigo}' actualizado exitosamente.`);
+      setWorkflows((prev) => prev.map((w) => (w.uuid === actualizado.uuid ? actualizado : w)));
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al actualizar workflow');
     }
   };
 
   const handlePublicarWorkflow = async (wf: WorkflowDefinicionAdminDto) => {
     if (!window.confirm(`¿Publicar y activar versión ${wf.versionNumero} de ${wf.codigo}?`)) return;
     try {
-      await adminApi.publicarWorkflow(wf.uuid, token);
+      const actualizado = await adminApi.publicarWorkflow(wf.uuid, token);
       setSuccessMsg(`Workflow ${wf.codigo} publicado.`);
+      if (workflowSeleccionado?.uuid === wf.uuid) {
+        setWorkflowSeleccionado(actualizado);
+      }
       cargarSubCatalogo('workflows');
     } catch (err: unknown) {
       setErrorMsg((err as Error).message || 'Error al publicar workflow');
+    }
+  };
+
+  const handleRetirarWorkflow = async (wf: WorkflowDefinicionAdminDto) => {
+    if (!window.confirm(`¿Retirar y pausar el workflow ${wf.codigo}?`)) return;
+    try {
+      const actualizado = await adminApi.retirarWorkflow(wf.uuid, token);
+      setSuccessMsg(`Workflow ${wf.codigo} retirado.`);
+      if (workflowSeleccionado?.uuid === wf.uuid) {
+        setWorkflowSeleccionado(actualizado);
+      }
+      cargarSubCatalogo('workflows');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al retirar workflow');
+    }
+  };
+
+  const handleEliminarWorkflow = async (wf: WorkflowDefinicionAdminDto) => {
+    if (!window.confirm(`¿Desea eliminar o desactivar definitivamente el workflow '${wf.codigo}'?`)) return;
+    try {
+      await adminApi.eliminarWorkflow(wf.uuid, token);
+      setSuccessMsg(`Workflow '${wf.codigo}' procesado.`);
+      setMostrarModalDetalleWf(false);
+      setWorkflowSeleccionado(null);
+      cargarSubCatalogo('workflows');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al eliminar workflow');
+    }
+  };
+
+  // Etapas / Pasos
+  const handleAbrirCrearPaso = () => {
+    if (!workflowSeleccionado) return;
+    const ordenSiguiente = (workflowSeleccionado.etapas?.length || 0) + 1;
+    setPasoEditando(null);
+    setFormPaso({
+      codigo: `PASO_${ordenSiguiente}`,
+      nombre: '',
+      orden: ordenSiguiente,
+      rolRequerido: 'TALLER',
+      tiempoEstimadoMinutos: 30,
+      descripcion: '',
+      esFinal: false,
+    });
+    setMostrarModalPaso(true);
+  };
+
+  const handleAbrirEditarPaso = (etapa: WorkflowEtapaAdminDto) => {
+    setPasoEditando(etapa);
+    setFormPaso({
+      codigo: etapa.codigo,
+      nombre: etapa.nombre,
+      orden: etapa.orden,
+      rolRequerido: etapa.rolRequerido || 'TALLER',
+      tiempoEstimadoMinutos: etapa.tiempoEstimadoMinutos || 30,
+      descripcion: etapa.descripcion || '',
+      esFinal: etapa.esFinal,
+    });
+    setMostrarModalPaso(true);
+  };
+
+  const handleGuardarPaso = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workflowSeleccionado) return;
+    setErrorMsg(null);
+    setGuardandoPaso(true);
+    try {
+      let wfActualizado: WorkflowDefinicionAdminDto;
+      if (pasoEditando) {
+        wfActualizado = await adminApi.actualizarEtapa(workflowSeleccionado.uuid, pasoEditando.uuid, {
+          nombre: formPaso.nombre,
+          codigo: formPaso.codigo,
+          orden: formPaso.orden,
+          rolRequerido: formPaso.rolRequerido,
+          tiempoEstimadoMinutos: Number(formPaso.tiempoEstimadoMinutos || 0),
+          descripcion: formPaso.descripcion,
+          activo: true,
+        }, token);
+        setSuccessMsg(`Etapa '${formPaso.nombre}' actualizada exitosamente.`);
+      } else {
+        wfActualizado = await adminApi.agregarEtapa(workflowSeleccionado.uuid, {
+          codigo: formPaso.codigo,
+          nombre: formPaso.nombre,
+          orden: formPaso.orden,
+          rolRequerido: formPaso.rolRequerido,
+          tiempoEstimadoMinutos: Number(formPaso.tiempoEstimadoMinutos || 0),
+          descripcion: formPaso.descripcion,
+          esFinal: formPaso.esFinal,
+        }, token);
+        setSuccessMsg(`Etapa '${formPaso.nombre}' añadida exitosamente.`);
+      }
+      setWorkflowSeleccionado(wfActualizado);
+      setWorkflows((prev) => prev.map((w) => (w.uuid === wfActualizado.uuid ? wfActualizado : w)));
+      setMostrarModalPaso(false);
+      setPasoEditando(null);
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al guardar etapa del workflow');
+    } finally {
+      setGuardandoPaso(false);
+    }
+  };
+
+  const handleEliminarPaso = async (etapa: WorkflowEtapaAdminDto) => {
+    if (!workflowSeleccionado) return;
+    if (!window.confirm(`¿Eliminar la etapa '${etapa.nombre}' (${etapa.codigo})?`)) return;
+    try {
+      const wfActualizado = await adminApi.eliminarEtapa(workflowSeleccionado.uuid, etapa.uuid, token);
+      setWorkflowSeleccionado(wfActualizado);
+      setWorkflows((prev) => prev.map((w) => (w.uuid === wfActualizado.uuid ? wfActualizado : w)));
+      setSuccessMsg(`Etapa '${etapa.nombre}' eliminada del workflow.`);
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al eliminar etapa');
+    }
+  };
+
+  const handleMoverPaso = async (indiceActual: number, direccion: 'arriba' | 'abajo') => {
+    if (!workflowSeleccionado || !workflowSeleccionado.etapas) return;
+    const etapasCopy = [...workflowSeleccionado.etapas];
+    const indiceNuevo = direccion === 'arriba' ? indiceActual - 1 : indiceActual + 1;
+    if (indiceNuevo < 0 || indiceNuevo >= etapasCopy.length) return;
+
+    const temp = etapasCopy[indiceActual];
+    etapasCopy[indiceActual] = etapasCopy[indiceNuevo];
+    etapasCopy[indiceNuevo] = temp;
+
+    const stepIds = etapasCopy.map((s) => s.uuid);
+    try {
+      const wfActualizado = await adminApi.reordenarEtapas(workflowSeleccionado.uuid, { stepIds }, token);
+      setWorkflowSeleccionado(wfActualizado);
+      setWorkflows((prev) => prev.map((w) => (w.uuid === wfActualizado.uuid ? wfActualizado : w)));
+      setSuccessMsg('Secuencia de etapas reordenada exitosamente.');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al reordenar etapas');
+    }
+  };
+
+  // Servicios Vinculados
+  const handleVincularServicio = async () => {
+    if (!workflowSeleccionado || !servicioParaVincular) return;
+    setGuardandoServicioWf(true);
+    try {
+      await adminApi.asignarServicioWorkflow(workflowSeleccionado.uuid, servicioParaVincular, token);
+      setSuccessMsg('Servicio vinculado al workflow exitosamente.');
+      setServicioParaVincular('');
+      await handleCargarDetalleWorkflow(workflowSeleccionado.uuid);
+      cargarSubCatalogo('workflows');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al vincular servicio');
+    } finally {
+      setGuardandoServicioWf(false);
+    }
+  };
+
+  const handleDesvincularServicio = async (itemId: string, itemNombre: string) => {
+    if (!workflowSeleccionado) return;
+    if (!window.confirm(`¿Desvincular el servicio '${itemNombre}' de este workflow?`)) return;
+    try {
+      await adminApi.desasignarServicioWorkflow(workflowSeleccionado.uuid, itemId, token);
+      setSuccessMsg(`Servicio '${itemNombre}' desvinculado.`);
+      await handleCargarDetalleWorkflow(workflowSeleccionado.uuid);
+      cargarSubCatalogo('workflows');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al desvincular servicio');
     }
   };
 
@@ -2226,12 +2470,10 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => {
-                        setWorkflowSeleccionado(wf);
-                        setMostrarModalDetalleWf(true);
-                      }}
+                      disabled={loadingDetalleWf}
+                      onClick={() => handleCargarDetalleWorkflow(wf.uuid)}
                     >
-                      👁️ Ver Detalle &amp; Etapas
+                      ⚙️ Configurar Flujo &amp; Etapas
                     </Button>
                     {!wf.esVigente && wf.activo && (
                       <Button
@@ -2257,61 +2499,95 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             className="border border-white/10 rounded-xl overflow-hidden shadow-xl"
           />
 
+          {loadingDetalleWf && (
+            <div className="text-center py-4 text-sm text-slate-400">
+              Cargando detalle y etapas del workflow...
+            </div>
+          )}
+
           {/* Pipeline Visual de Etapas del Workflow Seleccionado */}
-          {workflowSeleccionado && (
+          {!loadingDetalleWf && workflowSeleccionado && (
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
                 <div className="flex items-center gap-2.5">
                   <span className="text-xl">🔄</span>
                   <div>
                     <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      Pipeline de Etapas: {workflowSeleccionado.nombre}
+                      Pipeline Técnico: {workflowSeleccionado.nombre}
                       <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-blue-300 font-mono font-bold">
                         v{workflowSeleccionado.versionNumero}
                       </span>
                       <Badge variant={workflowSeleccionado.esVigente ? 'success' : 'warning'}>
                         {workflowSeleccionado.esVigente ? 'PUBLICADO' : 'BORRADOR'}
                       </Badge>
+                      <span className="text-xs text-slate-400 font-mono">
+                        ({workflowSeleccionado.serviciosVinculados?.length ?? workflowSeleccionado.serviciosVinculadosCount ?? 0} servicios vinculados)
+                      </span>
                     </h4>
                     <p className="text-xs text-slate-400 mt-0.5">{workflowSeleccionado.descripcion}</p>
                   </div>
                 </div>
-                {!workflowSeleccionado.esVigente && workflowSeleccionado.activo && (
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     size="sm"
-                    onClick={() => handlePublicarWorkflow(workflowSeleccionado)}
+                    onClick={() => handleSeleccionarWorkflow(workflowSeleccionado)}
                   >
-                    🚀 Publicar Versión
+                    🛠️ Gestionar Etapas &amp; Roles
                   </Button>
-                )}
+                  {!workflowSeleccionado.esVigente && workflowSeleccionado.activo && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handlePublicarWorkflow(workflowSeleccionado)}
+                    >
+                      🚀 Publicar Versión
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div>
                 <h5 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  Secuencia Técnica de Etapas ({workflowSeleccionado.etapas.length})
+                  Secuencia Técnica de Etapas y Roles Responsables ({workflowSeleccionado.etapas.length})
                 </h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {workflowSeleccionado.etapas.map((et, idx) => (
                     <div
                       key={et.uuid}
-                      className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800/80 flex items-center justify-between shadow-sm hover:border-slate-700 transition-all"
+                      onClick={() => handleSeleccionarWorkflow(workflowSeleccionado)}
+                      className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800/80 flex flex-col justify-between gap-2 shadow-sm hover:border-blue-500/50 cursor-pointer transition-all group"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="w-7 h-7 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs flex items-center justify-center font-bold">
-                          {idx + 1}
-                        </span>
-                        <div>
-                          <div className="text-sm font-semibold text-white">{et.nombre}</div>
-                          <div className="text-xs font-mono text-slate-400">{et.codigo}</div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-7 h-7 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-300 text-xs flex items-center justify-center font-bold">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <div className="text-sm font-semibold text-white group-hover:text-blue-300 transition-colors">
+                              {et.nombre}
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-400">{et.codigo}</div>
+                          </div>
                         </div>
-                      </div>
-                      <div>
                         {et.esFinal ? (
                           <Badge variant="success">🏁 Final</Badge>
                         ) : (
-                          <span className="text-xs text-slate-500 font-mono">Paso {idx + 1} ➜</span>
+                          <span className="text-[11px] text-slate-500 font-mono">Paso {idx + 1} ➜</span>
                         )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-900">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-indigo-300 border border-slate-700">
+                          {et.rolRequerido === 'SUPERVISOR' && '⭐ Supervisor'}
+                          {et.rolRequerido === 'CALIDAD' && '🔬 Calidad'}
+                          {et.rolRequerido === 'OPERARIO' && '⚙️ Operario'}
+                          {et.rolRequerido === 'ADMIN' && '🛡️ Admin'}
+                          {(!et.rolRequerido || et.rolRequerido === 'TALLER') && '🛠️ Taller'}
+                        </span>
+                        <span className="text-slate-400 font-mono text-[11px]">
+                          ⏱️ {et.tiempoEstimadoMinutos || 30} min
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -3915,83 +4191,464 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         </form>
       </Modal>
 
-      {/* Modal 16: Detalle Visual de Workflow */}
+      {/* Modal 16: Detalle y Gestión Avanzada de Workflow (tipo Jira / DevOps / Trello) */}
       <Modal
         isOpen={mostrarModalDetalleWf && !!workflowSeleccionado}
-        onClose={() => setMostrarModalDetalleWf(false)}
-        title={`Flujo Técnico: ${workflowSeleccionado?.nombre ?? ''}`}
+        onClose={() => {
+          setMostrarModalDetalleWf(false);
+          setEditandoInfoWf(false);
+        }}
+        title={`Flujo Técnico: ${workflowSeleccionado?.codigo ?? ''} - ${workflowSeleccionado?.nombre ?? ''}`}
         size="lg"
       >
         {workflowSeleccionado && (
           <div className="p-4 space-y-5">
-            <div className="flex justify-between items-start bg-gray-900/70 p-4 rounded-xl border border-white/10">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-white text-base">{workflowSeleccionado.codigo}</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-blue-300 font-mono font-bold">
-                    v{workflowSeleccionado.versionNumero}
-                  </span>
-                  <Badge variant={workflowSeleccionado.esVigente ? 'success' : 'warning'}>
-                    {workflowSeleccionado.esVigente ? 'PUBLICADO' : 'BORRADOR'}
-                  </Badge>
+            {/* Cabecera del Workflow */}
+            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-bold text-white text-lg">{workflowSeleccionado.codigo}</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-blue-300 font-mono font-bold border border-white/10">
+                      v{workflowSeleccionado.versionNumero}
+                    </span>
+                    <Badge variant={workflowSeleccionado.esVigente ? 'success' : workflowSeleccionado.activo ? 'warning' : 'neutral'}>
+                      {workflowSeleccionado.esVigente ? 'PUBLICADO' : workflowSeleccionado.activo ? 'BORRADOR' : 'RETIRADO'}
+                    </Badge>
+                    <span className="text-xs px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 font-mono border border-slate-700">
+                      📦 {workflowSeleccionado.serviciosVinculados?.length ?? workflowSeleccionado.serviciosVinculadosCount ?? 0} servicios asociados
+                    </span>
+                  </div>
+                  {!editandoInfoWf && (
+                    <div className="mt-1">
+                      <p className="text-sm font-semibold text-white">{workflowSeleccionado.nombre}</p>
+                      <p className="text-xs text-gray-300 mt-0.5">{workflowSeleccionado.descripcion || 'Sin descripción técnica adicional.'}</p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-gray-300 mt-1">{workflowSeleccionado.descripcion}</p>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setEditandoInfoWf(!editandoInfoWf)}
+                  >
+                    {editandoInfoWf ? '✕ Cancelar Edición' : '✏️ Editar Info'}
+                  </Button>
+
+                  {!workflowSeleccionado.esVigente && workflowSeleccionado.activo && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handlePublicarWorkflow(workflowSeleccionado)}
+                    >
+                      🚀 Publicar
+                    </Button>
+                  )}
+
+                  {workflowSeleccionado.esVigente && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleRetirarWorkflow(workflowSeleccionado)}
+                    >
+                      ⏸️ Retirar
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleEliminarWorkflow(workflowSeleccionado)}
+                  >
+                    🗑️
+                  </Button>
+                </div>
               </div>
 
-              {!workflowSeleccionado.esVigente && workflowSeleccionado.activo && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    handlePublicarWorkflow(workflowSeleccionado);
-                    setMostrarModalDetalleWf(false);
-                  }}
-                >
-                  🚀 Publicar Versión
-                </Button>
+              {/* Formulario de edición rápida de información general */}
+              {editandoInfoWf && (
+                <form onSubmit={handleGuardarInfoWorkflow} className="pt-3 border-t border-white/10 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input
+                      label="Nombre del Workflow"
+                      required
+                      value={formEditarWf.nombre ?? ''}
+                      onChange={(e) => setFormEditarWf({ ...formEditarWf, nombre: e.target.value })}
+                      fullWidth
+                    />
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">Descripción Técnica</label>
+                      <input
+                        type="text"
+                        value={formEditarWf.descripcion ?? ''}
+                        onChange={(e) => setFormEditarWf({ ...formEditarWf, descripcion: e.target.value })}
+                        className="w-full bg-gray-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        placeholder="Descripción del flujo técnico..."
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formEditarWf.activo ?? true}
+                        onChange={(e) => setFormEditarWf({ ...formEditarWf, activo: e.target.checked })}
+                        className="w-4 h-4 rounded text-blue-600 bg-gray-800 border-white/20 accent-blue-500"
+                      />
+                      <span>Workflow activo y disponible</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <Button variant="secondary" size="sm" type="button" onClick={() => setEditandoInfoWf(false)}>
+                        Cancelar
+                      </Button>
+                      <Button variant="primary" size="sm" type="submit">
+                        Guardar Cambios
+                      </Button>
+                    </div>
+                  </div>
+                </form>
               )}
             </div>
 
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
-                Secuencia Lineal de Etapas y Transiciones ({workflowSeleccionado.etapas.length})
-              </h4>
-              <div className="space-y-3">
-                {workflowSeleccionado.etapas.map((et, idx) => (
-                  <div
-                    key={et.uuid}
-                    className="p-3.5 bg-gray-900/60 rounded-xl border border-white/10 flex items-center justify-between shadow-sm hover:border-white/20 transition-all"
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <span className="w-7 h-7 rounded-full bg-blue-600/30 border border-blue-500 text-blue-300 text-xs flex items-center justify-center font-bold">
-                        {idx + 1}
-                      </span>
-                      <div>
-                        <div className="text-sm font-semibold text-white">{et.nombre}</div>
-                        <div className="text-xs font-mono text-gray-400">{et.codigo}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {et.esFinal ? (
-                        <Badge variant="success">🏁 Etapa Final (Lista para Despacho)</Badge>
-                      ) : (
-                        <span className="text-xs text-gray-400 font-mono flex items-center gap-1">
-                          Paso {idx + 1} de {workflowSeleccionado.etapas.length} ➜
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {/* Pestañas de Navegación del Modal */}
+            <div className="flex border-b border-white/10 gap-2">
+              <button
+                type="button"
+                onClick={() => setPestañaWf('etapas')}
+                className={`pb-2 px-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center gap-2 ${
+                  pestañaWf === 'etapas'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                <span>🛠️ Secuencia de Etapas &amp; Roles</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-gray-800 text-[10px] font-mono">
+                  {workflowSeleccionado.etapas?.length || 0}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPestañaWf('servicios')}
+                className={`pb-2 px-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center gap-2 ${
+                  pestañaWf === 'servicios'
+                    ? 'border-blue-500 text-blue-400'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                <span>📦 Servicios del Catálogo Vinculados</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-gray-800 text-[10px] font-mono">
+                  {workflowSeleccionado.serviciosVinculados?.length ?? workflowSeleccionado.serviciosVinculadosCount ?? 0}
+                </span>
+              </button>
             </div>
 
+            {/* Pestaña 1: Etapas y Roles Técnicos */}
+            {pestañaWf === 'etapas' && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-gray-400">
+                    Define la secuencia de etapas, roles autorizados para avanzar y tiempos SLA estimados.
+                  </p>
+                  <Button variant="primary" size="sm" onClick={handleAbrirCrearPaso}>
+                    + Agregar Etapa / Paso
+                  </Button>
+                </div>
+
+                {workflowSeleccionado.etapas?.length === 0 ? (
+                  <div className="p-8 text-center bg-gray-900/40 rounded-xl border border-dashed border-white/10">
+                    <p className="text-sm text-gray-400">Este workflow no tiene etapas configuradas.</p>
+                    <Button variant="secondary" size="sm" className="mt-3" onClick={handleAbrirCrearPaso}>
+                      + Crear Primer Paso
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
+                    {workflowSeleccionado.etapas.map((et, idx) => {
+                      const esPrimero = idx === 0;
+                      const esUltimo = idx === workflowSeleccionado.etapas.length - 1;
+
+                      return (
+                        <div
+                          key={et.uuid}
+                          className="p-3.5 bg-gray-900/70 rounded-xl border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-white/20 transition-all"
+                        >
+                          <div className="flex items-start gap-3">
+                            <span className="w-7 h-7 rounded-full bg-blue-600/30 border border-blue-500 text-blue-300 text-xs flex items-center justify-center font-bold shrink-0 mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-semibold text-white">{et.nombre}</span>
+                                <span className="text-xs font-mono px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-white/5">
+                                  {et.codigo}
+                                </span>
+                                {esUltimo ? (
+                                  <Badge variant="success">🏁 Final (Despacho)</Badge>
+                                ) : (
+                                  <span className="text-xs text-gray-400 font-mono">Paso {idx + 1} ➜</span>
+                                )}
+                              </div>
+                              {et.descripcion && (
+                                <p className="text-xs text-gray-400 mt-1">{et.descripcion}</p>
+                              )}
+                              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-indigo-300 border border-slate-700">
+                                  {et.rolRequerido === 'SUPERVISOR' && '⭐ Supervisor Técnico'}
+                                  {et.rolRequerido === 'CALIDAD' && '🔬 Control de Calidad'}
+                                  {et.rolRequerido === 'OPERARIO' && '⚙️ Operario de Taller'}
+                                  {et.rolRequerido === 'ADMIN' && '🛡️ Administrador'}
+                                  {(!et.rolRequerido || et.rolRequerido === 'TALLER') && '🛠️ Taller General'}
+                                </span>
+                                <span className="text-slate-400 font-mono text-[11px]">
+                                  ⏱️ SLA Estimado: {et.tiempoEstimadoMinutos || 30} min
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                            <button
+                              type="button"
+                              disabled={esPrimero}
+                              onClick={() => handleMoverPaso(idx, 'arriba')}
+                              title="Mover etapa hacia arriba"
+                              className={`p-1.5 rounded-lg border text-xs ${
+                                esPrimero
+                                  ? 'border-transparent text-gray-600 cursor-not-allowed'
+                                  : 'border-white/10 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+                              }`}
+                            >
+                              ⬆️
+                            </button>
+                            <button
+                              type="button"
+                              disabled={esUltimo}
+                              onClick={() => handleMoverPaso(idx, 'abajo')}
+                              title="Mover etapa hacia abajo"
+                              className={`p-1.5 rounded-lg border text-xs ${
+                                esUltimo
+                                  ? 'border-transparent text-gray-600 cursor-not-allowed'
+                                  : 'border-white/10 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white'
+                              }`}
+                            >
+                              ⬇️
+                            </button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleAbrirEditarPaso(et)}
+                              title="Editar etapa"
+                            >
+                              ✏️
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleEliminarPaso(et)}
+                              title="Eliminar etapa"
+                            >
+                              🗑️
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pestaña 2: Servicios Vinculados */}
+            {pestañaWf === 'servicios' && (
+              <div className="space-y-4">
+                <div className="p-3 bg-blue-950/40 border border-blue-800/40 rounded-xl text-xs text-blue-200">
+                  ℹ️ Cualquier solicitud de servicio que incluya uno de estos ítems ingresará al taller bajo este flujo de trabajo y seguirá sus etapas y roles configurados.
+                </div>
+
+                {/* Formulario de vinculación rápida */}
+                <div className="p-3.5 bg-gray-900/60 rounded-xl border border-white/10 flex flex-col sm:flex-row items-center gap-3">
+                  <div className="flex-1 w-full">
+                    <Select
+                      label="Seleccionar Servicio del Catálogo"
+                      value={servicioParaVincular}
+                      onChange={(e) => setServicioParaVincular(e.target.value)}
+                      options={[
+                        { label: '-- Selecciona un servicio para asociar --', value: '' },
+                        ...items
+                          .filter((it) => it.naturaleza === 'SERVICIO')
+                          .filter((it) => !(workflowSeleccionado.serviciosVinculados || []).some((sv) => sv.id === it.uuid))
+                          .map((it) => ({
+                            label: `${it.codigoReferencia} - ${it.nombre} ($${Number(it.precioBase || 0).toLocaleString()})`,
+                            value: it.uuid,
+                          })),
+                      ]}
+                      fullWidth
+                    />
+                  </div>
+                  <div className="sm:self-end w-full sm:w-auto">
+                    <Button
+                      variant="primary"
+                      disabled={!servicioParaVincular || guardandoServicioWf}
+                      onClick={handleVincularServicio}
+                    >
+                      {guardandoServicioWf ? 'Vinculando...' : '+ Vincular Servicio'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Lista de servicios vinculados */}
+                <div className="space-y-2">
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                    Servicios Asignados a este Flujo ({workflowSeleccionado.serviciosVinculados?.length || 0})
+                  </h5>
+                  {(!workflowSeleccionado.serviciosVinculados || workflowSeleccionado.serviciosVinculados.length === 0) ? (
+                    <div className="p-6 text-center bg-gray-900/30 rounded-xl border border-white/5 text-xs text-gray-400">
+                      No hay ítems de servicio asociados a este workflow actualmente.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+                      {workflowSeleccionado.serviciosVinculados.map((sv) => (
+                        <div
+                          key={sv.id}
+                          className="p-3 bg-gray-900/60 rounded-xl border border-white/10 flex items-center justify-between gap-3 hover:border-white/20 transition-all"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">⚙️</span>
+                            <div>
+                              <div className="text-sm font-semibold text-white flex items-center gap-2">
+                                <span>{sv.name}</span>
+                                <span className="text-xs font-mono px-2 py-0.5 rounded bg-gray-800 text-blue-300 border border-white/5">
+                                  {sv.code}
+                                </span>
+                              </div>
+                              {sv.description && (
+                                <p className="text-xs text-gray-400 mt-0.5">{sv.description}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {sv.basePrice !== undefined && (
+                              <span className="text-xs font-mono font-bold text-emerald-400">
+                                ${Number(sv.basePrice).toLocaleString()}
+                              </span>
+                            )}
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDesvincularServicio(sv.id, sv.name)}
+                              title="Desasociar servicio del flujo"
+                            >
+                              ✕ Desvincular
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end pt-3 border-t border-white/10">
-              <Button variant="secondary" onClick={() => setMostrarModalDetalleWf(false)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setMostrarModalDetalleWf(false);
+                  setEditandoInfoWf(false);
+                }}
+              >
                 Cerrar Detalle
               </Button>
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal 16.1: Crear / Editar Etapa Técnica de Workflow (Jira / DevOps style) */}
+      <Modal
+        isOpen={mostrarModalPaso}
+        onClose={() => setMostrarModalPaso(false)}
+        title={pasoEditando ? `✏️ Editar Etapa: ${pasoEditando.nombre}` : '➕ Nueva Etapa Técnica de Workflow'}
+        size="md"
+      >
+        <form onSubmit={handleGuardarPaso} className="p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Código de la Etapa"
+              required
+              placeholder="Ej: DIAGNOSTICO"
+              value={formPaso.codigo}
+              onChange={(e) => setFormPaso({ ...formPaso, codigo: e.target.value.toUpperCase() })}
+              fullWidth
+            />
+            <Input
+              label="Orden Secuencial"
+              type="number"
+              min="1"
+              required
+              value={String(formPaso.orden || 1)}
+              onChange={(e) => setFormPaso({ ...formPaso, orden: parseInt(e.target.value) || 1 })}
+              fullWidth
+            />
+          </div>
+
+          <Input
+            label="Nombre Descriptivo de la Etapa"
+            required
+            placeholder="Ej: Afilado de Dientes y Calibración"
+            value={formPaso.nombre}
+            onChange={(e) => setFormPaso({ ...formPaso, nombre: e.target.value })}
+            fullWidth
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Rol Responsable (Autorizado)"
+              value={formPaso.rolRequerido || 'TALLER'}
+              onChange={(e) => setFormPaso({ ...formPaso, rolRequerido: e.target.value })}
+              options={[
+                { label: '🛠️ Personal de Taller General (TALLER)', value: 'TALLER' },
+                { label: '⚙️ Operario Técnico Especialista (OPERARIO)', value: 'OPERARIO' },
+                { label: '⭐ Supervisor Técnico / VoBo (SUPERVISOR)', value: 'SUPERVISOR' },
+                { label: '🔬 Inspector de Control de Calidad (CALIDAD)', value: 'CALIDAD' },
+                { label: '🛡️ Administrador de Planta (ADMIN)', value: 'ADMIN' },
+              ]}
+              fullWidth
+            />
+
+            <Input
+              label="SLA Estimado (Minutos)"
+              type="number"
+              min="1"
+              placeholder="Ej: 30"
+              value={String(formPaso.tiempoEstimadoMinutos || 30)}
+              onChange={(e) => setFormPaso({ ...formPaso, tiempoEstimadoMinutos: parseInt(e.target.value) || 30 })}
+              fullWidth
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 uppercase mb-1">
+              Instrucciones / Procedimiento Técnico
+            </label>
+            <textarea
+              placeholder="Describe los criterios de aceptación, pruebas técnicas o herramientas a utilizar en esta fase..."
+              value={formPaso.descripcion || ''}
+              onChange={(e) => setFormPaso({ ...formPaso, descripcion: e.target.value })}
+              className="w-full bg-gray-800 border border-white/10 rounded-xl px-3 py-2 text-sm text-white h-24 resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          <div className="pt-3 flex justify-end gap-2 border-t border-white/10">
+            <Button variant="secondary" type="button" onClick={() => setMostrarModalPaso(false)}>
+              Cancelar
+            </Button>
+            <Button variant="primary" type="submit" disabled={guardandoPaso}>
+              {guardandoPaso ? 'Guardando...' : pasoEditando ? 'Actualizar Etapa' : 'Crear Etapa'}
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       {/* Modal Unificado de Subtipos: Datos + Saltar Consecutivo + Eliminación Física/Lógica */}

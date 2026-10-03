@@ -46,22 +46,39 @@ export interface WorkflowTransicionAdminDto {
 
 export interface WorkflowEtapaAdminDto {
   uuid: string;
+  id?: string;
   codigo: string;
   nombre: string;
   orden: number;
+  step?: number;
+  descripcion?: string;
+  rolRequerido?: string;
+  tiempoEstimadoMinutos?: number;
   permiteCancelacionDirecta: boolean;
   esFinal: boolean;
-  transicionesSalientes: WorkflowTransicionAdminDto[];
+  activo?: boolean;
+  transicionesSalientes?: WorkflowTransicionAdminDto[];
+}
+
+export interface WorkflowServicioItemDto {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  basePrice?: number;
 }
 
 export interface WorkflowDefinicionAdminDto {
   uuid: string;
+  id?: string;
   codigo: string;
   nombre: string;
   descripcion?: string;
   versionNumero: number;
   esVigente: boolean;
   activo: boolean;
+  serviciosVinculadosCount?: number;
+  serviciosVinculados?: WorkflowServicioItemDto[];
   creadoEn: string;
   etapas: WorkflowEtapaAdminDto[];
 }
@@ -70,14 +87,39 @@ export interface CrearWorkflowBorradorDto {
   codigo: string;
   nombre: string;
   descripcion?: string;
+  etapas?: CrearEtapaDto[];
+}
+
+export interface ActualizarWorkflowDto {
+  nombre?: string;
+  descripcion?: string;
+  activo?: boolean;
 }
 
 export interface CrearEtapaDto {
   codigo: string;
   nombre: string;
-  orden: number;
-  permiteCancelacionDirecta: boolean;
-  esFinal: boolean;
+  orden?: number;
+  descripcion?: string;
+  rolRequerido?: string;
+  tiempoEstimadoMinutos?: number;
+  permiteCancelacionDirecta?: boolean;
+  esFinal?: boolean;
+}
+
+export interface ActualizarEtapaDto {
+  codigo?: string;
+  nombre?: string;
+  orden?: number;
+  descripcion?: string;
+  rolRequerido?: string;
+  tiempoEstimadoMinutos?: number;
+  activo?: boolean;
+}
+
+export interface ReordenarEtapasDto {
+  etapaIds?: string[];
+  stepIds?: string[];
 }
 
 export interface CrearTransicionDto {
