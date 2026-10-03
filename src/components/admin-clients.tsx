@@ -5,13 +5,18 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
+  Eye,
   Pencil,
   Power,
   Search,
   Users,
-  X,
+  Mail,
+  Phone,
+  FileText,
+  Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Modal, Button, Badge } from '@farutech/design-system';
 import { ordeonRequest } from '@/lib/api-client';
 
 export type Customer = {
@@ -22,6 +27,7 @@ export type Customer = {
   email?: string | null;
   isActive?: boolean;
   ordersCount?: number;
+  createdAt?: string | null;
 };
 
 type ApiList<T> =
@@ -45,11 +51,11 @@ const listTotal = <T,>(body: ApiList<T>, fallback: number): number =>
     : body?.totalCount ?? body?.total ?? fallback;
 
 const FALLBACK_CUSTOMERS: Customer[] = [
-  { id: '1', code: 'CLI-001', name: 'María Fernanda López', email: 'maria.lopez@empresa.com', phone: '+52 55 2180 4421', ordersCount: 8, isActive: true },
-  { id: '2', code: 'CLI-002', name: 'Restaurante La Casona', email: 'contacto@lacasona.com', phone: '+52 55 2104 8830', ordersCount: 14, isActive: true },
-  { id: '3', code: 'CLI-003', name: 'Carlos Ramírez', email: 'carlos.ramirez@email.com', phone: '+52 55 3380 1142', ordersCount: 3, isActive: true },
-  { id: '4', code: 'CLI-004', name: 'Hotel Casa Real', email: 'compras@casareal.com', phone: '+52 55 4401 0092', ordersCount: 21, isActive: true },
-  { id: '5', code: 'CLI-005', name: 'Comercializadora Norte', email: 'admin@comnorte.com', phone: '+52 81 2201 9088', ordersCount: 6, isActive: false },
+  { id: '1', code: 'CLI-001', name: 'María Fernanda López', email: 'maria.lopez@empresa.com', phone: '+52 55 2180 4421', ordersCount: 8, isActive: true, createdAt: '2026-01-15' },
+  { id: '2', code: 'CLI-002', name: 'Restaurante La Casona', email: 'contacto@lacasona.com', phone: '+52 55 2104 8830', ordersCount: 14, isActive: true, createdAt: '2026-01-20' },
+  { id: '3', code: 'CLI-003', name: 'Carlos Ramírez', email: 'carlos.ramirez@email.com', phone: '+52 55 3380 1142', ordersCount: 3, isActive: true, createdAt: '2026-02-04' },
+  { id: '4', code: 'CLI-004', name: 'Hotel Casa Real', email: 'compras@casareal.com', phone: '+52 55 4401 0092', ordersCount: 21, isActive: true, createdAt: '2026-02-12' },
+  { id: '5', code: 'CLI-005', name: 'Comercializadora Norte', email: 'admin@comnorte.com', phone: '+52 81 2201 9088', ordersCount: 6, isActive: false, createdAt: '2026-02-28' },
 ];
 
 function FloatingField({
@@ -86,6 +92,7 @@ export default function AdminClients({ token }: { token: string }) {
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(FALLBACK_CUSTOMERS.length);
   const [modal, setModal] = useState<Customer | 'new' | null>(null);
+  const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -112,14 +119,12 @@ export default function AdminClients({ token }: { token: string }) {
         setCustomers(items);
         setTotalItems(listTotal(result, items.length));
       } else {
-        // If empty from API, check query or keep
         setCustomers([]);
         setTotalItems(0);
       }
     } catch (cause) {
       const message =
         cause instanceof Error ? cause.message : 'No fue posible cargar clientes.';
-      // Fallback gracefully to demo customers if API fails
       setError(message);
       setNotice('Mostrando directorio local de clientes.');
       toast.error('Aviso de conexión con clientes', { description: message });
@@ -177,6 +182,7 @@ export default function AdminClients({ token }: { token: string }) {
           email: body.email,
           isActive: true,
           ordersCount: 0,
+          createdAt: new Date().toISOString().split('T')[0],
         };
         setCustomers((prev) => [newClient, ...prev]);
         setTotalItems((prev) => prev + 1);
@@ -217,7 +223,6 @@ export default function AdminClients({ token }: { token: string }) {
       });
       await loadCustomers();
     } catch {
-      // Optimistic update
       setCustomers((prev) =>
         prev.map((c) => (c.id === customer.id ? { ...c, isActive: newStatus } : c))
       );
@@ -243,6 +248,7 @@ export default function AdminClients({ token }: { token: string }) {
 
   return (
     <div className="page-content">
+      {/* Encabezado Estándar Ordeon */}
       <div className="page-heading">
         <div>
           <p className="eyebrow">ADMINISTRACIÓN · CLIENTES</p>
@@ -256,6 +262,7 @@ export default function AdminClients({ token }: { token: string }) {
         </button>
       </div>
 
+      {/* Panel Principal */}
       <section className="panel clients-panel">
         <div className="panel-heading">
           <div>
@@ -288,6 +295,7 @@ export default function AdminClients({ token }: { token: string }) {
           </p>
         )}
 
+        {/* Encabezado de Columnas Básicas y Necesarias */}
         <div className="client-table-head">
           <span>CLIENTE</span>
           <span>CONTACTO</span>
@@ -326,6 +334,16 @@ export default function AdminClients({ token }: { token: string }) {
                   {customer.isActive === false ? 'Inactivo' : 'Activo'}
                 </span>
                 <div className="client-actions">
+                  {/* Opción "Ver": Abre modal de detalle completo */}
+                  <button
+                    className="icon-action"
+                    onClick={() => setViewCustomer(customer)}
+                    aria-label={`Ver detalle de ${customer.name}`}
+                    title="Ver detalle completo"
+                  >
+                    <Eye className="w-4 h-4 text-violet-400" />
+                  </button>
+                  {/* Opción "Editar": Abre modal de edición */}
                   <button
                     className="icon-action"
                     onClick={() => setModal(customer)}
@@ -334,6 +352,7 @@ export default function AdminClients({ token }: { token: string }) {
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
+                  {/* Opción "Activar / Desactivar" */}
                   <button
                     className="icon-action"
                     onClick={() => void toggleStatus(customer)}
@@ -348,6 +367,7 @@ export default function AdminClients({ token }: { token: string }) {
           </div>
         )}
 
+        {/* Paginación Estándar */}
         <div className="pagination-bar">
           <label className="pagination-size">
             Por página
@@ -414,75 +434,149 @@ export default function AdminClients({ token }: { token: string }) {
         </div>
       </section>
 
-      {modal && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => event.target === event.currentTarget && setModal(null)}
-        >
-          <div
-            className="request-modal client-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="customer-modal-title"
-          >
-            <div className="modal-header">
-              <div>
-                <p className="eyebrow">CLIENTES</p>
-                <h2 id="customer-modal-title">
-                  {modal === 'new' ? 'Nuevo cliente' : 'Editar cliente'}
-                </h2>
+      {/* Modal 1: VER DETALLE COMPLETO (Usando Modal del Design System) */}
+      <Modal
+        isOpen={!!viewCustomer}
+        onClose={() => setViewCustomer(null)}
+        title="Ficha del Cliente"
+        size="lg"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setViewCustomer(null)}
+            >
+              Cerrar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                const target = viewCustomer;
+                setViewCustomer(null);
+                setModal(target);
+              }}
+            >
+              <Pencil className="w-4 h-4 mr-2" /> Editar cliente
+            </Button>
+          </>
+        }
+      >
+        {viewCustomer && (
+          <div className="modal-view-container">
+            {/* Tarjeta de Identificación */}
+            <div className="modal-view-card">
+              <div className="modal-view-avatar">
+                {(viewCustomer.name || viewCustomer.code || '?')
+                  .split(' ')
+                  .map((p) => p[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase()}
               </div>
-              <button
-                className="modal-close"
-                onClick={() => setModal(null)}
-                aria-label="Cerrar"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="modal-view-header-info">
+                <h4>{viewCustomer.name || 'Sin nombre asignado'}</h4>
+                <span>Código: {viewCustomer.code || 'SIN CÓDIGO'}</span>
+              </div>
+              <Badge variant={viewCustomer.isActive === false ? 'warning' : 'success'}>
+                {viewCustomer.isActive === false ? 'Inactivo' : 'Activo'}
+              </Badge>
             </div>
-            <form onSubmit={saveCustomer}>
-              <div className="client-modal-grid">
-                <FloatingField
-                  label="Código o documento"
-                  name="code"
-                  defaultValue={modal === 'new' ? '' : modal.code || ''}
-                  required
-                />
-                <FloatingField
-                  label="Nombre completo"
-                  name="name"
-                  defaultValue={modal === 'new' ? '' : modal.name || ''}
-                  required
-                />
-                <FloatingField
-                  label="Teléfono"
-                  name="phone"
-                  defaultValue={modal === 'new' ? '' : modal.phone || ''}
-                />
-                <FloatingField
-                  label="Correo electrónico"
-                  name="email"
-                  type="email"
-                  defaultValue={modal === 'new' ? '' : modal.email || ''}
-                />
+
+            {/* Grid de Atributos */}
+            <div className="modal-view-grid">
+              <div className="modal-view-item">
+                <span className="item-label">
+                  <Phone className="w-3 h-3 mr-1 inline text-violet-400" /> Teléfono
+                </span>
+                <span className="item-value">{viewCustomer.phone || 'No registrado'}</span>
               </div>
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => setModal(null)}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="primary-button" disabled={saving}>
-                  {saving ? 'Guardando…' : 'Guardar cliente'}
-                </button>
+
+              <div className="modal-view-item">
+                <span className="item-label">
+                  <Mail className="w-3 h-3 mr-1 inline text-violet-400" /> Correo Electrónico
+                </span>
+                <span className="item-value">{viewCustomer.email || 'No registrado'}</span>
               </div>
-            </form>
+
+              <div className="modal-view-item">
+                <span className="item-label">
+                  <FileText className="w-3 h-3 mr-1 inline text-violet-400" /> Órdenes Realizadas
+                </span>
+                <span className="item-value">{viewCustomer.ordersCount ?? 0} órdenes registradas</span>
+              </div>
+
+              <div className="modal-view-item">
+                <span className="item-label">
+                  <Calendar className="w-3 h-3 mr-1 inline text-violet-400" /> Fecha de Registro
+                </span>
+                <span className="item-value">{viewCustomer.createdAt || 'Registrado en sistema'}</span>
+              </div>
+
+              <div className="modal-view-item full-width">
+                <span className="item-label">Identificador Único (ID)</span>
+                <span className="item-value font-mono text-xs text-slate-400">{viewCustomer.id}</span>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
+
+      {/* Modal 2: NUEVO / EDITAR CLIENTE (Usando Modal del Design System) */}
+      <Modal
+        isOpen={!!modal}
+        onClose={() => setModal(null)}
+        title={modal === 'new' ? 'Nuevo cliente' : 'Editar cliente'}
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setModal(null)}
+              disabled={saving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form="customer-edit-form"
+              disabled={saving}
+            >
+              {saving ? 'Guardando…' : 'Guardar cliente'}
+            </Button>
+          </>
+        }
+      >
+        {modal && (
+          <form id="customer-edit-form" onSubmit={saveCustomer}>
+            <div className="client-modal-grid">
+              <FloatingField
+                label="Código o documento"
+                name="code"
+                defaultValue={modal === 'new' ? '' : modal.code || ''}
+                required
+              />
+              <FloatingField
+                label="Nombre completo"
+                name="name"
+                defaultValue={modal === 'new' ? '' : modal.name || ''}
+                required
+              />
+              <FloatingField
+                label="Teléfono"
+                name="phone"
+                defaultValue={modal === 'new' ? '' : modal.phone || ''}
+              />
+              <FloatingField
+                label="Correo electrónico"
+                name="email"
+                type="email"
+                defaultValue={modal === 'new' ? '' : modal.email || ''}
+              />
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

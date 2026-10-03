@@ -72,7 +72,7 @@ export const navigationGroups: { label: string; items: NavItem[] }[] = [
       {
         label: 'Auditoría',
         icon: ShieldCheck,
-        children: ['Registro de actividad', 'Aprobaciones pendientes'],
+        children: ['Registro de actividad', 'Aprobaciones pendientes', 'Usuarios'],
       },
     ],
   },

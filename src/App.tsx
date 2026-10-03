@@ -8,6 +8,16 @@ import { LoginScreen } from '@/features/auth/LoginScreen';
 import { AppShell } from '@/components/layout/AppShell';
 import { OrdeonDashboard } from '@/features/dashboard/OrdeonDashboard';
 import AdminClients from '@/components/admin-clients';
+import AdminServices from '@/components/admin/AdminServices';
+import AdminProducts from '@/components/admin/AdminProducts';
+import AdminPrices from '@/components/admin/AdminPrices';
+import AdminUnitsCategories from '@/components/admin/AdminUnitsCategories';
+import AdminTaxDiscount from '@/components/admin/AdminTaxDiscount';
+import AdminSegments from '@/components/admin/AdminSegments';
+import AdminCreditLimits from '@/components/admin/AdminCreditLimits';
+import AdminAuditLogs from '@/components/admin/AdminAuditLogs';
+import AdminApprovals from '@/components/admin/AdminApprovals';
+import AdminUsers from '@/components/admin/AdminUsers';
 import { SectionPage } from '@/components/pages/SectionPage';
 import { RequestModal } from '@/components/modals/RequestModal';
 
@@ -20,7 +30,6 @@ import { TableroKanbanTaller } from '@/features/taller/TableroKanbanTaller';
 import { ModuloEntregas } from '@/features/entregas/ModuloEntregas';
 import { ModuloCaja } from '@/features/caja/ModuloCaja';
 import { ModuloReportes } from '@/features/reportes/ModuloReportes';
-import { ModuloAdmin } from '@/features/admin/ModuloAdmin';
 import { SolicitudCapturaMixta } from '@/features/solicitudes/SolicitudCapturaMixta';
 import { HistorialSolicitudesView } from '@/features/solicitudes/HistorialSolicitudesView';
 
@@ -186,6 +195,37 @@ export function App() {
     );
   } else if (activeSection === 'Clientes' || activeSection === 'Directorio') {
     content = <AdminClients token={session.token || ''} />;
+  } else if (activeSection === 'Segmentos') {
+    content = <AdminSegments token={session.token} />;
+  } else if (activeSection === 'Crédito y límites') {
+    content = <AdminCreditLimits token={session.token} />;
+  } else if (activeSection === 'Historial de solicitudes') {
+    content = (
+      <div className="page-content">
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">ADMINISTRACIÓN · CLIENTES</p>
+            <h1>Historial de Solicitudes</h1>
+            <p className="heading-copy">Consulta cronológica de pedidos y solicitudes emitidas por clientes.</p>
+          </div>
+          <button
+            className="primary-button"
+            onClick={() => {
+              setActiveSection('Solicitudes');
+              setSolicitudesSubView('nueva');
+            }}
+          >
+            + Nueva Solicitud
+          </button>
+        </div>
+        <HistorialSolicitudesView
+          onNuevaSolicitud={() => {
+            setActiveSection('Solicitudes');
+            setSolicitudesSubView('nueva');
+          }}
+        />
+      </div>
+    );
   } else if (activeSection === 'Solicitudes') {
     content = (
       <div className="page-content">
@@ -295,39 +335,17 @@ export function App() {
         <ModuloCaja userRole={session.role} token={session.token} />
       </div>
     );
-  } else if (
-    activeSection === 'Catálogos' ||
-    activeSection === 'Servicios' ||
-    activeSection === 'Productos y materiales' ||
-    activeSection === 'Precios' ||
-    activeSection === 'Unidades y categorías' ||
-    activeSection === 'Impuestos y descuentos'
-  ) {
-    const subCatMap: Record<string, string> = {
-      Servicios: 'items',
-      'Productos y materiales': 'items',
-      Precios: 'items',
-      'Unidades y categorías': 'unidades',
-      'Impuestos y descuentos': 'parametros',
-    };
-    content = (
-      <div className="page-content">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">ADMINISTRACIÓN · CATÁLOGOS</p>
-            <h1>Catálogos de Operación</h1>
-            <p className="heading-copy">Configuración de ítems, servicios, tarifas y parámetros maestros.</p>
-          </div>
-        </div>
-        <ModuloAdmin
-          token={session.token}
-          initialMacroCat="productos"
-          initialSubCat={(subCatMap[activeSection] || 'items') as any}
-          hideCategoryTabs={false}
-        />
-      </div>
-    );
-  } else if (activeSection === 'Reportes' || activeSection.startsWith('Operación') || activeSection.startsWith('Ventas')) {
+  } else if (activeSection === 'Catálogos' || activeSection === 'Servicios') {
+    content = <AdminServices token={session.token} />;
+  } else if (activeSection === 'Productos y materiales') {
+    content = <AdminProducts token={session.token} />;
+  } else if (activeSection === 'Precios') {
+    content = <AdminPrices token={session.token} />;
+  } else if (activeSection === 'Unidades y categorías') {
+    content = <AdminUnitsCategories token={session.token} />;
+  } else if (activeSection === 'Impuestos y descuentos') {
+    content = <AdminTaxDiscount token={session.token} />;
+  } else if (activeSection === 'Reportes' || activeSection.startsWith('Operación') || activeSection.startsWith('Ventas') || activeSection.startsWith('Inventario') || activeSection === 'Clientes') {
     content = (
       <div className="page-content">
         <div className="page-heading">
@@ -340,24 +358,12 @@ export function App() {
         <ModuloReportes token={session.token} />
       </div>
     );
-  } else if (activeSection === 'Auditoría' || activeSection === 'Registro de actividad' || activeSection === 'Aprobaciones pendientes') {
-    content = (
-      <div className="page-content">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">ADMINISTRACIÓN · SEGURIDAD</p>
-            <h1>Auditoría y Permisos</h1>
-            <p className="heading-copy">Bitácora de seguridad, trazabilidad de operaciones y autorizaciones.</p>
-          </div>
-        </div>
-        <ModuloAdmin
-          token={session.token}
-          initialMacroCat="seguridad"
-          initialSubCat="roles"
-          hideCategoryTabs={false}
-        />
-      </div>
-    );
+  } else if (activeSection === 'Auditoría' || activeSection === 'Registro de actividad') {
+    content = <AdminAuditLogs token={session.token} />;
+  } else if (activeSection === 'Aprobaciones pendientes') {
+    content = <AdminApprovals token={session.token} />;
+  } else if (activeSection === 'Usuarios') {
+    content = <AdminUsers token={session.token} />;
   }
 
   return (
