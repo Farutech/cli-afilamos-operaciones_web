@@ -1,10 +1,6 @@
 import type { FormEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
   Eye,
   Pencil,
   Power,
@@ -16,7 +12,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { ItemCatalogo } from '@/types/catalogos';
 
@@ -250,68 +246,28 @@ export default function AdminServices({ token }: { token?: string }) {
           </div>
         )}
 
-        {/* Barra de Paginación Estándar */}
-        <div className="pagination-bar">
-          <label className="pagination-size">
-            Por página
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              aria-label="Cantidad de servicios por página"
-            >
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-          </label>
-          <span className="pagination-summary">
-            Página {page} de {totalPages} · {pageSize} elementos por página
-          </span>
-          <div className="pagination-controls" aria-label="Paginación de servicios">
-            <button
-              className="pagination-icon"
-              disabled={page === 1}
-              onClick={() => setPage(1)}
-              aria-label="Primera página"
-            >
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button
-              className="pagination-icon"
-              disabled={page === 1}
-              onClick={() => setPage((c) => c - 1)}
-              aria-label="Página anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              className="pagination-icon"
-              disabled={page === totalPages}
-              onClick={() => setPage((c) => c + 1)}
-              aria-label="Página siguiente"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button
-              className="pagination-icon"
-              disabled={page === totalPages}
-              onClick={() => setPage(totalPages)}
-              aria-label="Última página"
-            >
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={totalItems}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          variant="dark"
+        />
       </section>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal
         isOpen={!!viewService}
         onClose={() => setViewService(null)}
-        title="Detalle del Servicio"
+        title="Ficha del Servicio"
+        subtitle="Tarifas técnicas, alcances y especificaciones de mecanizado"
+        icon={<Wrench className="w-5 h-5 text-violet-400" />}
         size="lg"
         footer={
           <>
@@ -393,14 +349,36 @@ export default function AdminServices({ token }: { token?: string }) {
         isOpen={!!modal}
         onClose={() => setModal(null)}
         title={modal === 'new' ? 'Nuevo Servicio' : 'Editar Servicio'}
+        subtitle={
+          modal === 'new'
+            ? 'Defina las tarifas y especificaciones para el catálogo operativo'
+            : 'Modifique los parámetros técnicos y comerciales del servicio'
+        }
+        icon={<Wrench className="w-5 h-5 text-violet-400" />}
         size="md"
+        extraActions={
+          modal && modal !== 'new' ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const target = modal;
+                setModal(null);
+                void toggleStatus(target);
+              }}
+              disabled={saving}
+            >
+              <Power className="w-4 h-4 mr-2" />
+              {modal.activo ? 'Desactivar servicio' : 'Activar servicio'}
+            </Button>
+          ) : undefined
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setModal(null)} disabled={saving}>
               Cancelar
             </Button>
             <Button variant="primary" type="submit" form="service-form" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar servicio'}
+              {saving ? 'Guardando…' : modal === 'new' ? 'Crear servicio' : 'Guardar servicio'}
             </Button>
           </>
         }
@@ -408,46 +386,38 @@ export default function AdminServices({ token }: { token?: string }) {
         {modal && (
           <form id="service-form" onSubmit={saveService}>
             <div className="client-modal-grid">
-              <label className="floating-field">
-                <input
-                  name="codigoReferencia"
-                  defaultValue={modal === 'new' ? '' : modal.codigoReferencia}
-                  placeholder=" "
-                  required
-                />
-                <span>Código de referencia (ej: SRV-010)</span>
-              </label>
+              <FloatingInput
+                name="codigoReferencia"
+                label="Código de referencia (ej: SRV-010)"
+                defaultValue={modal === 'new' ? '' : modal.codigoReferencia}
+                tooltip="Identificador alfanumérico único para el servicio en el sistema."
+                required
+              />
 
-              <label className="floating-field">
-                <input
-                  name="nombre"
-                  defaultValue={modal === 'new' ? '' : modal.nombre}
-                  placeholder=" "
-                  required
-                />
-                <span>Nombre del servicio</span>
-              </label>
+              <FloatingInput
+                name="nombre"
+                label="Nombre del servicio"
+                defaultValue={modal === 'new' ? '' : modal.nombre}
+                tooltip="Nombre comercial o técnico del proceso de afilado o mecanizado."
+                required
+              />
 
-              <label className="floating-field">
-                <input
-                  name="precioBase"
-                  type="number"
-                  min="0"
-                  defaultValue={modal === 'new' ? '' : modal.precioBase}
-                  placeholder=" "
-                  required
-                />
-                <span>Precio base (COP)</span>
-              </label>
+              <FloatingInput
+                name="precioBase"
+                type="number"
+                min="0"
+                label="Precio base (COP)"
+                defaultValue={modal === 'new' ? '' : modal.precioBase}
+                tooltip="Tarifa base estándar antes de descuentos o listas de precio."
+                required
+              />
 
-              <label className="floating-field">
-                <input
-                  name="descripcion"
-                  defaultValue={modal === 'new' ? '' : modal.descripcion || ''}
-                  placeholder=" "
-                />
-                <span>Descripción o especificación</span>
-              </label>
+              <FloatingInput
+                name="descripcion"
+                label="Descripción o especificación"
+                defaultValue={modal === 'new' ? '' : modal.descripcion || ''}
+                tooltip="Detalles sobre tolerancias técnicas, materiales aplicables o alcance."
+              />
             </div>
           </form>
         )}

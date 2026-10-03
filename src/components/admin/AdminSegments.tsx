@@ -1,10 +1,6 @@
 import type { FormEvent } from 'react';
 import { useMemo, useState } from 'react';
 import {
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
   Eye,
   Pencil,
   Power,
@@ -15,7 +11,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
 
 export interface CustomerSegment {
   id: string;
@@ -190,46 +186,28 @@ export default function AdminSegments({ token: _token }: { token?: string }) {
           </div>
         )}
 
-        <div className="pagination-bar">
-          <label className="pagination-size">
-            Por página
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              aria-label="Cantidad por página"
-            >
-              <option value="10">10</option>
-              <option value="25">25</option>
-            </select>
-          </label>
-          <span className="pagination-summary">
-            Página {page} de {totalPages} · {pageSize} elementos por página
-          </span>
-          <div className="pagination-controls" aria-label="Paginación de segmentos">
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage(1)}>
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage((c) => c - 1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage((c) => c + 1)}>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage(totalPages)}>
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={segments.length}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          variant="dark"
+        />
       </section>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal
         isOpen={!!viewSegment}
         onClose={() => setViewSegment(null)}
-        title="Detalle del Segmento Comercial"
+        title="Ficha del Segmento Comercial"
+        subtitle="Criterios comerciales, porcentaje de descuento y plazos de crédito"
+        icon={<Users2 className="w-5 h-5 text-violet-400" />}
         size="lg"
         footer={
           <>
@@ -309,14 +287,36 @@ export default function AdminSegments({ token: _token }: { token?: string }) {
         isOpen={!!modal}
         onClose={() => setModal(null)}
         title={modal === 'new' ? 'Nuevo Segmento Comercial' : 'Editar Segmento Comercial'}
+        subtitle={
+          modal === 'new'
+            ? 'Defina las condiciones de descuento y plazo para un grupo de clientes'
+            : 'Modifique las reglas y parámetros de facturación para este segmento'
+        }
+        icon={<Users2 className="w-5 h-5 text-violet-400" />}
         size="md"
+        extraActions={
+          modal && modal !== 'new' ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const target = modal;
+                setModal(null);
+                toggleStatus(target);
+              }}
+              disabled={saving}
+            >
+              <Power className="w-4 h-4 mr-2" />
+              {modal.activo ? 'Desactivar segmento' : 'Activar segmento'}
+            </Button>
+          ) : undefined
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setModal(null)} disabled={saving}>
               Cancelar
             </Button>
             <Button variant="primary" type="submit" form="segment-form" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar segmento'}
+              {saving ? 'Guardando…' : modal === 'new' ? 'Crear segmento' : 'Guardar segmento'}
             </Button>
           </>
         }
@@ -324,60 +324,52 @@ export default function AdminSegments({ token: _token }: { token?: string }) {
         {modal && (
           <form id="segment-form" onSubmit={saveSegment}>
             <div className="client-modal-grid">
-              <label className="floating-field">
-                <input
-                  name="codigo"
-                  defaultValue={modal === 'new' ? '' : modal.codigo}
-                  placeholder=" "
-                  required
-                />
-                <span>Código de segmento (ej: SEG-IND)</span>
-              </label>
+              <FloatingInput
+                name="codigo"
+                label="Código de segmento (ej: SEG-IND)"
+                defaultValue={modal === 'new' ? '' : modal.codigo}
+                tooltip="Identificador alfanumérico para asociar clientes a este grupo."
+                required
+              />
 
-              <label className="floating-field">
-                <input
-                  name="nombre"
-                  defaultValue={modal === 'new' ? '' : modal.nombre}
-                  placeholder=" "
-                  required
-                />
-                <span>Nombre del segmento</span>
-              </label>
+              <FloatingInput
+                name="nombre"
+                label="Nombre del segmento"
+                defaultValue={modal === 'new' ? '' : modal.nombre}
+                tooltip="Nombre comercial o categoría del segmento de clientes."
+                required
+              />
 
-              <label className="floating-field">
-                <input
-                  name="descuentoPorcentaje"
-                  type="number"
-                  min="0"
-                  max="100"
-                  defaultValue={modal === 'new' ? 0 : modal.descuentoPorcentaje}
-                  placeholder=" "
-                  required
-                />
-                <span>Descuento autorizado (%)</span>
-              </label>
+              <FloatingInput
+                name="descuentoPorcentaje"
+                type="number"
+                min="0"
+                max="100"
+                label="Descuento autorizado (%)"
+                defaultValue={modal === 'new' ? 0 : modal.descuentoPorcentaje}
+                tooltip="Porcentaje automático de rebaja sobre los precios de catálogo."
+                required
+              />
 
-              <label className="floating-field">
-                <input
-                  name="plazoDias"
-                  type="number"
-                  min="0"
-                  max="180"
-                  defaultValue={modal === 'new' ? 0 : modal.plazoDias}
-                  placeholder=" "
-                  required
-                />
-                <span>Días de plazo de crédito</span>
-              </label>
+              <FloatingInput
+                name="plazoDias"
+                type="number"
+                min="0"
+                max="180"
+                label="Días de plazo de crédito"
+                defaultValue={modal === 'new' ? 0 : modal.plazoDias}
+                tooltip="Días calendario permitidos para el pago antes de bloqueo."
+                required
+              />
 
-              <label className="floating-field" style={{ gridColumn: '1 / -1' }}>
-                <input
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FloatingInput
                   name="descripcion"
+                  label="Descripción y criterios comerciales"
                   defaultValue={modal === 'new' ? '' : modal.descripcion}
-                  placeholder=" "
+                  tooltip="Detalle de condiciones y perfil de clientes asignables."
                 />
-                <span>Descripción y criterios comerciales</span>
-              </label>
+              </div>
             </div>
           </form>
         )}

@@ -10,7 +10,7 @@ import {
   FolderTree,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { UnidadPresentacion, CategoriaItem } from '@/types/catalogos';
 
@@ -37,6 +37,8 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
   const [activeTab, setActiveTab] = useState<'TODOS' | 'UNIDADES' | 'CATEGORIAS'>('TODOS');
   const [items, setItems] = useState<UnitOrCatItem[]>(FALLBACK_ITEMS);
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [modal, setModal] = useState<UnitOrCatItem | 'new' | null>(null);
   const [viewItem, setViewItem] = useState<UnitOrCatItem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -152,6 +154,11 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
     });
   }, [items, activeTab, query]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = useMemo(() => {
+    return filtered.slice((page - 1) * pageSize, page * pageSize);
+  }, [filtered, page, pageSize]);
+
   return (
     <div className="page-content">
       <div className="page-heading">
@@ -218,7 +225,7 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
           <div className="empty-state">No hay registros que coincidan con el filtro.</div>
         ) : (
           <div className="client-list">
-            {filtered.map((item) => (
+            {visible.map((item) => (
               <div className="client-row" key={item.id}>
                 <div className="client-avatar">
                   {item.tipo === 'UNIDAD' ? <Ruler className="w-4 h-4" /> : <FolderTree className="w-4 h-4" />}
@@ -266,13 +273,29 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
             ))}
           </div>
         )}
+
+        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={filtered.length}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          variant="dark"
+        />
       </section>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal
         isOpen={!!viewItem}
         onClose={() => setViewItem(null)}
-        title="Detalle del Registro"
+        title="Ficha del Registro"
+        subtitle="Información técnica de clasificación, presentación y jerarquía"
+        icon={<Layers className="w-5 h-5 text-violet-400" />}
         size="md"
         footer={
           <>
@@ -332,14 +355,36 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
         isOpen={!!modal}
         onClose={() => setModal(null)}
         title={modal === 'new' ? 'Nuevo Registro' : 'Editar Registro'}
+        subtitle={
+          modal === 'new'
+            ? 'Defina una unidad de medida o categoría para la clasificación de catálogo'
+            : 'Modifique la codificación y etiquetas de presentación'
+        }
+        icon={<Layers className="w-5 h-5 text-violet-400" />}
         size="md"
+        extraActions={
+          modal && modal !== 'new' ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const target = modal;
+                setModal(null);
+                void toggleStatus(target);
+              }}
+              disabled={saving}
+            >
+              <Power className="w-4 h-4 mr-2" />
+              {modal.activo ? 'Desactivar registro' : 'Activar registro'}
+            </Button>
+          ) : undefined
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setModal(null)} disabled={saving}>
               Cancelar
             </Button>
             <Button variant="primary" type="submit" form="unit-cat-form" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar'}
+              {saving ? 'Guardando…' : modal === 'new' ? 'Crear registro' : 'Guardar cambios'}
             </Button>
           </>
         }
@@ -359,34 +404,32 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
                 </select>
               </div>
 
-              <label className="floating-field">
-                <input
-                  name="codigo"
-                  defaultValue={modal === 'new' ? '' : modal.codigo}
-                  placeholder=" "
-                  required
-                />
-                <span>Código (ej: UND, CAT-MADERA)</span>
-              </label>
+              <FloatingInput
+                name="codigo"
+                label="Código (ej: UND, CAT-MADERA)"
+                defaultValue={modal === 'new' ? '' : modal.codigo}
+                tooltip="Identificador alfanumérico único para la entidad."
+                required
+              />
 
-              <label className="floating-field" style={{ gridColumn: '1 / -1' }}>
-                <input
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FloatingInput
                   name="nombre"
+                  label="Nombre descriptivo"
                   defaultValue={modal === 'new' ? '' : modal.nombre}
-                  placeholder=" "
+                  tooltip="Nombre comercial visible al seleccionar o filtrar catálogo."
                   required
                 />
-                <span>Nombre descriptivo</span>
-              </label>
+              </div>
 
-              <label className="floating-field" style={{ gridColumn: '1 / -1' }}>
-                <input
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FloatingInput
                   name="detalle"
+                  label="Abreviatura (para unidades) o Descripción"
                   defaultValue={modal === 'new' ? '' : modal.detalle}
-                  placeholder=" "
+                  tooltip="Símbolo corto (ej: UND, MTR, JGO) o nota sobre la categoría."
                 />
-                <span>Abreviatura (para unidades) o Descripción</span>
-              </label>
+              </div>
             </div>
           </form>
         )}

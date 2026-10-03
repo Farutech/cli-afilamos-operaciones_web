@@ -8,7 +8,7 @@ import {
   Percent,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { ParametroSistema } from '@/types/catalogos';
 
@@ -23,6 +23,8 @@ const FALLBACK_PARAMS: ParametroSistema[] = [
 export default function AdminTaxDiscount({ token }: { token?: string }) {
   const [params, setParams] = useState<ParametroSistema[]>(FALLBACK_PARAMS);
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [modal, setModal] = useState<ParametroSistema | null>(null);
   const [viewParam, setViewParam] = useState<ParametroSistema | null>(null);
   const [loading, setLoading] = useState(false);
@@ -71,7 +73,7 @@ export default function AdminTaxDiscount({ token }: { token?: string }) {
     }
   }
 
-  const visible = useMemo(
+  const filtered = useMemo(
     () =>
       params.filter((p) =>
         `${p.clave} ${p.descripcion} ${p.valorJson}`
@@ -80,6 +82,11 @@ export default function AdminTaxDiscount({ token }: { token?: string }) {
       ),
     [params, query]
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = useMemo(() => {
+    return filtered.slice((page - 1) * pageSize, page * pageSize);
+  }, [filtered, page, pageSize]);
 
   return (
     <div className="page-content">
@@ -161,13 +168,29 @@ export default function AdminTaxDiscount({ token }: { token?: string }) {
             ))}
           </div>
         )}
+
+        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={filtered.length}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          variant="dark"
+        />
       </section>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal
         isOpen={!!viewParam}
         onClose={() => setViewParam(null)}
-        title="Detalle del Parámetro"
+        title="Ficha del Parámetro"
+        subtitle="Reglas fiscales y parámetros de liquidación en el sistema"
+        icon={<Percent className="w-5 h-5 text-violet-400" />}
         size="md"
         footer={
           <>
@@ -229,6 +252,8 @@ export default function AdminTaxDiscount({ token }: { token?: string }) {
         isOpen={!!modal}
         onClose={() => setModal(null)}
         title="Modificar Parámetro Operativo"
+        subtitle="Ajuste de umbrales y porcentajes de operación general"
+        icon={<Sliders className="w-5 h-5 text-violet-400" />}
         size="md"
         footer={
           <>
@@ -244,25 +269,25 @@ export default function AdminTaxDiscount({ token }: { token?: string }) {
         {modal && (
           <form id="param-form" onSubmit={saveParam}>
             <div className="client-modal-grid">
-              <label className="floating-field" style={{ gridColumn: '1 / -1' }}>
-                <input
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FloatingInput
                   name="clave"
+                  label="Clave del parámetro (no modificable)"
                   value={modal.clave}
                   disabled
-                  placeholder=" "
+                  tooltip="Identificador constante utilizado por el motor de liquidación."
                 />
-                <span>Clave del parámetro (no modificable)</span>
-              </label>
+              </div>
 
-              <label className="floating-field" style={{ gridColumn: '1 / -1' }}>
-                <input
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FloatingInput
                   name="valor"
+                  label="Nuevo valor configurado"
                   defaultValue={modal.valorJson}
-                  placeholder=" "
+                  tooltip="Modifique el valor numérico o alfanumérico según corresponda."
                   required
                 />
-                <span>Nuevo valor configurado</span>
-              </label>
+              </div>
 
               <div className="modal-form-full">
                 <p className="text-xs text-slate-400 leading-relaxed">

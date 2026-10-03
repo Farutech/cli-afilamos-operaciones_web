@@ -1,10 +1,6 @@
 import type { FormEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
   Eye,
   Pencil,
   Power,
@@ -14,12 +10,23 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle,
+  UserCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import {
+  Modal,
+  Button,
+  Badge,
+  FloatingInput,
+  CrudPagination,
+  LookupInput,
+  type LookupOption,
+} from '@farutech/design-system';
+import { ordeonRequest } from '@/lib/api-client';
 
 export interface CreditPolicyItem {
   id: string;
+  clienteId?: string;
   clienteCodigo: string;
   clienteNombre: string;
   limiteCredito: number;
@@ -29,74 +36,214 @@ export interface CreditPolicyItem {
   activo: boolean;
 }
 
-const FALLBACK_CREDITS: CreditPolicyItem[] = [
-  { id: 'crd-1', clienteCodigo: 'CLI-001', clienteNombre: 'María Fernanda López', limiteCredito: 2500000, saldoUtilizado: 450000, diasPlazo: 15, bloqueadoPorMora: false, activo: true },
-  { id: 'crd-2', clienteCodigo: 'CLI-002', clienteNombre: 'Restaurante La Casona', limiteCredito: 8000000, saldoUtilizado: 3200000, diasPlazo: 30, bloqueadoPorMora: false, activo: true },
-  { id: 'crd-3', clienteCodigo: 'CLI-004', clienteNombre: 'Hotel Casa Real', limiteCredito: 12000000, saldoUtilizado: 11400000, diasPlazo: 45, bloqueadoPorMora: true, activo: true },
-  { id: 'crd-4', clienteCodigo: 'CLI-005', clienteNombre: 'Comercializadora Norte', limiteCredito: 5000000, saldoUtilizado: 0, diasPlazo: 30, bloqueadoPorMora: false, activo: false },
-  { id: 'crd-5', clienteCodigo: 'CLI-006', clienteNombre: 'Maderas y Muebles del Valle', limiteCredito: 4500000, saldoUtilizado: 1800000, diasPlazo: 20, bloqueadoPorMora: false, activo: true },
-];
+interface RawCustomer {
+  id: string;
+  code?: string | null;
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  creditEnabled?: boolean;
+  creditLimit?: number;
+  isActive?: boolean;
+}
 
-export default function AdminCreditLimits({ token: _token }: { token?: string }) {
-  const [credits, setCredits] = useState<CreditPolicyItem[]>(FALLBACK_CREDITS);
+export default function AdminCreditLimits({ token }: { token?: string }) {
+  const [credits, setCredits] = useState<CreditPolicyItem[]>([]);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
   const [modal, setModal] = useState<CreditPolicyItem | 'new' | null>(null);
   const [viewCredit, setViewCredit] = useState<CreditPolicyItem | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const totalPages = Math.max(1, Math.ceil(credits.length / pageSize));
+  // Estado para el Lookup y la Búsqueda Avanzada de Clientes
+  const [selectedClientOption, setSelectedClientOption] = useState<LookupOption | null>(null);
+  const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
+  const [advQuery, setAdvQuery] = useState('');
+  const [advResults, setAdvResults] = useState<RawCustomer[]>([]);
+  const [advLoading, setAdvLoading] = useState(false);
 
-  function saveCredit(event: FormEvent<HTMLFormElement>) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  // Carga inicial y por paginación desde el API de Ordeon
+  async function loadCredits() {
+    setLoading(true);
+    try {
+      if (token) {
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(pageSize),
+        });
+        if (query.trim()) params.set('search', query.trim());
+
+        const res = await ordeonRequest<{ items?: RawCustomer[]; data?: RawCustomer[]; totalCount?: number; total?: number }>(
+          `/api/v1/customers?${params}`,
+          token
+        );
+        const list: RawCustomer[] = Array.isArray(res) ? res : res?.items || res?.data || [];
+        const mapped: CreditPolicyItem[] = list.map((c) => ({
+          id: c.id,
+          clienteId: c.id,
+          clienteCodigo: c.code || 'SIN-COD',
+          clienteNombre: c.name || 'Cliente sin nombre',
+          limiteCredito: Number(c.creditLimit || 0),
+          saldoUtilizado: 0,
+          diasPlazo: 30,
+          bloqueadoPorMora: false,
+          activo: Boolean(c.creditEnabled ?? c.isActive ?? true),
+        }));
+        setCredits(mapped);
+        setTotalItems(res?.totalCount ?? res?.total ?? mapped.length);
+      } else {
+        setCredits([]);
+        setTotalItems(0);
+      }
+    } catch {
+      // Fallback limpio local sin parpadeo de datos ficticios desfasados
+      setCredits([]);
+      setTotalItems(0);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadCredits();
+  }, [page, pageSize, query, token]);
+
+  // Proveedor de autocompletado para LookupInput
+  async function handleSearchCustomer(text: string): Promise<LookupOption[]> {
+    if (!token) return [];
+    try {
+      const res = await ordeonRequest<{ items?: RawCustomer[]; data?: RawCustomer[] }>(
+        `/api/v1/customers?search=${encodeURIComponent(text)}&pageSize=8`,
+        token
+      );
+      const items = Array.isArray(res) ? res : res?.items || res?.data || [];
+      return items.map((c) => ({
+        value: c.id,
+        label: `${c.name || 'Sin nombre'} (${c.code || 'S/C'})`,
+        description: `Tel: ${c.phone || 'S/T'} · Correo: ${c.email || 'S/C'}`,
+        data: c,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  // Búsqueda avanzada de clientes por múltiples criterios
+  async function runAdvancedSearch() {
+    if (!token) return;
+    setAdvLoading(true);
+    try {
+      const res = await ordeonRequest<{ items?: RawCustomer[]; data?: RawCustomer[] }>(
+        `/api/v1/customers?search=${encodeURIComponent(advQuery)}&pageSize=15`,
+        token
+      );
+      const items = Array.isArray(res) ? res : res?.items || res?.data || [];
+      setAdvResults(items);
+    } catch {
+      setAdvResults([]);
+    } finally {
+      setAdvLoading(false);
+    }
+  }
+
+  function handleSelectFromAdvanced(c: RawCustomer) {
+    setSelectedClientOption({
+      value: c.id,
+      label: `${c.name || 'Sin nombre'} (${c.code || 'S/C'})`,
+      description: `Tel: ${c.phone || 'S/T'} · Correo: ${c.email || 'S/C'}`,
+      data: c,
+    });
+    setIsAdvancedSearchOpen(false);
+  }
+
+  // Guardar límite / cupo
+  async function saveCredit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!modal) return;
     setSaving(true);
     const data = new FormData(event.currentTarget);
-    const body = {
-      clienteCodigo: String(data.get('clienteCodigo') || '').trim(),
-      clienteNombre: String(data.get('clienteNombre') || '').trim(),
-      limiteCredito: Number(data.get('limiteCredito') || 0),
-      diasPlazo: Number(data.get('diasPlazo') || 0),
-    };
+    const limiteCredito = Number(data.get('limiteCredito') || 0);
+    const diasPlazo = Number(data.get('diasPlazo') || 30);
 
-    if (modal === 'new') {
-      const newCred: CreditPolicyItem = {
-        id: `crd-${Date.now()}`,
-        ...body,
-        saldoUtilizado: 0,
-        bloqueadoPorMora: false,
-        activo: true,
-      };
-      setCredits((prev) => [newCred, ...prev]);
-      toast.success('Límite de crédito asignado con éxito');
-    } else {
-      setCredits((prev) =>
-        prev.map((c) => (c.id === modal.id ? { ...c, ...body } : c))
-      );
-      toast.success('Condición de crédito actualizada');
+    const clientRaw = selectedClientOption?.data as RawCustomer | undefined;
+    const clienteId = selectedClientOption?.value || (modal !== 'new' ? modal.clienteId : '');
+    const clienteCodigo = clientRaw?.code || (modal !== 'new' ? modal.clienteCodigo : '');
+    const clienteNombre = clientRaw?.name || (modal !== 'new' ? modal.clienteNombre : '');
+
+    try {
+      if (token && clienteId) {
+        await ordeonRequest(`/api/v1/customers/${clienteId}`, token, {
+          method: 'PUT',
+          body: JSON.stringify({
+            creditEnabled: true,
+            creditLimit: limiteCredito,
+          }),
+        });
+      }
+      toast.success(modal === 'new' ? 'Cupo de crédito asignado con éxito' : 'Condición de crédito actualizada');
+      setModal(null);
+      setSelectedClientOption(null);
+      await loadCredits();
+    } catch {
+      // Guardado local optimista
+      if (modal === 'new') {
+        const newCred: CreditPolicyItem = {
+          id: `crd-${Date.now()}`,
+          clienteId,
+          clienteCodigo: clienteCodigo || 'CLI-NEW',
+          clienteNombre: clienteNombre || 'Cliente Asignado',
+          limiteCredito,
+          saldoUtilizado: 0,
+          diasPlazo,
+          bloqueadoPorMora: false,
+          activo: true,
+        };
+        setCredits((prev) => [newCred, ...prev]);
+        setTotalItems((prev) => prev + 1);
+      } else {
+        setCredits((prev) =>
+          prev.map((c) => (c.id === modal.id ? { ...c, limiteCredito, diasPlazo } : c))
+        );
+      }
+      toast.success('Cupo registrado localmente');
+      setModal(null);
+      setSelectedClientOption(null);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setModal(null);
   }
 
-  function toggleCreditStatus(item: CreditPolicyItem) {
+  async function toggleCreditStatus(item: CreditPolicyItem) {
     const nextStatus = !item.activo;
-    setCredits((prev) =>
-      prev.map((c) => (c.id === item.id ? { ...c, activo: nextStatus } : c))
-    );
-    toast.success(nextStatus ? 'Crédito activado para el cliente' : 'Crédito suspendido para el cliente');
+    try {
+      if (token && item.clienteId) {
+        await ordeonRequest(`/api/v1/customers/${item.clienteId}`, token, {
+          method: 'PUT',
+          body: JSON.stringify({
+            creditEnabled: nextStatus,
+          }),
+        });
+      }
+      toast.success(nextStatus ? 'Línea de crédito activada' : 'Línea de crédito suspendida');
+      await loadCredits();
+    } catch {
+      setCredits((prev) =>
+        prev.map((c) => (c.id === item.id ? { ...c, activo: nextStatus } : c))
+      );
+      toast.success('Estado actualizado localmente');
+    }
   }
 
-  const visible = useMemo(
-    () =>
-      credits.filter((c) =>
-        `${c.clienteNombre} ${c.clienteCodigo}`
-          .toLowerCase()
-          .includes(query.toLowerCase())
-      ),
-    [credits, query]
-  );
+  const visible = useMemo(() => {
+    return credits.filter((c) =>
+      `${c.clienteNombre} ${c.clienteCodigo}`.toLowerCase().includes(query.toLowerCase())
+    );
+  }, [credits, query]);
 
   return (
     <div className="page-content">
@@ -105,10 +252,16 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
           <p className="eyebrow">ADMINISTRACIÓN · CLIENTES</p>
           <h1>Crédito y límites comerciales</h1>
           <p className="heading-copy">
-            Políticas de cupo autorizado, exposición de riesgo y días de crédito por cliente.
+            Políticas de cupo autorizado, exposición de riesgo y días de crédito por cliente en Ordeon.
           </p>
         </div>
-        <button className="primary-button" onClick={() => setModal('new')}>
+        <button
+          className="primary-button"
+          onClick={() => {
+            setSelectedClientOption(null);
+            setModal('new');
+          }}
+        >
           <CreditCard className="w-4 h-4 mr-2 inline" /> Asignar cupo
         </button>
       </div>
@@ -126,12 +279,13 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
                 setQuery(e.target.value);
                 setPage(1);
               }}
-              placeholder="Buscar por cliente o código"
+              placeholder="Buscar por cliente o código..."
               aria-label="Buscar límites"
             />
           </div>
         </div>
 
+        {/* Encabezado fijo de columnas */}
         <div className="client-table-head">
           <span>CLIENTE</span>
           <span>CUPO ASIGNADO</span>
@@ -140,12 +294,23 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
           <span>ACCIONES</span>
         </div>
 
-        {visible.length === 0 ? (
-          <div className="empty-state">No hay registros de crédito configurados.</div>
+        {loading && credits.length === 0 ? (
+          <div className="empty-state">
+            <span className="spinner-sm inline-block mr-2" /> Cargando límites de crédito…
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="empty-state">
+            {query.trim()
+              ? 'No hay registros de crédito que coincidan con la búsqueda.'
+              : 'No hay cupos de crédito asignados actualmente.'}
+          </div>
         ) : (
           <div className="client-list">
             {visible.map((item) => {
-              const porcentajeUso = Math.min(100, Math.round((item.saldoUtilizado / (item.limiteCredito || 1)) * 100));
+              const porcentajeUso = Math.min(
+                100,
+                Math.round((item.saldoUtilizado / (item.limiteCredito || 1)) * 100)
+              );
 
               return (
                 <div className="client-row" key={item.id}>
@@ -157,13 +322,13 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
                     <span>{item.clienteCodigo} · {item.diasPlazo} días de plazo</span>
                   </div>
                   <span className="client-contact font-bold text-slate-100">
-                    ${item.limiteCredito.toLocaleString('es-CO')}
+                    ${item.limiteCredito.toLocaleString('es-CO')} COP
                   </span>
                   <span className="client-orders font-bold text-amber-400">
                     ${item.saldoUtilizado.toLocaleString('es-CO')} ({porcentajeUso}%)
                   </span>
                   <span className={`client-status ${item.bloqueadoPorMora || !item.activo ? 'is-pending' : ''}`}>
-                    {!item.activo ? 'Suspendido' : item.bloqueadoPorMora ? 'Bloqueado x Mora' : 'Al día'}
+                    {!item.activo ? 'Suspendido' : item.bloqueadoPorMora ? 'Bloqueado x Mora' : 'Habilitado'}
                   </span>
                   <div className="client-actions">
                     <button
@@ -176,7 +341,14 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
                     </button>
                     <button
                       className="icon-action"
-                      onClick={() => setModal(item)}
+                      onClick={() => {
+                        setSelectedClientOption({
+                          value: item.clienteId || item.id,
+                          label: `${item.clienteNombre} (${item.clienteCodigo})`,
+                          description: `Código: ${item.clienteCodigo}`,
+                        });
+                        setModal(item);
+                      }}
                       aria-label={`Editar límite de ${item.clienteNombre}`}
                       title="Editar cupo"
                     >
@@ -184,7 +356,7 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
                     </button>
                     <button
                       className="icon-action"
-                      onClick={() => toggleCreditStatus(item)}
+                      onClick={() => void toggleCreditStatus(item)}
                       aria-label={`Cambiar estado de crédito de ${item.clienteNombre}`}
                       title="Suspender o activar crédito"
                     >
@@ -197,39 +369,19 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
           </div>
         )}
 
-        <div className="pagination-bar">
-          <label className="pagination-size">
-            Por página
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              aria-label="Cantidad por página"
-            >
-              <option value="10">10</option>
-              <option value="25">25</option>
-            </select>
-          </label>
-          <span className="pagination-summary">
-            Página {page} de {totalPages} · {pageSize} elementos por página
-          </span>
-          <div className="pagination-controls" aria-label="Paginación de créditos">
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage(1)}>
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage((c) => c - 1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage((c) => c + 1)}>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage(totalPages)}>
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={totalItems}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          variant="dark"
+        />
       </section>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
@@ -237,6 +389,8 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
         isOpen={!!viewCredit}
         onClose={() => setViewCredit(null)}
         title="Ficha Financiera y Límites de Crédito"
+        subtitle="Línea de crédito autorizada, exposición de riesgo y política de plazos"
+        icon={<CreditCard className="w-5 h-5 text-violet-400" />}
         size="lg"
         footer={
           <>
@@ -248,7 +402,14 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
               onClick={() => {
                 const target = viewCredit;
                 setViewCredit(null);
-                setModal(target);
+                if (target) {
+                  setSelectedClientOption({
+                    value: target.clienteId || target.id,
+                    label: `${target.clienteNombre} (${target.clienteCodigo})`,
+                    description: `Código: ${target.clienteCodigo}`,
+                  });
+                  setModal(target);
+                }
               }}
             >
               <Pencil className="w-4 h-4 mr-2" /> Ajustar cupo
@@ -267,7 +428,7 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
                 <span>Código: {viewCredit.clienteCodigo}</span>
               </div>
               <Badge variant={!viewCredit.activo ? 'neutral' : viewCredit.bloqueadoPorMora ? 'danger' : 'success'}>
-                {!viewCredit.activo ? 'Crédito Inactivo' : viewCredit.bloqueadoPorMora ? 'Bloqueado por Mora' : 'Línea de Crédito Habilitada'}
+                {!viewCredit.activo ? 'Crédito Suspendido' : viewCredit.bloqueadoPorMora ? 'Bloqueado por Mora' : 'Línea de Crédito Activa'}
               </Badge>
             </div>
 
@@ -309,11 +470,11 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
               </div>
 
               <div className="modal-view-item full-width">
-                <span className="item-label">Evaluación de Riesgo</span>
+                <span className="item-label">Evaluación de Riesgo y Regla de Negocio</span>
                 <span className="item-value">
                   {viewCredit.bloqueadoPorMora
-                    ? 'Requiere autorización de gerencia o pago previo para generar nuevas órdenes de trabajo.'
-                    : 'Cliente calificado con comportamiento de pago regular y cupo activo.'}
+                    ? 'Requiere autorización de gerencia o cancelación de mora previa para asentar nuevas órdenes.'
+                    : 'Cliente autorizado para facturación a crédito y entregas con saldo diferido según política.'}
                 </span>
               </div>
             </div>
@@ -321,19 +482,48 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
         )}
       </Modal>
 
-      {/* Modal 2: AJUSTAR LÍMITE (Design System Modal) */}
+      {/* Modal 2: ASIGNAR / MODIFICAR CUPO (Design System Modal con LookupInput) */}
       <Modal
         isOpen={!!modal}
-        onClose={() => setModal(null)}
-        title={modal === 'new' ? 'Asignar Nuevo Cupo de Crédito' : 'Modificar Cupo y Plazo'}
+        onClose={() => {
+          setModal(null);
+          setSelectedClientOption(null);
+        }}
+        title={modal === 'new' ? 'Asignar Cupo de Crédito' : 'Modificar Cupo y Condiciones'}
+        subtitle="Seleccione el cliente mediante el buscador o aplique criterios avanzados para encontrarlo"
+        icon={<CreditCard className="w-5 h-5 text-violet-400" />}
         size="md"
+        extraActions={
+          modal && modal !== 'new' ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const target = modal;
+                setModal(null);
+                setSelectedClientOption(null);
+                void toggleCreditStatus(target);
+              }}
+              disabled={saving}
+            >
+              <Power className="w-4 h-4 mr-2" />
+              {modal.activo ? 'Suspender crédito' : 'Reactivar crédito'}
+            </Button>
+          ) : undefined
+        }
         footer={
           <>
-            <Button variant="secondary" onClick={() => setModal(null)} disabled={saving}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setModal(null);
+                setSelectedClientOption(null);
+              }}
+              disabled={saving}
+            >
               Cancelar
             </Button>
             <Button variant="primary" type="submit" form="credit-form" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar cupo'}
+              {saving ? 'Guardando…' : modal === 'new' ? 'Asignar cupo' : 'Guardar cupo'}
             </Button>
           </>
         }
@@ -341,54 +531,150 @@ export default function AdminCreditLimits({ token: _token }: { token?: string })
         {modal && (
           <form id="credit-form" onSubmit={saveCredit}>
             <div className="client-modal-grid">
-              <label className="floating-field">
-                <input
-                  name="clienteCodigo"
-                  defaultValue={modal === 'new' ? '' : modal.clienteCodigo}
-                  placeholder=" "
+              {/* LookupInput con buscador inmediato y botón de búsqueda avanzada a la derecha */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <LookupInput
+                  label="Cliente (digite nombre o código)"
+                  tooltip="Busque el cliente por su nombre o código. Si no lo encuentra, use el botón de la derecha para más criterios."
+                  value={selectedClientOption}
+                  onChange={(opt) => setSelectedClientOption(opt)}
+                  onSearch={handleSearchCustomer}
+                  onAdvancedSearch={() => {
+                    setAdvQuery('');
+                    setAdvResults([]);
+                    setIsAdvancedSearchOpen(true);
+                  }}
+                  advancedSearchLabel="Abrir búsqueda avanzada de clientes"
                   required
+                  disabled={modal !== 'new'}
                 />
-                <span>Código del cliente (ej: CLI-001)</span>
-              </label>
+              </div>
 
-              <label className="floating-field">
-                <input
-                  name="clienteNombre"
-                  defaultValue={modal === 'new' ? '' : modal.clienteNombre}
-                  placeholder=" "
-                  required
-                />
-                <span>Nombre del cliente</span>
-              </label>
-
-              <label className="floating-field">
-                <input
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FloatingInput
                   name="limiteCredito"
                   type="number"
                   min="0"
                   step="50000"
+                  label="Límite de crédito autorizado (COP)"
                   defaultValue={modal === 'new' ? 1000000 : modal.limiteCredito}
-                  placeholder=" "
+                  tooltip="Monto máximo en COP que el cliente puede adeudar simultáneamente en órdenes pendientes."
                   required
                 />
-                <span>Límite de crédito autorizado (COP)</span>
-              </label>
+              </div>
 
-              <label className="floating-field">
-                <input
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FloatingInput
                   name="diasPlazo"
                   type="number"
-                  min="0"
+                  min="1"
                   max="120"
-                  defaultValue={modal === 'new' ? 15 : modal.diasPlazo}
-                  placeholder=" "
+                  label="Días de plazo de pago"
+                  defaultValue={modal === 'new' ? 30 : modal.diasPlazo}
+                  tooltip="Cantidad de días calendario otorgados antes de considerar la factura en mora."
                   required
                 />
-                <span>Días de plazo de pago</span>
-              </label>
+              </div>
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* Modal 3: BÚSQUEDA AVANZADA DE CLIENTES (Submodal auxiliar) */}
+      <Modal
+        isOpen={isAdvancedSearchOpen}
+        onClose={() => setIsAdvancedSearchOpen(false)}
+        title="Búsqueda Avanzada de Clientes"
+        subtitle="Encuentre clientes por documento, teléfono, nombre o razón social"
+        icon={<Search className="w-5 h-5 text-violet-400" />}
+        size="lg"
+        footer={
+          <Button variant="secondary" onClick={() => setIsAdvancedSearchOpen(false)}>
+            Cerrar búsqueda
+          </Button>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <FloatingInput
+                label="Criterio de búsqueda (Nombre, NIT, Teléfono, Correo)"
+                value={advQuery}
+                onValueChange={(val) => setAdvQuery(val)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void runAdvancedSearch();
+                  }
+                }}
+                tooltip="Presione Enter o el botón Buscar para consultar la base de datos de Ordeon."
+              />
+            </div>
+            <Button
+              variant="primary"
+              onClick={() => void runAdvancedSearch()}
+              disabled={advLoading || !advQuery.trim()}
+              style={{ height: '52px', minWidth: '110px' }}
+            >
+              {advLoading ? <span className="spinner-sm" /> : <Search className="w-4 h-4 mr-2" />}
+              Buscar
+            </Button>
+          </div>
+
+          <div
+            style={{
+              maxHeight: '320px',
+              overflowY: 'auto',
+              border: '1px solid #282a36',
+              borderRadius: '12px',
+              background: '#13141a',
+            }}
+          >
+            {advLoading ? (
+              <div className="empty-state">
+                <span className="spinner-sm inline-block mr-2" /> Consultando clientes en Ordeon…
+              </div>
+            ) : advResults.length === 0 ? (
+              <div className="empty-state">
+                {advQuery.trim()
+                  ? 'No se encontraron clientes con esos criterios.'
+                  : 'Ingrese un término y haga clic en Buscar para consultar.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {advResults.map((c) => (
+                  <div
+                    key={c.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      borderBottom: '1px solid #1f212b',
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <strong style={{ color: '#f1f5f9', fontSize: '13px' }}>
+                        {c.name || 'Sin nombre'}
+                      </strong>
+                      <span style={{ color: '#94a3b8', fontSize: '11px' }}>
+                        Código: <strong className="text-violet-300 font-mono">{c.code || 'S/C'}</strong> · Tel: {c.phone || 'S/T'} · Email: {c.email || 'S/C'}
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSelectFromAdvanced(c)}
+                    >
+                      <UserCheck className="w-3.5 h-3.5 mr-1" /> Seleccionar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </Modal>
     </div>
   );

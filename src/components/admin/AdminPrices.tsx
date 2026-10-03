@@ -1,10 +1,6 @@
 import type { FormEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
   Eye,
   Pencil,
   Power,
@@ -14,7 +10,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { ListaPrecio } from '@/types/catalogos';
 
@@ -221,47 +217,28 @@ export default function AdminPrices({ token }: { token?: string }) {
           </div>
         )}
 
-        <div className="pagination-bar">
-          <label className="pagination-size">
-            Por página
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              aria-label="Cantidad por página"
-            >
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-          </label>
-          <span className="pagination-summary">
-            Página {page} de {totalPages} · {pageSize} elementos por página
-          </span>
-          <div className="pagination-controls" aria-label="Paginación de tarifas">
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage(1)}>
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage((c) => c - 1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage((c) => c + 1)}>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage(totalPages)}>
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={priceLists.length}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          variant="dark"
+        />
       </section>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal
         isOpen={!!viewPrice}
         onClose={() => setViewPrice(null)}
-        title="Detalle de la Lista de Precio"
+        title="Ficha de la Lista de Precio"
+        subtitle="Márgenes de ajuste, recargos y condiciones comerciales"
+        icon={<BadgePercent className="w-5 h-5 text-violet-400" />}
         size="lg"
         footer={
           <>
@@ -331,14 +308,36 @@ export default function AdminPrices({ token }: { token?: string }) {
         isOpen={!!modal}
         onClose={() => setModal(null)}
         title={modal === 'new' ? 'Nueva Lista de Precios' : 'Editar Lista de Precios'}
+        subtitle={
+          modal === 'new'
+            ? 'Defina las condiciones de recargo o descuento porcentual sobre el catálogo'
+            : 'Modifique los porcentajes y parámetros de la tarifa'
+        }
+        icon={<BadgePercent className="w-5 h-5 text-violet-400" />}
         size="md"
+        extraActions={
+          modal && modal !== 'new' ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const target = modal;
+                setModal(null);
+                void toggleStatus(target);
+              }}
+              disabled={saving}
+            >
+              <Power className="w-4 h-4 mr-2" />
+              {modal.activa ? 'Desactivar lista' : 'Activar lista'}
+            </Button>
+          ) : undefined
+        }
         footer={
           <>
             <Button variant="secondary" onClick={() => setModal(null)} disabled={saving}>
               Cancelar
             </Button>
             <Button variant="primary" type="submit" form="price-form" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar tarifa'}
+              {saving ? 'Guardando…' : modal === 'new' ? 'Crear lista' : 'Guardar tarifa'}
             </Button>
           </>
         }
@@ -346,37 +345,33 @@ export default function AdminPrices({ token }: { token?: string }) {
         {modal && (
           <form id="price-form" onSubmit={savePriceList}>
             <div className="client-modal-grid">
-              <label className="floating-field">
-                <input
-                  name="codigo"
-                  defaultValue={modal === 'new' ? '' : modal.codigo}
-                  placeholder=" "
-                  required
-                />
-                <span>Código identificador (ej: TARIFA-ESP)</span>
-              </label>
+              <FloatingInput
+                name="codigo"
+                label="Código identificador (ej: TARIFA-ESP)"
+                defaultValue={modal === 'new' ? '' : modal.codigo}
+                tooltip="Identificador único para el esquema tarifario en el sistema."
+                required
+              />
 
-              <label className="floating-field">
-                <input
-                  name="nombre"
-                  defaultValue={modal === 'new' ? '' : modal.nombre}
-                  placeholder=" "
-                  required
-                />
-                <span>Nombre descriptivo de la tarifa</span>
-              </label>
+              <FloatingInput
+                name="nombre"
+                label="Nombre descriptivo de la tarifa"
+                defaultValue={modal === 'new' ? '' : modal.nombre}
+                tooltip="Nombre comercial visible al asignar la tarifa a clientes."
+                required
+              />
 
-              <label className="floating-field" style={{ gridColumn: '1 / -1' }}>
-                <input
+              <div style={{ gridColumn: '1 / -1' }}>
+                <FloatingInput
                   name="porcentajeAjuste"
                   type="number"
                   step="0.5"
+                  label="Porcentaje de ajuste (+ recargo / - descuento)"
                   defaultValue={modal === 'new' ? 0 : modal.porcentajeAjuste}
-                  placeholder=" "
+                  tooltip="Ingrese valores negativos para descuentos (ej: -10) o positivos para recargos (+15)."
                   required
                 />
-                <span>Porcentaje de ajuste (+ recargo / - descuento)</span>
-              </label>
+              </div>
             </div>
           </form>
         )}

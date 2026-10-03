@@ -1,10 +1,6 @@
 import type { FormEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
   Eye,
   Pencil,
   Power,
@@ -16,7 +12,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
 import { ordeonRequest } from '@/lib/api-client';
 
 export type Customer = {
@@ -50,51 +46,17 @@ const listTotal = <T,>(body: ApiList<T>, fallback: number): number =>
     ? fallback
     : body?.totalCount ?? body?.total ?? fallback;
 
-const FALLBACK_CUSTOMERS: Customer[] = [
-  { id: '1', code: 'CLI-001', name: 'María Fernanda López', email: 'maria.lopez@empresa.com', phone: '+52 55 2180 4421', ordersCount: 8, isActive: true, createdAt: '2026-01-15' },
-  { id: '2', code: 'CLI-002', name: 'Restaurante La Casona', email: 'contacto@lacasona.com', phone: '+52 55 2104 8830', ordersCount: 14, isActive: true, createdAt: '2026-01-20' },
-  { id: '3', code: 'CLI-003', name: 'Carlos Ramírez', email: 'carlos.ramirez@email.com', phone: '+52 55 3380 1142', ordersCount: 3, isActive: true, createdAt: '2026-02-04' },
-  { id: '4', code: 'CLI-004', name: 'Hotel Casa Real', email: 'compras@casareal.com', phone: '+52 55 4401 0092', ordersCount: 21, isActive: true, createdAt: '2026-02-12' },
-  { id: '5', code: 'CLI-005', name: 'Comercializadora Norte', email: 'admin@comnorte.com', phone: '+52 81 2201 9088', ordersCount: 6, isActive: false, createdAt: '2026-02-28' },
-];
-
-function FloatingField({
-  label,
-  name,
-  defaultValue,
-  type = 'text',
-  required = false,
-}: {
-  label: string;
-  name: string;
-  defaultValue?: string;
-  type?: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="floating-field">
-      <input
-        name={name}
-        type={type}
-        defaultValue={defaultValue || ''}
-        placeholder=" "
-        required={required}
-      />
-      <span>{label}</span>
-    </label>
-  );
-}
 
 export default function AdminClients({ token }: { token: string }) {
-  const [customers, setCustomers] = useState<Customer[]>(FALLBACK_CUSTOMERS);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [totalItems, setTotalItems] = useState(FALLBACK_CUSTOMERS.length);
+  const [totalItems, setTotalItems] = useState(0);
   const [modal, setModal] = useState<Customer | 'new' | null>(null);
   const [viewCustomer, setViewCustomer] = useState<Customer | null>(null);
   const [hasInitialLoaded, setHasInitialLoaded] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -103,7 +65,7 @@ export default function AdminClients({ token }: { token: string }) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   async function loadCustomers() {
-    if (!hasInitialLoaded && customers.length === 0) {
+    if (!hasInitialLoaded) {
       setIsInitialLoading(true);
     } else {
       setIsRefreshing(true);
@@ -132,10 +94,10 @@ export default function AdminClients({ token }: { token: string }) {
       const message =
         cause instanceof Error ? cause.message : 'No fue posible cargar clientes.';
       setError(message);
-      setNotice('Mostrando directorio local de clientes.');
+      setNotice('Error de conexión al cargar directorio.');
       toast.error('Aviso de conexión con clientes', { description: message });
-      setCustomers(FALLBACK_CUSTOMERS);
-      setTotalItems(FALLBACK_CUSTOMERS.length);
+      setCustomers([]);
+      setTotalItems(0);
     } finally {
       setIsInitialLoading(false);
       setIsRefreshing(false);
@@ -319,7 +281,7 @@ export default function AdminClients({ token }: { token: string }) {
           <span>ACCIONES</span>
         </div>
 
-        {isInitialLoading && !hasInitialLoaded && customers.length === 0 ? (
+        {isInitialLoading ? (
           <div className="empty-state">
             <span className="spinner-sm inline-block mr-2" /> Cargando clientes…
           </div>
@@ -395,71 +357,19 @@ export default function AdminClients({ token }: { token: string }) {
           </div>
         )}
 
-        {/* Paginación Estándar */}
-        <div className="pagination-bar">
-          <label className="pagination-size">
-            Por página
-            <select
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Math.min(50, Number(event.target.value)));
-                setPage(1);
-              }}
-              aria-label="Cantidad de clientes por página"
-            >
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-          </label>
-          <span className="pagination-summary">
-            Página {page} de {totalPages} · {pageSize} elementos por página
-          </span>
-          <div className="pagination-controls" aria-label="Paginación de clientes">
-            <button
-              className="pagination-icon"
-              disabled={page === 1}
-              onClick={() => setPage(1)}
-              aria-label="Primera página"
-            >
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button
-              className="pagination-icon"
-              disabled={page === 1}
-              onClick={() => setPage((current) => current - 1)}
-              aria-label="Página anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            {pageNumbers.map((pageNumber) => (
-              <button
-                key={pageNumber}
-                className={pageNumber === page ? 'is-current' : ''}
-                aria-current={pageNumber === page ? 'page' : undefined}
-                onClick={() => setPage(pageNumber)}
-              >
-                {pageNumber}
-              </button>
-            ))}
-            <button
-              className="pagination-icon"
-              disabled={page === totalPages}
-              onClick={() => setPage((current) => current + 1)}
-              aria-label="Página siguiente"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button
-              className="pagination-icon"
-              disabled={page === totalPages}
-              onClick={() => setPage(totalPages)}
-              aria-label="Última página"
-            >
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={totalItems}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          variant="dark"
+        />
       </section>
 
       {/* Modal 1: VER DETALLE COMPLETO (Usando Modal del Design System) */}
@@ -467,6 +377,8 @@ export default function AdminClients({ token }: { token: string }) {
         isOpen={!!viewCustomer}
         onClose={() => setViewCustomer(null)}
         title="Ficha del Cliente"
+        subtitle="Consulta de información general, contacto y parámetros en Ordeon"
+        icon={<Users className="w-5 h-5 text-violet-400" />}
         size="lg"
         footer={
           <>
@@ -554,7 +466,26 @@ export default function AdminClients({ token }: { token: string }) {
         isOpen={!!modal}
         onClose={() => setModal(null)}
         title={modal === 'new' ? 'Nuevo cliente' : 'Editar cliente'}
+        subtitle={
+          modal === 'new'
+            ? 'Diligencie los campos requeridos para dar de alta un cliente en Ordeon'
+            : `Modificando información de ${modal?.name || 'cliente'}`
+        }
+        icon={<Users className="w-5 h-5 text-violet-400" />}
         size="md"
+        extraActions={
+          modal && modal !== 'new' ? (
+            <Button
+              variant="danger"
+              size="sm"
+              type="button"
+              onClick={() => void toggleStatus(modal)}
+            >
+              <Power className="w-3.5 h-3.5 mr-1.5" />
+              {modal.isActive === false ? 'Activar cliente' : 'Desactivar cliente'}
+            </Button>
+          ) : undefined
+        }
         footer={
           <>
             <Button
@@ -570,7 +501,7 @@ export default function AdminClients({ token }: { token: string }) {
               form="customer-edit-form"
               disabled={saving}
             >
-              {saving ? 'Guardando…' : 'Guardar cliente'}
+              {saving ? 'Guardando…' : modal === 'new' ? 'Crear cliente' : 'Guardar cambios'}
             </Button>
           </>
         }
@@ -578,28 +509,33 @@ export default function AdminClients({ token }: { token: string }) {
         {modal && (
           <form id="customer-edit-form" onSubmit={saveCustomer}>
             <div className="client-modal-grid">
-              <FloatingField
+              <FloatingInput
                 label="Código o documento"
                 name="code"
                 defaultValue={modal === 'new' ? '' : modal.code || ''}
                 required
+                tooltip="NIT, Cédula de ciudadanía o identificación fiscal del cliente"
               />
-              <FloatingField
-                label="Nombre completo"
+              <FloatingInput
+                label="Nombre completo o Razón Social"
                 name="name"
                 defaultValue={modal === 'new' ? '' : modal.name || ''}
                 required
+                tooltip="Nombre comercial o razón social completa"
               />
-              <FloatingField
-                label="Teléfono"
+              <FloatingInput
+                label="Teléfono de contacto"
                 name="phone"
+                type="tel"
                 defaultValue={modal === 'new' ? '' : modal.phone || ''}
+                tooltip="Teléfono fijo o móvil para coordinar entregas y avisos"
               />
-              <FloatingField
+              <FloatingInput
                 label="Correo electrónico"
                 name="email"
                 type="email"
                 defaultValue={modal === 'new' ? '' : modal.email || ''}
+                tooltip="Correo electrónico para facturas y cotizaciones"
               />
             </div>
           </form>

@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
   Eye,
   Search,
   ShieldCheck,
@@ -12,7 +8,7 @@ import {
   Code,
   Layers,
 } from 'lucide-react';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
 import { auditoriaApi, type EventoAuditoriaDto } from '@/services/auditoriaApi';
 
 const FALLBACK_LOGS: EventoAuditoriaDto[] = [
@@ -152,40 +148,18 @@ export default function AdminAuditLogs({ token }: { token?: string }) {
           </div>
         )}
 
-        <div className="pagination-bar">
-          <label className="pagination-size">
-            Por página
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              aria-label="Cantidad por página"
-            >
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-          </label>
-          <span className="pagination-summary">
-            Página {page} de {totalPages} · {pageSize} elementos por página
-          </span>
-          <div className="pagination-controls" aria-label="Paginación de auditoría">
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage(1)}>
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage((c) => c - 1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage((c) => c + 1)}>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage(totalPages)}>
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={totalItems}
+          onPageChange={setPage}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          variant="dark"
+        />
       </section>
 
       {/* Modal: VER DETALLE DEL EVENTO (Design System Modal) */}
@@ -193,6 +167,8 @@ export default function AdminAuditLogs({ token }: { token?: string }) {
         isOpen={!!viewLog}
         onClose={() => setViewLog(null)}
         title="Detalle del Evento de Auditoría"
+        subtitle="Trazabilidad del actor, entidad afectada y carga de datos"
+        icon={<ShieldCheck className="w-5 h-5 text-violet-400" />}
         size="lg"
         footer={
           <Button variant="secondary" onClick={() => setViewLog(null)}>
