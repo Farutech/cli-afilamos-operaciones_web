@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Input } from '@farutech/design-system';
+import { Modal, Button, Input, Alert } from '@farutech/design-system';
 import { solicitudesApi } from '../../services/solicitudesApi';
 import type { TipoDocumentoIdentidad, Cliente } from '../../types/catalogos';
 
@@ -22,8 +22,6 @@ export const RegistroRapidoClienteModal: React.FC<RegistroRapidoClienteModalProp
   const [telefono, setTelefono] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,131 +57,84 @@ export const RegistroRapidoClienteModal: React.FC<RegistroRapidoClienteModalProp
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '1rem',
-      }}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Registro Rápido de Cliente"
+      subtitle="Ingresa la información básica para continuar con la solicitud operativa"
+      size="md"
+      className="border-slate-800 shadow-2xl backdrop-blur-md"
+      bodyClassName="p-6"
     >
-      <div
-        style={{
-          background: 'white',
-          borderRadius: '8px',
-          width: '100%',
-          maxWidth: '480px',
-          padding: '1.5rem',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3 id="modal-title" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>
-            Registro Rápido de Cliente
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar modal"
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.25rem' }}
-          >
-            &times;
-          </button>
-        </div>
-
+      <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div
-            role="alert"
-            style={{
-              padding: '0.75rem',
-              background: '#fee2e2',
-              color: '#991b1b',
-              borderRadius: '6px',
-              marginBottom: '1rem',
-              fontSize: '0.875rem',
-            }}
-          >
+          <Alert variant="danger">
             {error}
-          </div>
+          </Alert>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '1rem' }}>
-            <label htmlFor="select-tipo-doc" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>
-              Tipo de Documento
-            </label>
-            <select
-              id="select-tipo-doc"
-              value={uuidTipoDoc || tiposDocumento[0]?.uuid || ''}
-              onChange={(e) => setUuidTipoDoc(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '0.875rem',
-              }}
-            >
-              {tiposDocumento.map((td) => (
-                <option key={td.uuid} value={td.uuid}>
-                  {td.codigo} - {td.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label htmlFor="select-tipo-doc" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+            Tipo de Documento *
+          </label>
+          <select
+            id="select-tipo-doc"
+            value={uuidTipoDoc || tiposDocumento[0]?.uuid || ''}
+            onChange={(e) => setUuidTipoDoc(e.target.value)}
+            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all duration-200"
+          >
+            {tiposDocumento.map((td) => (
+              <option key={td.uuid} value={td.uuid} className="bg-slate-900 text-slate-100">
+                {td.codigo} - {td.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <Input
-              id="input-numero-doc"
-              label="Número de Documento"
-              value={numeroDoc}
-              onChange={(e) => setNumeroDoc(e.target.value)}
-              placeholder="Ej. 1020304050"
-              required
-            />
-          </div>
+        <div>
+          <Input
+            id="input-numero-doc"
+            label="Número de Documento *"
+            value={numeroDoc}
+            onChange={(e) => setNumeroDoc(e.target.value)}
+            placeholder="Ej. 1020304050"
+            required
+            fullWidth
+          />
+        </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <Input
-              id="input-nombre-cliente"
-              label="Nombre Completo / Razón Social"
-              value={nombreRazonSocial}
-              onChange={(e) => setNombreRazonSocial(e.target.value)}
-              placeholder="Ej. Taller Metalmecánica SAS"
-              required
-            />
-          </div>
+        <div>
+          <Input
+            id="input-nombre-cliente"
+            label="Nombre Completo / Razón Social *"
+            value={nombreRazonSocial}
+            onChange={(e) => setNombreRazonSocial(e.target.value)}
+            placeholder="Ej. Taller Metalmecánica SAS"
+            required
+            fullWidth
+          />
+        </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <Input
-              id="input-telefono-cliente"
-              label="Teléfono / Celular (WhatsApp)"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              placeholder="Ej. 3001234567"
-            />
-          </div>
+        <div>
+          <Input
+            id="input-telefono-cliente"
+            label="Teléfono / Celular (WhatsApp)"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            placeholder="Ej. 3001234567"
+            fullWidth
+          />
+        </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-              Cancelar
-            </Button>
-            <Button type="submit" variant="primary" disabled={loading}>
-              {loading ? 'Guardando...' : 'Crear y Seleccionar'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="pt-3 border-t border-slate-800/80 flex justify-end gap-3">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button type="submit" variant="primary" disabled={loading}>
+            {loading ? 'Guardando...' : 'Crear y Seleccionar'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 };

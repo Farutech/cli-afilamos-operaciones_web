@@ -93,7 +93,10 @@ export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Nuevo Registro de Cliente"
+      subtitle="Completa el formulario para dar de alta un nuevo cliente en el sistema"
       size="md"
+      className="border-slate-800 shadow-2xl backdrop-blur-md"
+      bodyClassName="p-6"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <Alert variant="danger">{error}</Alert>}
