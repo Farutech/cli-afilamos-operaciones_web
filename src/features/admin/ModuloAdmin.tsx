@@ -40,6 +40,7 @@ import type {
 } from '../../types/catalogos';
 import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
 import { ParametroDinamicoModal } from '../config/ParametroDinamicoModal';
+import { ConfigurarDenominacionesModal, type DenominacionConfigItem } from '../config/ConfigurarDenominacionesModal';
 import {
   EditarSubtipoModal,
   type CambiosSubtipoDoc,
@@ -250,6 +251,10 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
 
   // Modal Unificado de Edición de Subtipo (Datos + Consecutivo + Eliminación Física/Lógica)
   const [mostrarModalEditarSubtipo, setMostrarModalEditarSubtipo] = useState(false);
+  const [mostrarModalDenominaciones, setMostrarModalDenominaciones] = useState(false);
+
+
+
   const [subtipoEditando, setSubtipoEditando] = useState<SubtipoConTipoBase | null>(null);
 
   const handleActualizarConsecutivo = async (
@@ -607,6 +612,39 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
   });
 
   const [parametros, setParametros] = useState<ParametroSistema[]>([]);
+
+  const denominacionesActualesConfig = useMemo<DenominacionConfigItem[]>(() => {
+    const p = parametros.find((param) => param.clave === 'denominaciones_efectivo');
+    if (p?.valorJson) {
+      try {
+        const parsed = JSON.parse(p.valorJson);
+        if (Array.isArray(parsed.denominaciones)) {
+          return parsed.denominaciones;
+        }
+      } catch {}
+    }
+    return [];
+  }, [parametros]);
+
+  const handleGuardarDenominaciones = async (nuevas: DenominacionConfigItem[]) => {
+    try {
+      const jsonStr = JSON.stringify({
+        monedaBase: 'COP',
+        denominaciones: nuevas,
+      });
+      await catalogosApi.actualizarParametro('denominaciones_efectivo', jsonStr);
+      setSuccessMsg('✓ Denominaciones de monedas y billetes guardadas para caja y arqueos.');
+      setParametros((prev) =>
+        prev.map((p) =>
+          p.clave === 'denominaciones_efectivo'
+            ? { ...p, valorJson: jsonStr }
+            : p
+        )
+      );
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Error al guardar denominaciones');
+    }
+  };
   const [loadingParametros, setLoadingParametros] = useState(false);
   const [parametroTarget, setParametroTarget] = useState<ParametroSistema | null>(null);
   const [nuevoValorParametro, setNuevoValorParametro] = useState('');
@@ -4663,6 +4701,13 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         onSaltarConsecutivo={handleActualizarConsecutivo}
         onEliminar={handleEliminarSubtipo}
         onReactivar={handleReactivarSubtipo}
+      />
+
+            <ConfigurarDenominacionesModal
+        isOpen={mostrarModalDenominaciones}
+        onClose={() => setMostrarModalDenominaciones(false)}
+        denominacionesIniciales={denominacionesActualesConfig}
+        onGuardar={handleGuardarDenominaciones}
       />
 
       <ParametroDinamicoModal

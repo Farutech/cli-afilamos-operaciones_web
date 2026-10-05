@@ -72,6 +72,7 @@ export function OrdeonDashboard({
     .toUpperCase();
 
   const firstName = userName ? userName.split(' ')[0] : 'Javier';
+  const shouldShowCash = showCashSummary && metricData.turnoAbierto;
 
   useEffect(() => {
     if (!token) return;
@@ -150,7 +151,7 @@ export function OrdeonDashboard({
         />
       </div>
 
-      <div className={`content-grid ${showCashSummary ? '' : 'without-cash'}`}>
+      <div className={`content-grid ${shouldShowCash ? '' : 'without-cash'}`}>
         <section className="panel orders-panel">
           <div className="panel-heading">
             <div>
@@ -208,7 +209,7 @@ export function OrdeonDashboard({
           </div>
         </section>
 
-        {showCashSummary && (
+        {shouldShowCash && (
           <section className="panel summary-panel">
             <div className="panel-heading">
               <div>

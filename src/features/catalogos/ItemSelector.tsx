@@ -21,7 +21,7 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   naturalezaFiltro,
   placeholder = 'Buscar por código o nombre (ej: INV-001, Cuchillo)...',
   habilitarModalBusqueda = true,
-  minimoCaracteres = 0,
+  minimoCaracteres = 3,
   tamanoListado = 10,
 }) => {
   const [query, setQuery] = useState('');
@@ -59,7 +59,7 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   // Búsqueda desplegable automática (debounce 250ms)
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (query.length >= minimoCaracteres) {
+      if (query.trim().length >= minimoCaracteres) {
         fetchItems(query);
       }
     }, 250);

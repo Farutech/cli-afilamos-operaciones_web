@@ -16,6 +16,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom',
+    pool: 'forks',
     setupFiles: './src/setupTests.ts',
   },
 })

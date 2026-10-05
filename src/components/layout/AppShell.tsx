@@ -16,6 +16,7 @@ import {
   Users,
   WalletCards,
   Wrench,
+  Settings,
 } from 'lucide-react';
 import { ProfileModal } from '@/components/modals/ProfileModal';
 
@@ -73,6 +74,15 @@ export const navigationGroups: { label: string; items: NavItem[] }[] = [
         label: 'Auditoría',
         icon: ShieldCheck,
         children: ['Registro de actividad', 'Aprobaciones pendientes', 'Usuarios'],
+      },
+      {
+        label: 'Configuración',
+        icon: Settings,
+        children: [
+          'Formas y medios de pago',
+          'Subtipos de documento',
+          'Parámetros del sistema',
+        ],
       },
     ],
   },

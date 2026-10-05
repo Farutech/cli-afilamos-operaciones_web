@@ -200,13 +200,7 @@ export default function AdminClients({ token }: { token: string }) {
     }
   }
 
-  const pageNumbers = Array.from(
-    { length: Math.min(5, totalPages) },
-    (_, index) =>
-      Math.min(Math.max(page - 2, 1), Math.max(totalPages - 4, 1)) + index
-  );
-
-  const visible = useMemo(
+    const visible = useMemo(
     () =>
       customers.filter((customer) =>
         `${customer.name || ''} ${customer.email || ''} ${customer.phone || ''} ${customer.code || ''}`

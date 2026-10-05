@@ -32,6 +32,7 @@ import { ModuloCaja } from '@/features/caja/ModuloCaja';
 import { ModuloReportes } from '@/features/reportes/ModuloReportes';
 import { SolicitudCapturaMixta } from '@/features/solicitudes/SolicitudCapturaMixta';
 import { HistorialSolicitudesView } from '@/features/solicitudes/HistorialSolicitudesView';
+import { ModuloAdmin } from '@/features/admin/ModuloAdmin';
 
 export interface UserSession {
   name: string;
@@ -362,6 +363,39 @@ export function App() {
     content = <AdminAuditLogs token={session.token} />;
   } else if (activeSection === 'Aprobaciones pendientes') {
     content = <AdminApprovals token={session.token} />;
+    } else if (activeSection === 'Formas y medios de pago' || activeSection === 'Formas de pago') {
+    content = (
+      <div className="page-content">
+        <ModuloAdmin
+          token={session.token}
+          initialMacroCat="tesoreria"
+          initialSubCat="medios_pago"
+          hideCategoryTabs={true}
+        />
+      </div>
+    );
+  } else if (activeSection === 'Subtipos de documento' || activeSection === 'Tipos y subtipos') {
+    content = (
+      <div className="page-content">
+        <ModuloAdmin
+          token={session.token}
+          initialMacroCat="sistema"
+          initialSubCat="tipos_subtipos"
+          hideCategoryTabs={true}
+        />
+      </div>
+    );
+  } else if (activeSection === 'Parámetros del sistema' || activeSection === 'Parámetros globales') {
+    content = (
+      <div className="page-content">
+        <ModuloAdmin
+          token={session.token}
+          initialMacroCat="sistema"
+          initialSubCat="parametros"
+          hideCategoryTabs={true}
+        />
+      </div>
+    );
   } else if (activeSection === 'Usuarios') {
     content = <AdminUsers token={session.token} />;
   }

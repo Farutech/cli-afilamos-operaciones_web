@@ -1,10 +1,6 @@
 import type { FormEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
   Eye,
   Pencil,
   Power,
@@ -16,7 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
 import { adminApi } from '@/services/adminApi';
 import type { UsuarioAdminDto } from '@/types/admin';
 
@@ -235,39 +231,18 @@ export default function AdminUsers({ token }: { token?: string }) {
           </div>
         )}
 
-        <div className="pagination-bar">
-          <label className="pagination-size">
-            Por página
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setPage(1);
-              }}
-              aria-label="Cantidad por página"
-            >
-              <option value="10">10</option>
-              <option value="25">25</option>
-            </select>
-          </label>
-          <span className="pagination-summary">
-            Página {page} de {totalPages} · {pageSize} elementos por página
-          </span>
-          <div className="pagination-controls" aria-label="Paginación de usuarios">
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage(1)}>
-              <ChevronsLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === 1} onClick={() => setPage((c) => c - 1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage((c) => c + 1)}>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button className="pagination-icon" disabled={page === totalPages} onClick={() => setPage(totalPages)}>
-              <ChevronsRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <CrudPagination
+          currentPage={page}
+          totalPages={totalPages}
+          perPage={pageSize}
+          total={users.length}
+          onPageChange={(newPage) => setPage(newPage)}
+          perPageOptions={[10, 25, 50, 100]}
+          onPerPageChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+        />
       </section>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
