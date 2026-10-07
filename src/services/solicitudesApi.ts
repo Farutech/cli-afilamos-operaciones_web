@@ -91,6 +91,7 @@ export const solicitudesApi = {
       unitPrice: data.precioUnitario,
       promisedDeliveryAt: new Date(Date.now() + 86400000 * 2).toISOString(),
       technicalObservation: data.descripcion,
+      photoUrls: [],
     }, token);
     return mapRequestDetails(res);
   },
@@ -119,6 +120,7 @@ export const solicitudesApi = {
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
       initialPayments: payments,
+      supervisorPin: null,
     }, token);
     return mapRequestDetails(res);
   },
@@ -141,6 +143,7 @@ export const solicitudesApi = {
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
       initialPayments: payments,
+      supervisorPin: null,
     }, token);
     return mapRequestDetails(res);
   },
@@ -152,6 +155,7 @@ export const solicitudesApi = {
   ): Promise<SolicitudDetalleDto> {
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
+      initialPayments: [],
       supervisorPin: data.supervisorPin,
     }, token);
     return mapRequestDetails(res);
@@ -159,11 +163,18 @@ export const solicitudesApi = {
 
   async asentarSolicitud(
     uuid: string,
-    _data: { usuarioAsientaId: number; usuarioAsientaCodigo: string },
+    data?: {
+      usuarioAsientaId?: number;
+      usuarioAsientaCodigo?: string;
+      initialPayments?: { paymentMethodId: string; amount: number; referenceNumber?: string }[];
+      supervisorPin?: string | null;
+    },
     token?: string,
   ): Promise<SolicitudDetalleDto> {
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
+      initialPayments: data?.initialPayments || [],
+      supervisorPin: data?.supervisorPin || null,
     }, token);
     return mapRequestDetails(res);
   },

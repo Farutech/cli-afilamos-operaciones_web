@@ -204,6 +204,54 @@ describe('SolicitudCapturaMixta Component', () => {
     const inputAnticipo = screen.getByLabelText(/Anticipo para Afilado Cuchillo/i)
     fireEvent.change(inputAnticipo, { target: { value: '8000' } })
 
+    // Registrar el recaudo correspondiente al anticipo
+    const inputMonto = screen.getByLabelText(/^Monto/i)
+    fireEvent.change(inputMonto, { target: { value: '8000' } })
+
+    await waitFor(() => {
+      expect(asentarBtn).not.toBeDisabled()
+    })
+  })
+
+  it('no permite habilitar el botón de asentar si el monto pagado es menor a los anticipos dados en los registros aunque haya VoBo', async () => {
+    render(
+      <SolicitudCapturaMixta
+        canales={mockCanales}
+        tiposDocumento={mockTiposDoc}
+        clientes={mockClientes}
+        onAsentarSolicitud={vi.fn()}
+      />,
+    )
+
+    // Agregar un servicio
+    fireEvent.click(screen.getByText('Seleccionar Afilado'))
+    fireEvent.click(screen.getByRole('button', { name: /\+ Agregar Línea/i }))
+
+    // Imputar anticipo de 5000 en el registro (menor al 40% requerido de 8000)
+    const inputAnticipo = screen.getByLabelText(/Anticipo para Afilado Cuchillo/i)
+    fireEvent.change(inputAnticipo, { target: { value: '5000' } })
+
+    const asentarBtn = screen.getByRole('button', { name: /Asentar Solicitud/i })
+    expect(asentarBtn).toBeDisabled()
+
+    // Solicitar y aprobar VoBo de Supervisor (para autorizar el menor monto de anticipo de 5000 en vez de 8000)
+    fireEvent.click(screen.getByRole('button', { name: /Solicitar VoBo Supervisor/i }))
+    fireEvent.change(screen.getByLabelText(/Código de Supervisor/i), { target: { value: 'SUPERVISOR_01' } })
+    fireEvent.change(screen.getByLabelText(/PIN de Autorización/i), { target: { value: '9999' } })
+    fireEvent.change(screen.getByLabelText(/Justificación Obligatoria/i), { target: { value: 'Aprobación especial menor anticipo' } })
+    fireEvent.click(screen.getByRole('button', { name: /Autorizar VoBo/i }))
+
+    // A pesar del VoBo aprobado, el botón DEBE SEGUIR DESHABILITADO porque el pago es 0 (< 5000)
+    expect(asentarBtn).toBeDisabled()
+    expect(screen.getByText(/Pago Insuficiente para Anticipos/i)).toBeInTheDocument()
+
+    // Si se abona un monto inferior (ej: 2000), sigue deshabilitado
+    const inputMonto = screen.getByLabelText(/^Monto/i)
+    fireEvent.change(inputMonto, { target: { value: '2000' } })
+    expect(asentarBtn).toBeDisabled()
+
+    // Solo al registrar o cubrir el monto total de los anticipos dados (5000), se habilita
+    fireEvent.change(inputMonto, { target: { value: '5000' } })
     await waitFor(() => {
       expect(asentarBtn).not.toBeDisabled()
     })

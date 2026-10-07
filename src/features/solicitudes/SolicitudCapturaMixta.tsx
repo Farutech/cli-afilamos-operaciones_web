@@ -62,6 +62,7 @@ interface SolicitudCapturaMixtaProps {
   tiposDocumento: TipoDocumentoIdentidad[];
   clientes: Cliente[];
   onAsentarSolicitud: (solicitud: {
+    requestId?: string;
     canalUuid: string;
     clienteUuid: string;
     tipoDocumentoUuid?: string;
@@ -74,8 +75,19 @@ interface SolicitudCapturaMixtaProps {
     observaciones?: string;
     pagosAbono?: PagoDistribucionLocal[];
     esSoloGuardar?: boolean;
+    supervisorPin?: string;
   }) => Promise<void>;
   loading?: boolean;
+  solicitudInicial?: {
+    requestId?: string;
+    numeroDocumentoVisible?: string;
+    clienteUuid?: string;
+    canalUuid?: string;
+    observaciones?: string;
+    lineas?: LineaDetalleLocal[];
+    pagosAbono?: PagoDistribucionLocal[];
+  } | null;
+  onCancelarEdicion?: () => void;
 }
 
 interface AnticipoInputProps {
@@ -139,12 +151,42 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   clientes: clientesIniciales,
   onAsentarSolicitud,
   loading = false,
+  solicitudInicial = null,
+  onCancelarEdicion,
 }) => {
   const [clientes, setClientes] = useState<Cliente[]>(clientesIniciales);
-  const [selectedCanal, setSelectedCanal] = useState<string>(canales[0]?.uuid || '');
-  const [selectedCliente, setSelectedCliente] = useState<string>(clientesIniciales[0]?.uuid || '');
+  const [selectedCanal, setSelectedCanal] = useState<string>(
+    solicitudInicial?.canalUuid || canales[0]?.uuid || ''
+  );
+  const [selectedCliente, setSelectedCliente] = useState<string>(
+    solicitudInicial?.clienteUuid || clientesIniciales[0]?.uuid || ''
+  );
   const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
   const [isClienteBuscarModalOpen, setIsClienteBuscarModalOpen] = useState(false);
+
+  // Precargar datos si cambia solicitudInicial
+  useEffect(() => {
+    if (!solicitudInicial) return;
+    if (solicitudInicial.canalUuid) {
+      setSelectedCanal(solicitudInicial.canalUuid);
+    }
+    if (solicitudInicial.clienteUuid) {
+      setSelectedCliente(solicitudInicial.clienteUuid);
+    }
+    if (typeof solicitudInicial.observaciones === 'string') {
+      setObservacionesDocumento(solicitudInicial.observaciones);
+    }
+    if (Array.isArray(solicitudInicial.lineas) && solicitudInicial.lineas.length > 0) {
+      setLineas(solicitudInicial.lineas);
+    }
+    if (Array.isArray(solicitudInicial.pagosAbono) && solicitudInicial.pagosAbono.length > 0) {
+      setPagosAbono(solicitudInicial.pagosAbono);
+    }
+    if (solicitudInicial.numeroDocumentoVisible) {
+      setModoNumeracion('MANUAL');
+      setNumeroDocManual(solicitudInicial.numeroDocumentoVisible);
+    }
+  }, [solicitudInicial]);
 
   // Autocompletado / buscador predictivo de cliente con debounce de 500ms
   const [clienteSearchQuery, setClienteSearchQuery] = useState('');
@@ -454,7 +496,8 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
           const activas = res.instrumentos.filter((i) => i.activo);
           setMediosPago(activas);
           if (activas.length > 0) {
-            setMedioSeleccionadoUuid(activas[0].uuid);
+            const preferido = activas.find((i) => i.codigo === 'EFECTIVO') || activas[0];
+            setMedioSeleccionadoUuid(preferido.uuid);
           }
         }
       } catch {
@@ -488,6 +531,13 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
 
   // Totales financieros consistentes (basados exclusivamente en los pagos y anticipos reales)
   const totalAbonado = useMemo(() => pagosAbono.reduce((acc, p) => acc + p.monto, 0), [pagosAbono]);
+  const montoInputNumero = Number(montoAbonoInput) || 0;
+  // Valor efectivamente disponible para recaudo (abonos asentados + monto digitado en caja)
+  const valorPagadoEfectivo = useMemo(
+    () => totalAbonado + (montoInputNumero > 0 ? montoInputNumero : 0),
+    [totalAbonado, montoInputNumero]
+  );
+
   const totalInventario = useMemo(
     () => lineas.filter((l) => l.naturaleza === 'INVENTARIO').reduce((acc, l) => acc + l.subtotal, 0),
     [lineas]
@@ -501,18 +551,18 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   // Distribución del recaudo real según regla de prelación del negocio:
   // 1. Cubrimiento de inventario:
   const cobroInventarioEfectivo = useMemo(() => {
-    return Math.min(totalAbonado, totalInventario);
-  }, [totalAbonado, totalInventario]);
+    return Math.min(valorPagadoEfectivo, totalInventario);
+  }, [valorPagadoEfectivo, totalInventario]);
 
   const faltanteInventario = Math.max(0, totalInventario - cobroInventarioEfectivo);
 
   // 2. Remanente para anticipos de taller / servicios:
   const abonoRestanteParaServicios = useMemo(() => {
-    return Math.max(0, totalAbonado - totalInventario);
-  }, [totalAbonado, totalInventario]);
+    return Math.max(0, valorPagadoEfectivo - totalInventario);
+  }, [valorPagadoEfectivo, totalInventario]);
 
-  // Anticipos asignados en la tabla por línea de servicio
-  const anticiposImputadosManuales = useMemo(
+  // Anticipos asignados en la tabla por línea de servicio / registros
+  const totalAnticiposRegistros = useMemo(
     () =>
       lineas
         .filter((l) => l.naturaleza === 'SERVICIO')
@@ -520,9 +570,17 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     [lineas]
   );
 
+  // REGLA CRÍTICA DE NEGOCIO:
+  // Si el valor pagado es menor a la suma de anticipos dados en todos los registros,
+  // el botón "Asentar solicitud" NO se puede habilitar, INCLUSO con VoBo o aprobación de supervisor.
+  const anticiposSuperanPago = useMemo(
+    () => totalAnticiposRegistros > 0 && valorPagadoEfectivo < totalAnticiposRegistros,
+    [totalAnticiposRegistros, valorPagadoEfectivo]
+  );
+
   const totalAnticiposEfectivos = useMemo(
-    () => Math.max(anticiposImputadosManuales, abonoRestanteParaServicios),
-    [anticiposImputadosManuales, abonoRestanteParaServicios]
+    () => Math.max(totalAnticiposRegistros, abonoRestanteParaServicios),
+    [totalAnticiposRegistros, abonoRestanteParaServicios]
   );
 
   // Anticipos mínimos requeridos por los servicios:
@@ -537,12 +595,8 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const faltanteAnticipo = Math.max(0, totalMinimoAnticiposExigido - totalAnticiposEfectivos);
 
   const totalPagado = useMemo(() => {
-    return Math.min(
-      totalNeto,
-      totalAbonado +
-        (anticiposImputadosManuales > abonoRestanteParaServicios ? anticiposImputadosManuales - abonoRestanteParaServicios : 0)
-    );
-  }, [totalNeto, totalAbonado, anticiposImputadosManuales, abonoRestanteParaServicios]);
+    return Math.min(totalNeto, valorPagadoEfectivo);
+  }, [totalNeto, valorPagadoEfectivo]);
 
   const saldoPendiente = Math.max(0, totalNeto - totalPagado);
 
@@ -829,7 +883,25 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       alert('Agregue al menos una línea de producto o servicio para guardar la solicitud.');
       return;
     }
+
+    let pagosFinales = [...pagosAbono];
+    const montoPendiente = Number(montoAbonoInput) || 0;
+    if (montoPendiente > 0) {
+      const medio = mediosPago.find((m) => m.uuid === medioSeleccionadoUuid) || mediosPago[0];
+      if (medio) {
+        pagosFinales.push({
+          idTemp: `pago-auto-${Date.now()}`,
+          instrumentoUuid: medio.uuid,
+          instrumentoCodigo: medio.codigo,
+          instrumentoNombre: medio.nombre,
+          monto: montoPendiente,
+          referencia: referenciaAbonoInput.trim(),
+        });
+      }
+    }
+
     await onAsentarSolicitud({
+      requestId: solicitudInicial?.requestId,
       canalUuid: selectedCanal || canales[0]?.uuid,
       clienteUuid: selectedCliente || clientes[0]?.uuid,
       tipoDocumentoUuid: tipoDocActual?.uuid,
@@ -840,13 +912,19 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       totalPagadoInventario: cobroInventarioEfectivo,
       anticipoVoBoAutorizado: false,
       observaciones: observacionesDocumento,
-      pagosAbono,
+      pagosAbono: pagosFinales,
       esSoloGuardar: true,
     });
   };
 
   const handleAsentar = async () => {
     if (lineas.length === 0) return;
+    if (anticiposSuperanPago) {
+      alert(
+        `No es posible asentar: El valor pagado ($${valorPagadoEfectivo.toLocaleString()}) es menor a la suma de anticipos dados en los registros ($${totalAnticiposRegistros.toLocaleString()}).`
+      );
+      return;
+    }
     if (!voboAutorizado) {
       if (inventarioImpago) {
         alert('Invariante #1: El inventario debe estar cubierto al 100% para asentar.');
@@ -858,7 +936,24 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       }
     }
 
+    let pagosFinales = [...pagosAbono];
+    const montoPendiente = Number(montoAbonoInput) || 0;
+    if (montoPendiente > 0) {
+      const medio = mediosPago.find((m) => m.uuid === medioSeleccionadoUuid) || mediosPago[0];
+      if (medio) {
+        pagosFinales.push({
+          idTemp: `pago-auto-${Date.now()}`,
+          instrumentoUuid: medio.uuid,
+          instrumentoCodigo: medio.codigo,
+          instrumentoNombre: medio.nombre,
+          monto: montoPendiente,
+          referencia: referenciaAbonoInput.trim(),
+        });
+      }
+    }
+
     await onAsentarSolicitud({
+      requestId: solicitudInicial?.requestId,
       canalUuid: selectedCanal || canales[0]?.uuid,
       clienteUuid: selectedCliente || clientes[0]?.uuid,
       tipoDocumentoUuid: tipoDocActual?.uuid,
@@ -868,13 +963,45 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       lineas,
       totalPagadoInventario: cobroInventarioEfectivo,
       anticipoVoBoAutorizado: voboAutorizado || voboExcepcionAnticipo,
+      supervisorPin: (voboAutorizado || voboExcepcionAnticipo) && supervisorPin ? supervisorPin.trim() : undefined,
       observaciones: observacionesDocumento,
-      pagosAbono,
+      pagosAbono: pagosFinales,
     });
   };
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Banner Informativo al Continuar/Editar Solicitud en Borrador */}
+      {solicitudInicial?.requestId && (
+        <div className="p-4 bg-gradient-to-r from-amber-950/80 to-amber-900/40 border border-amber-600/70 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 shadow-lg">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">✏️</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-white">Continuando Solicitud en Borrador:</span>
+                <span className="font-mono font-bold text-amber-400 bg-amber-950/90 px-2 py-0.5 rounded border border-amber-600/50">
+                  {solicitudInicial.numeroDocumentoVisible || solicitudInicial.requestId}
+                </span>
+                <Badge variant="warning">BORRADOR</Badge>
+              </div>
+              <p className="text-xs text-amber-200/90 mt-0.5">
+                La información previa ha sido cargada. Puedes agregar ítems, registrar pagos de anticipo y presionar &quot;Asentar Solicitud&quot; para enviar a taller, o &quot;Guardar Borrador&quot; para mantener los cambios.
+              </p>
+            </div>
+          </div>
+          {onCancelarEdicion && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onCancelarEdicion}
+              className="border-amber-700/60 text-amber-200 hover:bg-amber-900/60 whitespace-nowrap"
+            >
+              ✕ Cancelar y Volver a Lista
+            </Button>
+          )}
+        </div>
+      )}
       {/* ========================================================================= */}
       {/* 1. CABECERA DOCUMENTAL (WIREFRAME 1: TIPO, SUBTIPO, NÚMERO, FECHA, CANAL/CLIENTE) */}
       {/* ========================================================================= */}
@@ -1832,6 +1959,24 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
               </div>
             )}
 
+            {/* ALERTA CRÍTICA: PAGO MENOR A ANTICIPOS DADOS EN REGISTROS */}
+            {anticiposSuperanPago && (
+              <div
+                role="alert"
+                className="p-2.5 bg-rose-950/40 border border-rose-600/50 rounded-lg space-y-1 text-[11px] text-rose-200 mt-2"
+              >
+                <div className="font-bold flex items-center gap-1.5 text-rose-300">
+                  <span>🛑 Pago Insuficiente para Anticipos</span>
+                </div>
+                <p className="m-0 leading-tight">
+                  Los anticipos asignados en los registros suman <strong>${totalAnticiposRegistros.toLocaleString()}</strong>, pero el valor pagado actual es de <strong>${valorPagadoEfectivo.toLocaleString()}</strong> (faltan <strong>${(totalAnticiposRegistros - valorPagadoEfectivo).toLocaleString()}</strong>).
+                </p>
+                <p className="m-0 text-[10px] text-rose-300/80">
+                  Regla de negocio: No se puede asentar la solicitud mientras el pago sea menor a los anticipos dados, incluso si hay un VoBo aprobado.
+                </p>
+              </div>
+            )}
+
             <div className="pt-2 flex flex-col sm:flex-row gap-2">
               <Button
                 type="button"
@@ -1847,9 +1992,19 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 type="button"
                 variant="primary"
                 fullWidth
-                disabled={loading || lineas.length === 0 || (!voboAutorizado && (inventarioImpago || anticipoInsuficiente))}
+                disabled={
+                  loading ||
+                  lineas.length === 0 ||
+                  anticiposSuperanPago ||
+                  (!voboAutorizado && (inventarioImpago || anticipoInsuficiente))
+                }
                 onClick={handleAsentar}
                 className="bg-indigo-600 hover:bg-indigo-500 font-bold shadow-md shadow-indigo-950 py-2"
+                title={
+                  anticiposSuperanPago
+                    ? `El valor pagado ($${valorPagadoEfectivo.toLocaleString()}) es menor a los anticipos registrados ($${totalAnticiposRegistros.toLocaleString()})`
+                    : undefined
+                }
               >
                 {loading ? 'Procesando...' : '⚡ Asentar Solicitud e Iniciar Flujo'}
               </Button>

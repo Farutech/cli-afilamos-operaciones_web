@@ -32,14 +32,14 @@ export const adminApi = {
 
   async getUsuarios(token?: string): Promise<UsuarioAdminDto[]> {
     try {
-      const res = await apiClient<any[]>('/users', { method: 'GET' }, token);
-      const list = Array.isArray(res) ? res : [];
+      const res = await apiClient<any>('/users', { method: 'GET' }, token);
+      const list = Array.isArray(res) ? res : (res?.items || res?.usuarios || []);
       return list.map((u: any) => ({
         uuid: u.id,
         codigo: u.username || 'USR',
         nombreCompleto: u.fullName || u.username,
         email: u.email || `${u.username || 'user'}@afilamos.local`,
-        rol: u.canSuperviseCash ? 'SUPERVISOR' : (u.canBeCashier ? 'CAJERO' : 'ADMIN'),
+        rol: u.role || u.rol || (u.canSuperviseCash ? 'SUPERVISOR' : (u.canBeCashier ? 'CAJERO' : 'ADMIN')),
         activo: u.isActive ?? true,
         tienePin: u.hasPinConfigured ?? false,
         creadoEn: new Date().toISOString(),

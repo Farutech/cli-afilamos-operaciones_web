@@ -3,11 +3,19 @@ import { CRUDTable, Badge, Button, Modal } from '@farutech/design-system';
 import { solicitudesApi } from '../../services/solicitudesApi';
 
 export interface SolicitudHistorialItem {
+  id?: string;
   numeroSolicitud: string;
   subtipo: string;
   fecha: string;
   clienteNombre: string;
   clienteDocumento: string;
+  clienteUuid?: string;
+  canalUuid?: string;
+  tipoDocumentoUuid?: string;
+  subtipoUuid?: string;
+  observaciones?: string;
+  lineas?: any[];
+  pagosAbono?: any[];
   totalItems: number;
   totalNetoCop: number;
   anticipoCop: number;
@@ -17,12 +25,14 @@ export interface SolicitudHistorialItem {
 
 interface HistorialSolicitudesViewProps {
   onNuevaSolicitud: () => void;
+  onEditarSolicitud?: (solicitud: SolicitudHistorialItem) => void;
   solicitudesExtra?: SolicitudHistorialItem[];
   token?: string;
 }
 
 export function HistorialSolicitudesView({
   onNuevaSolicitud: _onNuevaSolicitud,
+  onEditarSolicitud,
   solicitudesExtra = [],
   token,
 }: HistorialSolicitudesViewProps) {
@@ -36,16 +46,20 @@ export function HistorialSolicitudesView({
       const res = await solicitudesApi.getSolicitudes({ page: 1, pageSize: 50 }, token);
       if (res?.items && Array.isArray(res.items)) {
         const mapeadas: SolicitudHistorialItem[] = res.items.map((dto) => ({
+          id: dto.publicId,
           numeroSolicitud: dto.codigo || dto.numeroDocumentoVisible || 'SOL',
           subtipo: dto.subtipoCodigo === 'PREF' ? 'SOL-PREF' : 'SOL-GEN',
           fecha: dto.fechaEmision ? dto.fechaEmision.split('T')[0] : new Date().toISOString().split('T')[0],
           clienteNombre: dto.clienteNombre || 'Mostrador',
           clienteDocumento: dto.clienteNumeroDocumento || '—',
+          clienteUuid: dto.clientePublicId,
+          canalUuid: dto.canalPublicId,
+          observaciones: dto.notas,
           totalItems: dto.items?.length || 0,
           totalNetoCop: dto.totalNeto || 0,
           anticipoCop: dto.totalAnticiposImputados || 0,
           saldoCop: dto.saldoPendiente || 0,
-          estado: dto.estado === 'ASENTADO' ? 'ASENTADA' : 'ASENTADA',
+          estado: dto.estado === 'ASENTADO' ? 'ASENTADA' : dto.estado === 'BORRADOR' ? 'BORRADOR' : 'ASENTADA',
         }));
         setSolicitudesApiList(mapeadas);
       } else {
@@ -158,9 +172,43 @@ export function HistorialSolicitudesView({
               render: (v: any) => {
                 const est = String(v);
                 const variant =
-                  est === 'ENTREGADA' ? 'success' : est === 'EN_TALLER' ? 'info' : est === 'ASENTADA' ? 'warning' : 'neutral';
+                  est === 'ENTREGADA'
+                    ? 'success'
+                    : est === 'EN_TALLER'
+                    ? 'info'
+                    : est === 'ASENTADA'
+                    ? 'info'
+                    : est === 'BORRADOR'
+                    ? 'warning'
+                    : 'neutral';
                 return <Badge variant={variant}>{est.replace('_', ' ')}</Badge>;
               },
+            },
+            {
+              key: 'acciones',
+              label: 'Acciones',
+              align: 'right',
+              render: (_: any, r: SolicitudHistorialItem) => (
+                <div className="flex items-center justify-end gap-1.5">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSolicitudDetalle(r)}
+                  >
+                    👁️ Ver
+                  </Button>
+                  {r.estado === 'BORRADOR' && onEditarSolicitud && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => onEditarSolicitud(r)}
+                      className="bg-amber-600 hover:bg-amber-500 text-white font-medium shadow-sm"
+                    >
+                      ✏️ Continuar / Editar
+                    </Button>
+                  )}
+                </div>
+              ),
             },
           ]}
           rowActions={[
@@ -172,6 +220,18 @@ export function HistorialSolicitudesView({
               variant: 'secondary',
               onClick: (r: SolicitudHistorialItem) => setSolicitudDetalle(r),
             },
+            ...(onEditarSolicitud
+              ? [
+                  {
+                    id: 'editar_borrador',
+                    label: 'Continuar / Editar',
+                    icon: <span>✏️</span>,
+                    tooltip: 'Continuar y asentar solicitud en borrador',
+                    variant: 'primary' as const,
+                    onClick: (r: SolicitudHistorialItem) => onEditarSolicitud(r),
+                  },
+                ]
+              : []),
           ]}
           searchable={true}
           searchPlaceholder="Buscar por consecutivo, cliente o documento..."
@@ -203,6 +263,12 @@ export function HistorialSolicitudesView({
                 <span className="text-slate-400">Fecha de Registro:</span>
                 <span className="font-mono text-slate-300">{solicitudDetalle.fecha}</span>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Estado:</span>
+                <Badge variant={solicitudDetalle.estado === 'BORRADOR' ? 'warning' : 'info'}>
+                  {solicitudDetalle.estado}
+                </Badge>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-center">
@@ -220,10 +286,23 @@ export function HistorialSolicitudesView({
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
+            <div className="pt-2 flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setSolicitudDetalle(null)}>
                 Cerrar
               </Button>
+              {solicitudDetalle.estado === 'BORRADOR' && onEditarSolicitud && (
+                <Button
+                  variant="primary"
+                  className="bg-amber-600 hover:bg-amber-500 font-bold text-white"
+                  onClick={() => {
+                    const target = solicitudDetalle;
+                    setSolicitudDetalle(null);
+                    onEditarSolicitud(target);
+                  }}
+                >
+                  ✏️ Continuar / Editar esta Solicitud
+                </Button>
+              )}
             </div>
           </div>
         </Modal>

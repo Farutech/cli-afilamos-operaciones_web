@@ -47,7 +47,17 @@ export function App() {
   const [session, setSession] = useState<UserSession | null>(() => {
     try {
       const stored = localStorage.getItem('ordeon_session');
-      return stored ? JSON.parse(stored) : null;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.token === 'demo-local-token') {
+          // Limpiar token demo obsoleto para forzar login real con credenciales válidas
+          localStorage.removeItem('ordeon_session');
+          localStorage.removeItem('ordeon_token');
+          return null;
+        }
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -66,9 +76,87 @@ export function App() {
   const [canales, setCanales] = useState<CanalOrigen[]>([]);
   const [tiposDoc, setTiposDoc] = useState<TipoDocumentoIdentidad[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [solicitudesCreadas, setSolicitudesCreadas] = useState<SolicitudHistorialItem[]>([]);
+  const [solicitudesCreadas, setSolicitudesCreadas] = useState<SolicitudHistorialItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('ordeon_solicitudes_locales');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ordeon_solicitudes_locales', JSON.stringify(solicitudesCreadas));
+    } catch (e) {
+      console.warn('No se pudo guardar solicitudes en localStorage:', e);
+    }
+  }, [solicitudesCreadas]);
+
+  // Estado para continuar o editar una solicitud guardada / borrador
+  const [solicitudEnEdicion, setSolicitudEnEdicion] = useState<{
+    requestId?: string;
+    numeroDocumentoVisible?: string;
+    clienteUuid?: string;
+    canalUuid?: string;
+    observaciones?: string;
+    lineas?: any[];
+    pagosAbono?: any[];
+  } | null>(null);
+
+  const handleEditarSolicitud = async (sol: SolicitudHistorialItem) => {
+    let lineasCargadas = sol.lineas || [];
+    let obs = sol.observaciones || '';
+    let cliId = sol.clienteUuid || '';
+    let canalId = sol.canalUuid || '';
+
+    // Si tiene ID en backend, consultar detalle fresco
+    if (sol.id && session?.token) {
+      try {
+        const detalle = await solicitudesApi.getSolicitudByUuid(sol.id, session.token);
+        if (detalle) {
+          cliId = detalle.clientePublicId || cliId;
+          canalId = detalle.canalPublicId || canalId;
+          obs = detalle.notas || obs;
+          if (detalle.items && detalle.items.length > 0) {
+            lineasCargadas = detalle.items.map((it) => ({
+              idTemp: it.publicId || `it-${Date.now()}-${Math.random()}`,
+              itemCatalogoId: it.publicId,
+              naturaleza: it.naturaleza,
+              descripcion: it.descripcion,
+              cantidad: it.cantidad,
+              precioUnitario: it.precioUnitario,
+              subtotal: it.subtotal,
+              stockReferencial: it.stockReferencialDisponible,
+              exigeAnticipo: it.exigeAnticipoObligatorio,
+              porcentajeAnticipoMinimo: it.porcentajeAnticipoMinimo,
+              anticipoMinimo: it.anticipoMinimoRequerido,
+              anticipoImputado: it.anticipoDirectoImputado,
+              franjaCompromiso: it.franjaCompromiso,
+              observaciones: '',
+            }));
+          }
+        }
+      } catch (e) {
+        console.warn('Cargando borrador desde almacenamiento local:', e);
+      }
+    }
+
+    setSolicitudEnEdicion({
+      requestId: sol.id,
+      numeroDocumentoVisible: sol.numeroSolicitud,
+      clienteUuid: cliId,
+      canalUuid: canalId,
+      observaciones: obs,
+      lineas: lineasCargadas,
+      pagosAbono: sol.pagosAbono || [],
+    });
+    setActiveSection('Solicitudes');
+    setSolicitudesSubView('nueva');
+  };
 
   const handleAsentarSolicitud = async (solicitud: {
+    requestId?: string;
     canalUuid: string;
     clienteUuid: string;
     tipoDocumentoUuid?: string;
@@ -81,6 +169,7 @@ export function App() {
     observaciones?: string;
     pagosAbono?: any[];
     esSoloGuardar?: boolean;
+    supervisorPin?: string;
   }) => {
     const clienteObj = clientes.find((c) => c.uuid === solicitud.clienteUuid);
     const subtotalCalc = solicitud.lineas.reduce(
@@ -89,17 +178,27 @@ export function App() {
     );
     const totalAbonado = (solicitud.pagosAbono || []).reduce((acc, p) => acc + (p.monto || 0), 0);
     const saldo = Math.max(0, subtotalCalc - totalAbonado);
-    const nuevoNumero = `SOL-${String(Math.floor(1000 + Math.random() * 9000))}`;
+    const nuevoNumero = solicitud.requestId
+      ? (solicitudEnEdicion?.numeroDocumentoVisible || `SOL-${solicitud.requestId.slice(0, 8)}`)
+      : `SOL-${String(Math.floor(1000 + Math.random() * 9000))}`;
 
     const tieneServicios = solicitud.lineas.some((l) => l.naturaleza === 'SERVICIO');
     const esBorrador = solicitud.esSoloGuardar === true;
 
     const nuevaSolicitudHistorial: SolicitudHistorialItem = {
+      id: solicitud.requestId,
       numeroSolicitud: nuevoNumero,
       subtipo: solicitud.subtipoCodigo || solicitud.tipoDocumentoCodigo || 'SOL_EST',
       fecha: new Date().toISOString().split('T')[0],
       clienteNombre: clienteObj ? clienteObj.nombreRazonSocial : 'Cliente Mostrador',
       clienteDocumento: clienteObj ? clienteObj.numeroDocumento : '—',
+      clienteUuid: solicitud.clienteUuid,
+      canalUuid: solicitud.canalUuid,
+      tipoDocumentoUuid: solicitud.tipoDocumentoUuid,
+      subtipoUuid: solicitud.subtipoUuid,
+      observaciones: solicitud.observaciones,
+      lineas: solicitud.lineas,
+      pagosAbono: solicitud.pagosAbono,
       totalItems: solicitud.lineas.length,
       totalNetoCop: subtotalCalc,
       anticipoCop: totalAbonado,
@@ -114,22 +213,28 @@ export function App() {
           : 'Consumiendo servicio de backend para asentar solicitud...',
         { id: 'asentar-sol' }
       );
-      // 1. Invocar POST /requests en backend
-      const resSolicitud = await solicitudesApi.crearSolicitud(
-        {
-          subtipoPublicId: solicitud.subtipoUuid || solicitud.tipoDocumentoUuid || 'SOL_EST',
-          clientePublicId: solicitud.clienteUuid,
-          canalPublicId: solicitud.canalUuid,
-          notas: solicitud.observaciones,
-        },
-        session?.token
-      );
 
-      const uuidSol = resSolicitud.publicId;
+      let uuidSol = solicitud.requestId;
+
+      // 1. Si no existe solicitud previa en backend, invocar POST /requests
+      if (!uuidSol) {
+        const resSolicitud = await solicitudesApi.crearSolicitud(
+          {
+            subtipoPublicId: solicitud.subtipoUuid || solicitud.tipoDocumentoUuid || 'SOL_EST',
+            clientePublicId: solicitud.clienteUuid,
+            canalPublicId: solicitud.canalUuid,
+            notas: solicitud.observaciones,
+          },
+          session?.token
+        );
+        uuidSol = resSolicitud.publicId;
+        nuevaSolicitudHistorial.id = uuidSol;
+        nuevaSolicitudHistorial.numeroSolicitud = resSolicitud.codigo || nuevoNumero;
+      }
 
       // 2. Agregar ítems al backend si tienen identificador en catálogo
       for (const linea of solicitud.lineas) {
-        if (linea.itemCatalogoId) {
+        if (linea.itemCatalogoId && uuidSol) {
           try {
             await solicitudesApi.agregarItem(
               uuidSol,
@@ -148,15 +253,21 @@ export function App() {
         }
       }
 
-      nuevaSolicitudHistorial.numeroSolicitud = resSolicitud.codigo || nuevoNumero;
-
       // 3. Confirmar / Asentar solicitud solo si no es solo guardar
-      if (!esBorrador) {
+      if (!esBorrador && uuidSol) {
+        const initialPayments = (solicitud.pagosAbono || []).map((p: any) => ({
+          paymentMethodId: p.instrumentoUuid,
+          amount: p.monto,
+          referenceNumber: p.referencia || 'SIN-REF',
+        }));
+
         await solicitudesApi.asentarSolicitud(
           uuidSol,
           {
             usuarioAsientaId: 1,
             usuarioAsientaCodigo: session?.codigo || 'admin',
+            initialPayments,
+            supervisorPin: solicitud.supervisorPin || null,
           },
           session?.token
         );
@@ -191,7 +302,22 @@ export function App() {
         description: 'El servicio del backend generó este error al procesar la solicitud. Se registró en el historial local.',
       });
     } finally {
-      setSolicitudesCreadas((prev) => [nuevaSolicitudHistorial, ...prev]);
+      setSolicitudesCreadas((prev) => {
+        const existIdx = prev.findIndex(
+          (s) => (nuevaSolicitudHistorial.id && s.id === nuevaSolicitudHistorial.id) ||
+                 s.numeroSolicitud === nuevaSolicitudHistorial.numeroSolicitud
+        );
+        if (existIdx >= 0) {
+          const copia = [...prev];
+          copia[existIdx] = {
+            ...copia[existIdx],
+            ...nuevaSolicitudHistorial,
+          };
+          return copia;
+        }
+        return [nuevaSolicitudHistorial, ...prev];
+      });
+      setSolicitudEnEdicion(null);
       setSolicitudesSubView('lista');
     }
   };
@@ -237,6 +363,7 @@ export function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
+          codigo: identifier,
           identifier,
           username: identifier,
           email: identifier,
@@ -341,6 +468,7 @@ export function App() {
           <button
             className="primary-button"
             onClick={() => {
+              setSolicitudEnEdicion(null);
               setActiveSection('Solicitudes');
               setSolicitudesSubView('nueva');
             }}
@@ -350,9 +478,13 @@ export function App() {
         </div>
         <HistorialSolicitudesView
           onNuevaSolicitud={() => {
+            setSolicitudEnEdicion(null);
             setActiveSection('Solicitudes');
             setSolicitudesSubView('nueva');
           }}
+          onEditarSolicitud={handleEditarSolicitud}
+          solicitudesExtra={solicitudesCreadas}
+          token={session?.token}
         />
       </div>
     );
@@ -368,7 +500,12 @@ export function App() {
           <SegmentedControl
             size="sm"
             value={solicitudesSubView}
-            onChange={(val) => setSolicitudesSubView(val as 'nueva' | 'lista')}
+            onChange={(val) => {
+              if (val === 'nueva') {
+                setSolicitudEnEdicion(null);
+              }
+              setSolicitudesSubView(val as 'nueva' | 'lista');
+            }}
             options={[
               { value: 'nueva', label: 'Captura (POS)' },
               { value: 'lista', label: 'Historial' },
@@ -378,7 +515,11 @@ export function App() {
 
         {solicitudesSubView === 'lista' ? (
           <HistorialSolicitudesView
-            onNuevaSolicitud={() => setSolicitudesSubView('nueva')}
+            onNuevaSolicitud={() => {
+              setSolicitudEnEdicion(null);
+              setSolicitudesSubView('nueva');
+            }}
+            onEditarSolicitud={handleEditarSolicitud}
             solicitudesExtra={solicitudesCreadas}
             token={session?.token}
           />
@@ -388,6 +529,11 @@ export function App() {
             tiposDocumento={tiposDoc}
             clientes={clientes}
             onAsentarSolicitud={handleAsentarSolicitud}
+            solicitudInicial={solicitudEnEdicion}
+            onCancelarEdicion={() => {
+              setSolicitudEnEdicion(null);
+              setSolicitudesSubView('lista');
+            }}
           />
         )}
       </div>
