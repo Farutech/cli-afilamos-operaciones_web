@@ -55,6 +55,24 @@ export function App() {
           localStorage.removeItem('ordeon_token');
           return null;
         }
+
+        if (parsed.token && typeof parsed.token === 'string') {
+          try {
+            const parts = parsed.token.split('.');
+            if (parts.length === 3) {
+              const payload = JSON.parse(atob(parts[1]));
+              if (payload.exp && Date.now() >= payload.exp * 1000) {
+                console.warn('El token de sesión ha expirado. Limpiando credenciales locales.');
+                localStorage.removeItem('ordeon_session');
+                localStorage.removeItem('ordeon_token');
+                return null;
+              }
+            }
+          } catch {
+            // Token no parseable
+          }
+        }
+
         return parsed;
       }
       return null;
@@ -62,6 +80,15 @@ export function App() {
       return null;
     }
   });
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setSession(null);
+      setLoginError('Tu sesión ha expirado. Por favor ingresa nuevamente con tus credenciales.');
+    };
+    window.addEventListener('ordeon:auth_expired', handleAuthExpired);
+    return () => window.removeEventListener('ordeon:auth_expired', handleAuthExpired);
+  }, []);
 
   const [activeSection, setActiveSection] = useState<string>('Resumen');
   const [loginError, setLoginError] = useState('');

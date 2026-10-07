@@ -90,6 +90,11 @@ export async function apiClient<T>(
   })
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('ordeon_token');
+      localStorage.removeItem('ordeon_session');
+      window.dispatchEvent(new CustomEvent('ordeon:auth_expired'));
+    }
     let errorDetail = `Error ${response.status}: ${response.statusText}`
     try {
       const text = await response.text()
