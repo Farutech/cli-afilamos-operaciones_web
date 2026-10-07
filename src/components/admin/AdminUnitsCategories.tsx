@@ -10,7 +10,7 @@ import {
   FolderTree,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { UnidadPresentacion, CategoriaItem } from '@/types/catalogos';
 
@@ -227,12 +227,17 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
           <div className="client-list">
             {visible.map((item) => (
               <div className="client-row" key={item.id}>
-                <div className="client-avatar">
+                <div className="client-cell-main">
+
+                  <div className="client-avatar">
                   {item.tipo === 'UNIDAD' ? <Ruler className="w-4 h-4" /> : <FolderTree className="w-4 h-4" />}
                 </div>
-                <div className="client-main">
+
+                  <div className="client-main">
                   <strong>{item.nombre}</strong>
                   <span>{item.detalle}</span>
+                </div>
+
                 </div>
                 <span className="client-contact font-mono text-xs">{item.codigo}</span>
                 <span className="client-orders font-medium text-slate-300">
@@ -362,72 +367,103 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
         }
         icon={<Layers className="w-5 h-5 text-violet-400" />}
         size="md"
-        extraActions={
-          modal && modal !== 'new' ? (
-            <Button
-              variant="outline"
-              onClick={() => {
-                const target = modal;
-                setModal(null);
-                void toggleStatus(target);
-              }}
-              disabled={saving}
-            >
-              <Power className="w-4 h-4 mr-2" />
-              {modal.activo ? 'Desactivar registro' : 'Activar registro'}
-            </Button>
-          ) : undefined
-        }
         footer={
-          <>
-            <Button variant="secondary" onClick={() => setModal(null)} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button variant="primary" type="submit" form="unit-cat-form" disabled={saving}>
-              {saving ? 'Guardando…' : modal === 'new' ? 'Crear registro' : 'Guardar cambios'}
-            </Button>
-          </>
+          <div className="modal-footer-standard">
+            <div>
+              {modal && modal !== 'new' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = modal;
+                    setModal(null);
+                    void toggleStatus(target);
+                  }}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold whitespace-nowrap transition-colors"
+                >
+                  <Power className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span>{modal.activo ? 'Desactivar registro' : 'Activar registro'}</span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2.5 ml-auto">
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold whitespace-nowrap transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="unit-cat-form"
+                disabled={saving}
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold whitespace-nowrap transition-colors shadow-sm"
+              >
+                {saving ? 'Guardando…' : modal === 'new' ? 'Crear registro' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
         }
       >
         {modal && (
           <form id="unit-cat-form" onSubmit={saveItem}>
             <div className="client-modal-grid">
-              <div className="modal-form-field">
-                <label>Tipo de Catálogo</label>
+              <div className="form-field">
+                <label className="form-label" htmlFor="tipo-cat">
+                  Tipo de Catálogo *
+                </label>
                 <select
+                  id="tipo-cat"
                   name="tipo"
                   defaultValue={modal === 'new' ? 'UNIDAD' : modal.tipo}
                   disabled={modal !== 'new'}
+                  className="form-select"
                 >
                   <option value="UNIDAD">Unidad de Medida</option>
                   <option value="CATEGORIA">Categoría de Ítems</option>
                 </select>
               </div>
 
-              <FloatingInput
-                name="codigo"
-                label="Código (ej: UND, CAT-MADERA)"
-                defaultValue={modal === 'new' ? '' : modal.codigo}
-                tooltip="Identificador alfanumérico único para la entidad."
-                required
-              />
-
-              <div style={{ gridColumn: '1 / -1' }}>
-                <FloatingInput
-                  name="nombre"
-                  label="Nombre descriptivo"
-                  defaultValue={modal === 'new' ? '' : modal.nombre}
-                  tooltip="Nombre comercial visible al seleccionar o filtrar catálogo."
+              <div className="form-field">
+                <label className="form-label" htmlFor="codigo-cat">
+                  Código (ej: UND, CAT-MADERA) *
+                </label>
+                <input
+                  id="codigo-cat"
+                  name="codigo"
+                  className="form-input font-mono"
+                  placeholder="Ej: UND, CAT-MADERA"
+                  defaultValue={modal === 'new' ? '' : modal.codigo}
                   required
                 />
               </div>
 
-              <div style={{ gridColumn: '1 / -1' }}>
-                <FloatingInput
+              <div className="form-field full-width">
+                <label className="form-label" htmlFor="nombre-cat">
+                  Nombre descriptivo *
+                </label>
+                <input
+                  id="nombre-cat"
+                  name="nombre"
+                  className="form-input"
+                  placeholder="Nombre de la unidad o categoría"
+                  defaultValue={modal === 'new' ? '' : modal.nombre}
+                  required
+                />
+              </div>
+
+              <div className="form-field full-width">
+                <label className="form-label" htmlFor="detalle-cat">
+                  Abreviatura (para unidades) o Descripción
+                </label>
+                <input
+                  id="detalle-cat"
                   name="detalle"
-                  label="Abreviatura (para unidades) o Descripción"
+                  className="form-input"
+                  placeholder="Símbolo corto o nota sobre la categoría"
                   defaultValue={modal === 'new' ? '' : modal.detalle}
-                  tooltip="Símbolo corto (ej: UND, MTR, JGO) o nota sobre la categoría."
                 />
               </div>
             </div>

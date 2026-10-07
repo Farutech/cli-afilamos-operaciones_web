@@ -12,9 +12,9 @@ import {
   Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
 import { catalogosApi } from '@/services/catalogosApi';
-import type { ItemCatalogo } from '@/types/catalogos';
+import type { ItemCatalogo, UnidadPresentacion } from '@/types/catalogos';
 
 const FALLBACK_SERVICES: ItemCatalogo[] = [
   { uuid: 'srv-1', codigoReferencia: 'SRV-001', nombre: 'Afilado Sierra Circular Carburo', descripcion: 'Afilado integral de dientes de carburo de tungsteno con refrigeración asistida.', naturaleza: 'SERVICIO', precioBase: 45000, stockReferencial: null, activo: true },
@@ -26,6 +26,7 @@ const FALLBACK_SERVICES: ItemCatalogo[] = [
 
 export default function AdminServices({ token }: { token?: string }) {
   const [services, setServices] = useState<ItemCatalogo[]>(FALLBACK_SERVICES);
+  const [unidades, setUnidades] = useState<UnidadPresentacion[]>([]);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -59,6 +60,7 @@ export default function AdminServices({ token }: { token?: string }) {
 
   useEffect(() => {
     void loadServices();
+    catalogosApi.getUnidades().then((res) => setUnidades(res.unidades)).catch(() => {});
   }, [page, pageSize, query, token]);
 
   async function saveService(event: FormEvent<HTMLFormElement>) {
@@ -71,6 +73,7 @@ export default function AdminServices({ token }: { token?: string }) {
       nombre: String(data.get('nombre') || '').trim(),
       descripcion: String(data.get('descripcion') || '').trim(),
       precioBase: Number(data.get('precioBase') || 0),
+      uuidUnidadPresentacion: String(data.get('uuidUnidadPresentacion') || '8f647d36-b43d-4f21-aa1a-005ad16ce290'),
     };
 
     try {
@@ -201,12 +204,17 @@ export default function AdminServices({ token }: { token?: string }) {
           <div className="client-list">
             {visible.map((service) => (
               <div className="client-row" key={service.uuid}>
-                <div className="client-avatar">
+                <div className="client-cell-main">
+
+                  <div className="client-avatar">
                   <Wrench className="w-4 h-4" />
                 </div>
-                <div className="client-main">
+
+                  <div className="client-main">
                   <strong>{service.nombre}</strong>
                   <span>{service.descripcion || 'Sin descripción adicional'}</span>
+                </div>
+
                 </div>
                 <span className="client-contact font-mono text-xs">{service.codigoReferencia}</span>
                 <span className="client-orders text-emerald-400 font-bold">
@@ -386,38 +394,87 @@ export default function AdminServices({ token }: { token?: string }) {
         {modal && (
           <form id="service-form" onSubmit={saveService}>
             <div className="client-modal-grid">
-              <FloatingInput
-                name="codigoReferencia"
-                label="Código de referencia (ej: SRV-010)"
-                defaultValue={modal === 'new' ? '' : modal.codigoReferencia}
-                tooltip="Identificador alfanumérico único para el servicio en el sistema."
-                required
-              />
+              <div className="form-field">
+                <label className="form-label" htmlFor="srv-code">
+                  Código de referencia (ej: SRV-010) *
+                </label>
+                <input
+                  id="srv-code"
+                  name="codigoReferencia"
+                  className="form-input font-mono"
+                  placeholder="Ej: SRV-010"
+                  defaultValue={modal === 'new' ? '' : modal.codigoReferencia}
+                  required
+                />
+              </div>
 
-              <FloatingInput
-                name="nombre"
-                label="Nombre del servicio"
-                defaultValue={modal === 'new' ? '' : modal.nombre}
-                tooltip="Nombre comercial o técnico del proceso de afilado o mecanizado."
-                required
-              />
+              <div className="form-field">
+                <label className="form-label" htmlFor="srv-name">
+                  Nombre del servicio *
+                </label>
+                <input
+                  id="srv-name"
+                  name="nombre"
+                  className="form-input"
+                  placeholder="Ej: Afilado Sierra Circular Carburo"
+                  defaultValue={modal === 'new' ? '' : modal.nombre}
+                  required
+                />
+              </div>
 
-              <FloatingInput
-                name="precioBase"
-                type="number"
-                min="0"
-                label="Precio base (COP)"
-                defaultValue={modal === 'new' ? '' : modal.precioBase}
-                tooltip="Tarifa base estándar antes de descuentos o listas de precio."
-                required
-              />
+                            <div className="form-field">
+                <label className="form-label" htmlFor="srv-unidad">
+                  Unidad de Medida del Servicio *
+                </label>
+                <select
+                  id="srv-unidad"
+                  name="uuidUnidadPresentacion"
+                  className="form-input"
+                  defaultValue={modal === 'new' ? '8f647d36-b43d-4f21-aa1a-005ad16ce290' : modal.unidadPresentacion?.uuid || '8f647d36-b43d-4f21-aa1a-005ad16ce290'}
+                  required
+                >
+                  {unidades.length === 0 ? (
+                    <option value="8f647d36-b43d-4f21-aa1a-005ad16ce290">SRV - Servicio Técnico</option>
+                  ) : (
+                    unidades.map((u) => (
+                      <option key={u.uuid} value={u.uuid}>
+                        {u.codigo} - {u.nombre}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
 
-              <FloatingInput
-                name="descripcion"
-                label="Descripción o especificación"
-                defaultValue={modal === 'new' ? '' : modal.descripcion || ''}
-                tooltip="Detalles sobre tolerancias técnicas, materiales aplicables o alcance."
-              />
+              <div className="form-field">
+                <label className="form-label" htmlFor="srv-price">
+                  Precio base (COP) *
+                </label>
+                <input
+                  id="srv-price"
+                  name="precioBase"
+                  type="number"
+                  min="0"
+                  step="100"
+                  className="form-input font-mono"
+                  placeholder="0"
+                  defaultValue={modal === 'new' ? '' : modal.precioBase}
+                  required
+                />
+              </div>
+
+              <div className="form-field full-width">
+                <label className="form-label" htmlFor="srv-desc">
+                  Descripción o especificación
+                </label>
+                <textarea
+                  id="srv-desc"
+                  name="descripcion"
+                  rows={2}
+                  className="form-textarea"
+                  placeholder="Detalles sobre tolerancias técnicas, muela o alcance..."
+                  defaultValue={modal === 'new' ? '' : modal.descripcion || ''}
+                />
+              </div>
             </div>
           </form>
         )}

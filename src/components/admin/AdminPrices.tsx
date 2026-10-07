@@ -318,14 +318,19 @@ export default function AdminPrices({ token }: { token?: string }) {
           <div className="client-list">
             {visible.map((lp) => (
               <div className="client-row" key={lp.uuid}>
-                <div className="client-avatar">
+                <div className="client-cell-main">
+
+                  <div className="client-avatar">
                   <Coins className="w-4 h-4" />
                 </div>
-                <div className="client-main">
+
+                  <div className="client-main">
                   <strong>
                     {lp.nombre} {lp.esPredeterminada && <span className="text-violet-400 text-xs font-normal">(Predeterminada)</span>}
                   </strong>
                   <span>Ajuste comercial sobre precio base</span>
+                </div>
+
                 </div>
                 <span className="client-contact font-mono text-xs">{lp.codigo}</span>
                 <span className={`client-orders font-bold ${lp.porcentajeAjuste < 0 ? 'text-emerald-400' : lp.porcentajeAjuste > 0 ? 'text-amber-400' : 'text-slate-300'}`}>

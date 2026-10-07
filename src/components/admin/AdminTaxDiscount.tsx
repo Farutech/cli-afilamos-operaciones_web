@@ -132,12 +132,17 @@ export default function AdminTaxDiscount({ token }: { token?: string }) {
           <div className="client-list">
             {visible.map((param) => (
               <div className="client-row" key={param.clave}>
-                <div className="client-avatar">
+                <div className="client-cell-main">
+
+                  <div className="client-avatar">
                   <Sliders className="w-4 h-4" />
                 </div>
-                <div className="client-main">
+
+                  <div className="client-main">
                   <strong>{param.clave.replace(/_/g, ' ')}</strong>
                   <span>{param.descripcion}</span>
+                </div>
+
                 </div>
                 <span className="client-contact font-mono text-xs">{param.clave}</span>
                 <span className="client-orders font-bold text-violet-300">

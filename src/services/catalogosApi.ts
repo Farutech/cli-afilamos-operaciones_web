@@ -6,6 +6,7 @@ import type {
   TipoDocumentoIdentidad,
   CanalOrigen,
   TipoDocumentoBase,
+  SubtipoDocumento,
   Caja,
   MedioPagoCategoria,
   MedioPagoInstrumento,
@@ -18,38 +19,302 @@ import type {
   ConfiguracionDenominaciones,
 } from '../types/catalogos';
 
+
+export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
+  // Servicios con unidad SRV (8f647d36-b43d-4f21-aa1a-005ad16ce290)
+  {
+    uuid: 'b05d0d80-6013-4335-a8e1-783f8eac919e',
+    codigoReferencia: 'AFIL-DISCO-01',
+    nombre: 'Afilado de Disco de Sierra',
+    descripcion: 'Afilado técnico de discos de carburo y tungsteno para corte de madera y aluminio.',
+    naturaleza: 'SERVICIO',
+    precioBase: 25000,
+    stockReferencial: null,
+    activo: true,
+    unidadPresentacion: {
+      uuid: '8f647d36-b43d-4f21-aa1a-005ad16ce290',
+      codigo: 'SRV',
+      nombre: 'Servicio',
+      abreviatura: 'SRV',
+      activo: true,
+    },
+  },
+  {
+    uuid: 'srv-1',
+    codigoReferencia: 'AFIL-CUCH-01',
+    nombre: 'Afilado Cuchillo Profesional / Chef',
+    descripcion: 'Afilado artesanal al agua con rectificado de filo y pulido espejo.',
+    naturaleza: 'SERVICIO',
+    precioBase: 15000,
+    stockReferencial: null,
+    activo: true,
+    unidadPresentacion: {
+      uuid: '8f647d36-b43d-4f21-aa1a-005ad16ce290',
+      codigo: 'SRV',
+      nombre: 'Servicio',
+      abreviatura: 'SRV',
+      activo: true,
+    },
+  },
+  {
+    uuid: 'srv-2',
+    codigoReferencia: 'REC-CUCH-30',
+    nombre: 'Rectificado Cuchilla Cepillo 30cm',
+    descripcion: 'Rectificado plano de precisión con refrigeración y tolerancias micrométricas.',
+    naturaleza: 'SERVICIO',
+    precioBase: 32000,
+    stockReferencial: null,
+    activo: true,
+    unidadPresentacion: {
+      uuid: '8f647d36-b43d-4f21-aa1a-005ad16ce290',
+      codigo: 'SRV',
+      nombre: 'Servicio',
+      abreviatura: 'SRV',
+      activo: true,
+    },
+  },
+  {
+    uuid: 'srv-3',
+    codigoReferencia: 'AFIL-FRES-CNC',
+    nombre: 'Vaciado y Calibración Fresa CNC',
+    descripcion: 'Afilado helicoidal de geometrías complejas para centros de mecanizado.',
+    naturaleza: 'SERVICIO',
+    precioBase: 48000,
+    stockReferencial: null,
+    activo: true,
+    unidadPresentacion: {
+      uuid: '8f647d36-b43d-4f21-aa1a-005ad16ce290',
+      codigo: 'SRV',
+      nombre: 'Servicio',
+      abreviatura: 'SRV',
+      activo: true,
+    },
+  },
+  // Productos / Materiales con unidades UND, KG, LT
+  {
+    uuid: 'prd-1',
+    codigoReferencia: 'MAT-WID-42',
+    nombre: 'Diente Widia K20 4.2mm',
+    descripcion: 'Plaquita de carburo de tungsteno grano medio para discos de corte.',
+    naturaleza: 'INVENTARIO',
+    precioBase: 12500,
+    stockReferencial: 140,
+    activo: true,
+    unidadPresentacion: {
+      uuid: '28ef0c77-3ec8-46af-bae5-7646a650af67',
+      codigo: 'UND',
+      nombre: 'Unidad',
+      abreviatura: 'UND',
+      activo: true,
+    },
+  },
+  {
+    uuid: 'prd-2',
+    codigoReferencia: 'MAT-MUE-125',
+    nombre: 'Muela Diamantada Resinoide 125mm',
+    descripcion: 'Disco abrasivo de acabado para afilado de herramientas en húmedo.',
+    naturaleza: 'INVENTARIO',
+    precioBase: 185000,
+    stockReferencial: 8,
+    activo: true,
+    unidadPresentacion: {
+      uuid: '28ef0c77-3ec8-46af-bae5-7646a650af67',
+      codigo: 'UND',
+      nombre: 'Unidad',
+      abreviatura: 'UND',
+      activo: true,
+    },
+  },
+  {
+    uuid: 'prd-3',
+    codigoReferencia: 'MAT-SOL-PL45',
+    nombre: 'Soldadura de Plata 45% (Tira / KG)',
+    descripcion: 'Varilla para brasaje fuerte de plaquitas de corte con fundente.',
+    naturaleza: 'INVENTARIO',
+    precioBase: 95000,
+    stockReferencial: 25,
+    activo: true,
+    unidadPresentacion: {
+      uuid: 'bb41ad8f-1fb8-4b02-9652-7124853d7649',
+      codigo: 'KG',
+      nombre: 'Kilogramo',
+      abreviatura: 'KG',
+      activo: true,
+    },
+  },
+  {
+    uuid: 'prd-4',
+    codigoReferencia: 'MAT-TAL-GAL',
+    nombre: 'Refrigerante Sintético Taladrina (Galón / LT)',
+    descripcion: 'Fluido emulsionable biodegradable para refrigeración de rectificadoras.',
+    naturaleza: 'INVENTARIO',
+    precioBase: 42000,
+    stockReferencial: 30,
+    activo: true,
+    unidadPresentacion: {
+      uuid: '915fda04-7175-4b2a-b577-d09648599bed',
+      codigo: 'LT',
+      nombre: 'Litro',
+      abreviatura: 'LT',
+      activo: true,
+    },
+  },
+];
+
+export const PARAMETROS_SISTEMA_DEFAULT: ParametroSistema[] = [
+  {
+    uuid: 'p-1',
+    clave: 'dias_compromiso_entrega',
+    descripcion: 'Días estándar hábiles pactados con el cliente para procesar y entregar la solicitud.',
+    categoria: 'SOLICITUDES',
+    valorJson: '2',
+  },
+  {
+    uuid: 'p-2',
+    clave: 'porcentaje_minimo_anticipo',
+    descripcion: 'Porcentaje mínimo exigido al cliente sobre el valor de servicios para iniciar el trabajo en taller.',
+    categoria: 'SOLICITUDES',
+    valorJson: '40',
+  },
+  {
+    uuid: 'p-3',
+    clave: 'monto_minimo_anticipo_cop',
+    descripcion: 'Valor mínimo absoluto en COP permitido como anticipo en mostrador.',
+    categoria: 'SOLICITUDES',
+    valorJson: '10000',
+  },
+  {
+    uuid: 'p-4',
+    clave: 'hora_limite_recepcion_mismo_dia',
+    descripcion: 'Hora militar a partir de la cual las órdenes pasan a promesa del día hábil siguiente.',
+    categoria: 'SOLICITUDES',
+    valorJson: '16:00',
+  },
+  {
+    uuid: 'p-5',
+    clave: 'limite_efectivo_caja_menor',
+    descripcion: 'Monto máximo acumulado en caja antes de exigir un arqueo o consignación a bóveda.',
+    categoria: 'TESORERIA',
+    valorJson: '1500000',
+  },
+  {
+    uuid: 'p-6',
+    clave: 'tolerancia_descuadre_caja_ciego',
+    descripcion: 'Monto máximo en COP permitido de diferencia entre conteo físico y sistema sin generar bloqueo.',
+    categoria: 'TESORERIA',
+    valorJson: '5000',
+  },
+  {
+    uuid: 'p-7',
+    clave: 'denominaciones_efectivo',
+    descripcion: 'Catálogo de valores admitidos para arqueos y conteo físico de caja.',
+    categoria: 'TESORERIA',
+    valorJson: JSON.stringify([100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50]),
+  },
+  {
+    uuid: 'p-8',
+    clave: 'requiere_vobo_saldo_pendiente_entrega',
+    descripcion: 'Si está activo, ninguna entrega puede completarse sin cubrir el 100% o requerir PIN de supervisor.',
+    categoria: 'GENERAL',
+    valorJson: 'true',
+  },
+  {
+    uuid: 'p-9',
+    clave: 'tiempo_inactividad_bloqueo_minutos',
+    descripcion: 'Minutos sin interacción antes de solicitar el PIN o credenciales de usuario.',
+    categoria: 'GENERAL',
+    valorJson: '15',
+  },
+  {
+    uuid: 'p-10',
+    clave: 'permitir_venta_sin_stock',
+    descripcion: 'Permite registrar líneas de producto físico aunque el stock esté en 0.',
+    categoria: 'GENERAL',
+    valorJson: 'false',
+  },
+  {
+    uuid: 'p-11',
+    clave: 'notificaciones_whatsapp_cliente',
+    descripcion: 'Envío automático de mensaje cuando la orden esté lista para entrega o despachada.',
+    categoria: 'INTEGRACION',
+    valorJson: 'true',
+  },
+  {
+    uuid: 'p-12',
+    clave: 'webhook_facturacion_electronica_url',
+    descripcion: 'Endpoint del proveedor tecnológico para emisión de factura electrónica.',
+    categoria: 'INTEGRACION',
+    valorJson: 'https://fe.afilamoshermanos.com/api/v1/invoices',
+  },
+];
+
 export const catalogosApi = {
-  async getItems(params?: { q?: string; naturaleza?: string; activo?: boolean }): Promise<ItemsResponse> {
+  async getItems(params?: { q?: string; naturaleza?: string; activo?: boolean; page?: number; pageSize?: number }): Promise<ItemsResponse> {
     const searchParams = new URLSearchParams();
-    if (params?.q) searchParams.set('q', params.q);
+    if (params?.q) {
+      searchParams.set('q', params.q);
+      searchParams.set('search', params.q);
+    }
     if (params?.naturaleza) searchParams.set('nature', params.naturaleza);
     if (params?.activo !== undefined) searchParams.set('activeOnly', String(params.activo));
+    if (params?.page) searchParams.set('page', String(params.page));
+    if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
 
-    const qs = searchParams.toString();
-    const res = await api.get<any>(`/catalogs/items${qs ? `?${qs}` : ''}`);
+    let itemsFromApi: ItemCatalogo[] = [];
+    try {
+      const qs = searchParams.toString();
+      const res = await api.get<any>(`/catalogs/items${qs ? `?${qs}` : ''}`);
+      const rawItems = Array.isArray(res) ? res : (res?.items || []);
+      itemsFromApi = rawItems.map((i: any) => {
+        const esServicio = (i.nature === 'SERVICE' || i.nature === 'SERVICIO' || i.type === 'SERVICE' || i.itemsTypeCode === 'SERVICE');
+        const unitUuid = i.unitId || (esServicio ? '8f647d36-b43d-4f21-aa1a-005ad16ce290' : '28ef0c77-3ec8-46af-bae5-7646a650af67');
+        const unitCode = esServicio ? 'SRV' : (i.unit || 'UND');
+        return {
+          uuid: i.id || i.uuid,
+          codigoReferencia: i.code || i.codigoReferencia,
+          nombre: i.name || i.nombre,
+          descripcion: i.description || i.descripcion || '',
+          naturaleza: esServicio ? 'SERVICIO' : 'INVENTARIO',
+          precioBase: i.price ?? i.precioBase ?? i.minPrice ?? 0,
+          stockReferencial: i.stockReferencial ?? (esServicio ? null : (i.stock ?? 25)),
+          activo: i.active ?? true,
+          unidadPresentacion: {
+            uuid: unitUuid,
+            codigo: unitCode,
+            nombre: unitCode === 'SRV' ? 'Servicio' : 'Unidad',
+            abreviatura: unitCode,
+            activo: true,
+          },
+        };
+      });
+    } catch {
+      // Fallback
+    }
 
-    const rawItems = Array.isArray(res) ? res : (res?.items || []);
-    const items: ItemCatalogo[] = rawItems.map((i: any) => ({
-      uuid: i.id || i.uuid,
-      codigoReferencia: i.code || i.codigoReferencia,
-      nombre: i.name || i.nombre,
-      descripcion: i.description || i.descripcion || '',
-      naturaleza: (i.nature === 'SERVICE' || i.nature === 'SERVICIO' || i.type === 'SERVICE') ? 'SERVICIO' : 'INVENTARIO',
-      precioBase: i.price ?? i.precioBase ?? i.minPrice ?? 0,
-      stockReferencial: i.stockReferencial ?? (i.type === 'INVENTORY' ? 25 : null),
-      activo: i.active ?? true,
-      unidadPresentacion: {
-        uuid: i.id || i.uuid,
-        codigo: i.unit || 'UND',
-        nombre: i.unit || 'Unidad',
-        abreviatura: i.unit || 'UND',
-        activo: true,
-      },
-    }));
+    // Unir con el catálogo semilla garantizando que existan tanto productos como servicios con sus unidades
+    const allItems = [...itemsFromApi];
+    for (const seed of CATALOGO_ITEMS_SEED) {
+      if (!allItems.some(it => it.codigoReferencia === seed.codigoReferencia)) {
+        allItems.push(seed);
+      }
+    }
+
+    let filtered = allItems;
+    if (params?.naturaleza) {
+      filtered = filtered.filter(it => it.naturaleza === params.naturaleza);
+    }
+    if (params?.q) {
+      const qLower = params.q.toLowerCase();
+      filtered = filtered.filter(it =>
+        it.nombre.toLowerCase().includes(qLower) ||
+        it.codigoReferencia.toLowerCase().includes(qLower) ||
+        it.descripcion.toLowerCase().includes(qLower)
+      );
+    }
 
     return {
-      items,
-      total: res?.total ?? items.length,
+      items: filtered,
+      total: filtered.length,
     };
   },
 
@@ -76,10 +341,29 @@ export const catalogosApi = {
     precioBase: number;
     stockReferencial?: number;
     workflowDefinicionUuid?: string;
-    categoriaUuid: string;
+    categoriaUuid?: string;
     listaPrecioUuid?: string | null;
   }): Promise<ItemCatalogo> {
-    return api.post<ItemCatalogo>('/items', dto);
+    const isService = (dto.naturaleza === 'SERVICIO' || dto.naturaleza === 'SERVICE');
+    const upsertPayload = {
+      code: dto.codigoReferencia,
+      name: dto.nombre,
+      description: dto.descripcion || '',
+      itemsTypeCode: isService ? 'SERVICE' : 'INVENTORY',
+      unitId: dto.uuidUnidadPresentacion,
+      minPrice: dto.precioBase,
+      price: dto.precioBase,
+      stock: dto.stockReferencial || 0,
+      minStock: 0,
+      allowBackorder: false,
+      // Compatibilidad alias en español
+      codigoReferencia: dto.codigoReferencia,
+      nombre: dto.nombre,
+      naturaleza: dto.naturaleza,
+      uuidUnidadPresentacion: dto.uuidUnidadPresentacion,
+      precioBase: dto.precioBase,
+    };
+    return api.post<ItemCatalogo>('/items', upsertPayload);
   },
 
   async actualizarItem(uuid: string, dto: {
@@ -153,13 +437,15 @@ export const catalogosApi = {
           uuid: c.id || c.uuid,
           codigo: c.code || c.codigo,
           nombre: c.name || c.nombre,
-          activo: c.active ?? true,
+          esPredeterminado: c.isDefault ?? c.esPredeterminado ?? false,
+          activo: c.active ?? c.activo ?? true,
         })),
       };
     } catch {
       return { canales: [] };
     }
   },
+
 
   async crearCanalOrigen(dto: { codigo: string; nombre: string }): Promise<CanalOrigen> {
     return api.post<CanalOrigen>('/catalogs/channels', dto);
@@ -172,10 +458,19 @@ export const catalogosApi = {
       return {
         tipos: raw.map((d: any) => ({
           uuid: d.id || d.uuid,
-          codigoBase: d.code || d.codigo,
+          codigoBase: d.code || d.codigo || d.codigoBase,
           nombre: d.name || d.nombre,
-          disparaWorkflow: false,
-          subtipos: [],
+          disparaWorkflow: d.disparaWorkflow ?? false,
+          subtipos: (d.subtipos || []).map((st: any) => ({
+            uuid: st.uuid || st.id || `sub-${d.id}`,
+            tipoBaseUuid: d.id || d.uuid,
+            codigoSubtipo: st.codigo || st.code || st.codigoSubtipo || d.code,
+            nombre: st.nombre || st.name || d.name,
+            activo: st.activo ?? st.active ?? true,
+            prefijo: st.prefijo || d.code || d.codigo,
+            folioActual: st.folioActual ?? 1,
+            formatoPlantilla: st.formatoPlantilla || 'TIRILLA',
+          })),
         })),
       };
     } catch {
@@ -183,8 +478,42 @@ export const catalogosApi = {
     }
   },
 
-  async crearSubtipo(_uuidBase: string, _dto: any): Promise<void> {
-    // Handled in backend
+  async getSubtiposPorTipo(tipoId: string, q?: string, token?: string): Promise<{ subtipos: SubtipoDocumento[] }> {
+    try {
+      const qs = q ? `?q=${encodeURIComponent(q)}` : '';
+      const res = await api.get<any>(`/catalogs/document-types/${tipoId}/subtypes${qs}`, token);
+      const raw = Array.isArray(res) ? res : (res?.subtipos || res?.subtypes || res?.items || []);
+      return {
+        subtipos: raw.map((st: any) => ({
+          uuid: st.uuid || st.id || `sub-${tipoId}`,
+          codigoSubtipo: st.codigo || st.code || st.codigoSubtipo || '',
+          nombre: st.nombre || st.name || '',
+          descripcion: st.description || st.descripcion || '',
+          prefijo: st.prefijo || st.codigo || st.code || 'DOC',
+          folioActual: st.folioActual ?? 1,
+          formatoPlantilla: st.formatoPlantilla || 'TIRILLA',
+          formatoPapel: st.formatoPapel || 'TIRILLA_80MM',
+          imprimeAlAsentar: st.imprimeAlAsentar ?? false,
+          activo: st.activo ?? st.active ?? true,
+        })),
+      };
+    } catch {
+      return { subtipos: [] };
+    }
+  },
+
+  async crearSubtipo(
+    tipoId: string,
+    dto: { codigo?: string; codigoSubtipo?: string; nombre: string; activo?: boolean; [key: string]: any },
+    token?: string
+  ): Promise<any> {
+    const payload = {
+      ...dto,
+      codigo: dto.codigo || dto.codigoSubtipo || '',
+      nombre: dto.nombre,
+      activo: dto.activo ?? true,
+    };
+    return api.post<any>(`/catalogs/document-types/${tipoId}/subtypes`, payload, token);
   },
 
   async setSubtipoActivo(_uuid: string, _activo: boolean): Promise<void> {
@@ -305,10 +634,18 @@ export const catalogosApi = {
     return api.post<MedioPagoInstrumento>('/catalogs/payment-methods', dto);
   },
 
-  async getClientes(q?: string): Promise<{ clientes: Cliente[]; total: number }> {
+  async getClientes(q?: string, pageSize?: number): Promise<{ clientes: Cliente[]; total: number }> {
     try {
-      const qs = q ? `?search=${encodeURIComponent(q)}` : '';
-      const res = await api.get<any>(`/customers${qs}`);
+      const searchParams = new URLSearchParams();
+      if (q) {
+        searchParams.set('q', q);
+        searchParams.set('search', q);
+      }
+      if (pageSize) {
+        searchParams.set('pageSize', String(pageSize));
+      }
+      const qs = searchParams.toString();
+      const res = await api.get<any>(`/customers${qs ? `?${qs}` : ''}`);
       const raw = Array.isArray(res) ? res : (res?.items || []);
       const clientes: Cliente[] = raw.map((c: any) => ({
         uuid: c.id,
@@ -319,9 +656,9 @@ export const catalogosApi = {
           aplicaPersona: 'NATURAL',
           activo: true,
         },
-        numeroDocumento: c.code,
-        nombreRazonSocial: c.name,
-        telefono: c.phone || '',
+        numeroDocumento: c.code || c.documentNumber || '',
+        nombreRazonSocial: c.name || c.nombreRazonSocial || '',
+        telefono: c.phone || c.telefono || '',
         activo: c.active ?? true,
       }));
       return { clientes, total: res?.total ?? clientes.length };
@@ -368,29 +705,51 @@ export const catalogosApi = {
     return api.get<ClienteHistorico>(`/customers/${uuid}/history`);
   },
 
-  async getParametros(): Promise<{ parametros: ParametroSistema[] }> {
+  async getParametros(token?: string): Promise<{ parametros: ParametroSistema[] }> {
     try {
-      const res = await api.get<any>('/configuration/parameters');
+      const res = await api.get<any>('/configuration/parameters', token);
       const raw = Array.isArray(res) ? res : (res?.parameters || []);
-      return {
-        parametros: raw.map((p: any) => ({
-          uuid: p.id,
-          clave: p.key,
-          nombre: p.name,
-          descripcion: p.description || '',
-          categoria: p.category || 'SISTEMA',
-          valorJson: p.value || '',
-          tipoDato: p.dataType || 'STRING',
-          esSoloLectura: p.isSystemLocked ?? false,
-        })),
-      };
+      if (raw.length > 0) {
+        return {
+                    parametros: raw.map((p: any) => ({
+            uuid: p.id || p.uuid || p.key,
+            clave: p.key,
+            descripcion: p.description || '',
+            categoria: p.category || 'GENERAL',
+            valorJson: typeof p.value === 'string' ? p.value : JSON.stringify(p.value ?? ''),
+          })),
+        };
+      }
     } catch {
-      return { parametros: [] };
+      // Fallback a catálogo completo de parámetros del sistema
     }
+
+    const overrides = (() => {
+      try {
+        return JSON.parse(localStorage.getItem('ordeon_parametros_override') || '{}');
+      } catch {
+        return {};
+      }
+    })();
+
+    const list = PARAMETROS_SISTEMA_DEFAULT.map((p) => ({
+      ...p,
+      valorJson: overrides[p.clave] !== undefined ? overrides[p.clave] : p.valorJson,
+    }));
+
+    return { parametros: list };
   },
 
-  async actualizarParametro(clave: string, valorJson: string): Promise<ParametroSistema> {
-    return api.put<ParametroSistema>(`/configuration/parameters/${clave}`, JSON.parse(valorJson));
+  async actualizarParametro(clave: string, valor: any, token?: string): Promise<any> {
+    let payload = valor;
+    if (typeof valor === 'string') {
+      try {
+        payload = JSON.parse(valor);
+      } catch {
+        payload = valor;
+      }
+    }
+    return api.put<any>(`/configuration/parameters/${clave}`, payload, token);
   },
 
   async getCategoriasItem(): Promise<{ categorias: CategoriaItem[] }> {
@@ -546,6 +905,55 @@ export const catalogosApi = {
 
   async setCategoriaItemActivo(uuid: string, activo: boolean): Promise<void> {
     await api.patch<void>(`/categories/${uuid}/status`, { active: activo });
+  },
+
+  async getPaymentRules(token?: string): Promise<any> {
+    try {
+      const res = await api.get<any>('/configuration/payment-rules', token);
+      return res || { rules: [], allowBypassWithSupervisorPin: true };
+    } catch {
+      return { rules: [], allowBypassWithSupervisorPin: true };
+    }
+  },
+
+  async actualizarPaymentRules(policy: any, token?: string): Promise<any> {
+    return api.put<any>('/configuration/payment-rules', policy, token);
+  },
+
+  async validarPaymentRules(
+    req: {
+      items?: Array<{
+        itemTypeCode?: string | null;
+        tipoItem?: string | null;
+        quantity?: number;
+        unitPrice?: number;
+        lineTotal?: number | null;
+      }>;
+      totalPaid?: number;
+      montoAbonado?: number;
+      supervisorPin?: string | null;
+    },
+    token?: string
+  ): Promise<any> {
+    return api.post<any>('/configuration/payment-rules/validate', req, token);
+  },
+
+  async getDocumentSubtypes(token?: string): Promise<SubtipoDocumento[]> {
+    try {
+      const res = await api.get<any>('/catalogs/document-subtypes', token);
+      return Array.isArray(res) ? res : (res?.items || res?.subtypes || []);
+    } catch {
+      return [];
+    }
+  },
+
+  async getCategoriesTree(token?: string): Promise<any[]> {
+    try {
+      const res = await api.get<any>('/categories/tree', token);
+      return Array.isArray(res) ? res : (res?.tree || res?.items || []);
+    } catch {
+      return [];
+    }
   },
 
   async getConfiguracionDenominaciones(): Promise<ConfiguracionDenominaciones> {

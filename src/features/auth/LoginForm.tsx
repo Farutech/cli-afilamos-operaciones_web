@@ -9,30 +9,38 @@ export interface LoginFormProps {
 }
 
 const OrdeonBlade: React.FC = () => (
-  <div className="ordeon-blade" aria-label="Ordeon" role="img">
+  <div className="ordeon-blade" aria-label="Afilamos Hermanos Blade" role="img">
     <svg className="blade-svg" viewBox="0 0 200 200" aria-hidden="true">
       <defs>
-        <clipPath id="blade-center-clip"><circle cx="100" cy="100" r="23" /></clipPath>
+        <radialGradient id="blade-core-glow-form" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
+          <stop offset="70%" stopColor="#0284c7" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#0f172a" stopOpacity="0" />
+        </radialGradient>
       </defs>
+
+      {/* Dientes exteriores de la sierra */}
       <g className="blade-spin">
-        <circle cx="100" cy="100" r="86" fill="none" stroke="#c9d4dc" strokeWidth="16" strokeDasharray="9 7" />
-        <circle cx="100" cy="100" r="74" fill="#2b2f34" stroke="#4a5158" strokeWidth="2" />
-        <circle cx="100" cy="100" r="70" fill="none" stroke="#3a4046" strokeWidth="1" />
-        <circle cx="100" cy="58" r="5" fill="#14161a" stroke="#4a5158" />
-        <circle cx="100" cy="142" r="5" fill="#14161a" stroke="#4a5158" />
-        <circle cx="58" cy="100" r="5" fill="#14161a" stroke="#4a5158" />
-        <circle cx="142" cy="100" r="5" fill="#14161a" stroke="#4a5158" />
-        <path d="M100 30 L104 44 L96 44 Z" fill="#c9d4dc" />
-        <path d="M100 170 L104 156 L96 156 Z" fill="#c9d4dc" />
-        <path d="M30 100 L44 96 L44 104 Z" fill="#c9d4dc" />
-        <path d="M170 100 L156 96 L156 104 Z" fill="#c9d4dc" />
+        <circle cx="100" cy="100" r="86" fill="none" stroke="#cbd5e1" strokeWidth="16" strokeDasharray="9 7" />
+        <circle cx="100" cy="100" r="74" fill="#1e242b" stroke="#334155" strokeWidth="2.5" />
+        <circle cx="100" cy="100" r="68" fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="4 4" />
+
+        {/* 4 Pernos / Remaches */}
+        <circle cx="100" cy="56" r="4.5" fill="#0f172a" stroke="#64748b" strokeWidth="1.5" />
+        <circle cx="100" cy="144" r="4.5" fill="#0f172a" stroke="#64748b" strokeWidth="1.5" />
+        <circle cx="56" cy="100" r="4.5" fill="#0f172a" stroke="#64748b" strokeWidth="1.5" />
+        <circle cx="144" cy="100" r="4.5" fill="#0f172a" stroke="#64748b" strokeWidth="1.5" />
+
+        <path d="M100 28 L103 42 L97 42 Z" fill="#94a3b8" />
+        <path d="M100 172 L103 158 L97 158 Z" fill="#94a3b8" />
+        <path d="M28 100 L42 97 L42 103 Z" fill="#94a3b8" />
+        <path d="M172 100 L158 97 L158 103 Z" fill="#94a3b8" />
       </g>
-      <g className="blade-sparks" aria-hidden="true">
-        <circle cx="100" cy="30" r="2" /><circle cx="170" cy="100" r="2" />
-        <circle cx="100" cy="170" r="2" /><circle cx="30" cy="100" r="2" />
-      </g>
-      <circle cx="100" cy="100" r="25" fill="#ffffff" stroke="#c9d4dc" strokeWidth="2" />
-      <image href="/ordeon-mark.png" x="77" y="77" width="46" height="46" clipPath="url(#blade-center-clip)" preserveAspectRatio="xMidYMid slice" />
+
+      <circle cx="100" cy="100" r="30" fill="url(#blade-core-glow-form)" />
+      <circle cx="100" cy="100" r="24" fill="#0b1322" stroke="#38bdf8" strokeWidth="2.5" />
+      <circle cx="100" cy="100" r="16" fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="5 3" />
+      <circle cx="100" cy="100" r="7" fill="#38bdf8" />
     </svg>
   </div>
 )
@@ -42,6 +50,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,10 +65,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
     try {
       const res = await api.post<any>('/auth/login', { codigo, password })
 
-      // Resolver token
       const token = res?.token || res?.accessToken || ''
-
-      // Extraer y normalizar rol
       const roles = normalizeRoles(res?.user?.roles || res?.roles || (res?.rol ? [res.rol] : []))
       const permissions = normalizePermissionList(res?.user?.permissions || res?.permissions)
       const mappedRol = primaryRole(roles.length ? roles : ['Operario'])
@@ -77,7 +83,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
         expiresAt: res?.expiresAt,
       }
 
-      // La sesión se conserva solo para restaurar la interfaz; el backend sigue siendo la fuente de autorización.
       localStorage.setItem('ordeon_token', sesion.token)
       localStorage.setItem('ordeon_sesion', JSON.stringify(sesion))
       localStorage.setItem('ordeon_permissions', JSON.stringify(permissions))
@@ -87,7 +92,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
       }
     } catch (err: unknown) {
       if (err instanceof Error) {
-        // Strip [status] prefix if present for clean UI display
         setError(err.message.replace(/^\[\d+\]\s*/, ''))
       } else {
         setError('Ocurrió un error inesperado.')
@@ -95,10 +99,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
     } finally {
       setCargando(false)
     }
-
   }
-
-  const [showPassword, setShowPassword] = useState(false)
 
   return (
     <main className="login-page">
@@ -111,14 +112,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
             alt="Afilamos Hermanos"
           />
           <div className="login-visual__rule" />
-          <p className="login-visual__eyebrow">Operaciones en un solo lugar</p>
+          <p className="login-visual__eyebrow">OPERACIONES EN UN SOLO LUGAR</p>
           <h1>Control claro para decisiones rápidas.</h1>
           <p className="login-visual__description">
             Ordeon conecta tu operación diaria con la información que necesitas para trabajar mejor.
           </p>
           <div className="login-visual__status">
             <span className="login-status-dot" aria-hidden="true" />
-            Plataforma operativa disponible
+            <span>Plataforma operativa disponible</span>
           </div>
         </div>
         <p className="login-visual__footer">Ordeon POS · Un producto de Farutech para Afilamos Hermanos</p>
@@ -127,28 +128,46 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
       <section className="login-panel">
         <Card className="login-card">
           <div className="login-heading">
-            <div className="login-heading__brand" aria-label="Ordeon, producto de Farutech">
-              <img className="login-heading__mark" src="/ordeon-mark.png" alt="" aria-hidden="true" />
+            <div className="login-heading__brand" aria-label="Ordeon">
+              <div className="login-heading__icon-box" aria-hidden="true">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="#0ea5e9" strokeWidth="2.5" />
+                  <path d="M12 6a6 6 0 1 0 6 6" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" />
+                  <circle cx="12" cy="12" r="2.5" fill="#38bdf8" />
+                </svg>
+              </div>
               <span className="login-heading__wordmark">ORDEON</span>
             </div>
-            <p className="login-heading__eyebrow">Acceso seguro</p>
+            <p className="login-heading__eyebrow">ACCESO SEGURO</p>
             <h2>Bienvenido de nuevo</h2>
-            <p>Ingresa tus credenciales para continuar con tus operaciones.</p>
+            <p className="login-heading__subtitle">Ingresa tus credenciales para continuar con tus operaciones.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="login-form">
             <div className="login-field">
               <label htmlFor="login-codigo">Usuario o código de operario</label>
-              <input
-                id="login-codigo"
-                type="text"
-                placeholder="Ej. admin o CAJERO1"
-                value={codigo}
-                onChange={(e) => setCodigo(e.target.value)}
-                disabled={cargando}
-                autoFocus
-                autoComplete="username"
-              />
+              <div className="login-input-group">
+                <input
+                  id="login-codigo"
+                  name="codigo"
+                  type="text"
+                  placeholder="Ej. admin o CAJERO1"
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                  disabled={cargando}
+                  autoFocus
+                  autoComplete="username"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className="login-field__pill-btn"
+                  title="Opciones"
+                  aria-hidden="true"
+                >
+                  ···
+                </button>
+              </div>
             </div>
 
             <div className="login-field">
@@ -156,9 +175,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
                 <label htmlFor="login-password">Contraseña</label>
                 <span className="login-field__hint">Protegida</span>
               </div>
-              <div className="login-password">
+              <div className="login-input-group">
                 <input
                   id="login-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Ingresa tu contraseña"
                   value={password}
@@ -166,15 +186,25 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
                   disabled={cargando}
                   autoComplete="current-password"
                 />
-                <button
-                  type="button"
-                  className="login-password__toggle"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {showPassword ? 'Ocultar' : 'Mostrar'}
-                </button>
+                <div className="login-password__actions">
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="login-field__pill-btn"
+                    title="Opciones"
+                    aria-hidden="true"
+                  >
+                    ···
+                  </button>
+                  <button
+                    type="button"
+                    className="login-password__toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {showPassword ? 'Ocultar' : 'Mostrar'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -186,8 +216,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
           </form>
 
           <div className="login-card__meta">
-            <Badge variant="success">Sistema activo</Badge>
-            <span>v1.0.0</span>
+            <Badge variant="success" className="login-badge-pill">Sistema activo</Badge>
+            <span className="login-version">v1.0.0</span>
+            <span className="login-creator">Creado por Farutech</span>
           </div>
         </Card>
       </section>

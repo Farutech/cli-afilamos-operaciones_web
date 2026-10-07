@@ -139,12 +139,17 @@ export default function AdminApprovals({ token }: { token?: string }) {
           <div className="client-list">
             {visible.map((a) => (
               <div className="client-row" key={a.id}>
-                <div className="client-avatar">
+                <div className="client-cell-main">
+
+                  <div className="client-avatar">
                   <ShieldAlert className="w-4 h-4 text-amber-400" />
                 </div>
-                <div className="client-main">
+
+                  <div className="client-main">
                   <strong>{a.documentNumber}</strong>
                   <span>{a.customerName || 'Cliente mostrador'}</span>
+                </div>
+
                 </div>
                 <span className="client-contact font-medium text-slate-200">
                   {a.requestedByName}

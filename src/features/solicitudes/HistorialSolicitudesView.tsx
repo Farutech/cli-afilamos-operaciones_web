@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { CRUDTable, Badge, Button, Modal } from '@farutech/design-system';
+import { solicitudesApi } from '../../services/solicitudesApi';
 
-interface SolicitudHistorialItem {
+export interface SolicitudHistorialItem {
   numeroSolicitud: string;
-  subtipo: 'SOL-GEN' | 'SOL-PREF';
+  subtipo: string;
   fecha: string;
   clienteNombre: string;
   clienteDocumento: string;
@@ -11,66 +12,66 @@ interface SolicitudHistorialItem {
   totalNetoCop: number;
   anticipoCop: number;
   saldoCop: number;
-  estado: 'ASENTADA' | 'EN_TALLER' | 'FINALIZADA' | 'ENTREGADA';
+  estado: 'BORRADOR' | 'PENDIENTE_APROBACION' | 'ASENTADA' | 'EN_TALLER' | 'FINALIZADA' | 'ENTREGADA';
 }
-
-const SOLICITUDES_MOCK: SolicitudHistorialItem[] = [
-  {
-    numeroSolicitud: 'SG-0001',
-    subtipo: 'SOL-GEN',
-    fecha: '2026-09-19',
-    clienteNombre: 'Afilados del Valle S.A.S.',
-    clienteDocumento: '900123456-1',
-    totalItems: 4,
-    totalNetoCop: 145000,
-    anticipoCop: 72500,
-    saldoCop: 72500,
-    estado: 'EN_TALLER',
-  },
-  {
-    numeroSolicitud: 'SG-0002',
-    subtipo: 'SOL-GEN',
-    fecha: '2026-09-20',
-    clienteNombre: 'Carnicería La Esmeralda',
-    clienteDocumento: '800987654-3',
-    totalItems: 2,
-    totalNetoCop: 60000,
-    anticipoCop: 60000,
-    saldoCop: 0,
-    estado: 'ASENTADA',
-  },
-  {
-    numeroSolicitud: 'SP-0001',
-    subtipo: 'SOL-PREF',
-    fecha: '2026-09-20',
-    clienteNombre: 'Restaurante Gourmet & Mar',
-    clienteDocumento: '901234888-0',
-    totalItems: 6,
-    totalNetoCop: 320000,
-    anticipoCop: 200000,
-    saldoCop: 120000,
-    estado: 'EN_TALLER',
-  },
-  {
-    numeroSolicitud: 'SG-0000',
-    subtipo: 'SOL-GEN',
-    fecha: '2026-09-18',
-    clienteNombre: 'Taller Metalmecánico Hnos.',
-    clienteDocumento: '1020304050',
-    totalItems: 1,
-    totalNetoCop: 35000,
-    anticipoCop: 35000,
-    saldoCop: 0,
-    estado: 'ENTREGADA',
-  },
-];
 
 interface HistorialSolicitudesViewProps {
   onNuevaSolicitud: () => void;
+  solicitudesExtra?: SolicitudHistorialItem[];
+  token?: string;
 }
 
-export function HistorialSolicitudesView({ onNuevaSolicitud }: HistorialSolicitudesViewProps) {
+export function HistorialSolicitudesView({
+  onNuevaSolicitud: _onNuevaSolicitud,
+  solicitudesExtra = [],
+  token,
+}: HistorialSolicitudesViewProps) {
+  const [solicitudesApiList, setSolicitudesApiList] = useState<SolicitudHistorialItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [solicitudDetalle, setSolicitudDetalle] = useState<SolicitudHistorialItem | null>(null);
+
+  const fetchSolicitudes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await solicitudesApi.getSolicitudes({ page: 1, pageSize: 50 }, token);
+      if (res?.items && Array.isArray(res.items)) {
+        const mapeadas: SolicitudHistorialItem[] = res.items.map((dto) => ({
+          numeroSolicitud: dto.codigo || dto.numeroDocumentoVisible || 'SOL',
+          subtipo: dto.subtipoCodigo === 'PREF' ? 'SOL-PREF' : 'SOL-GEN',
+          fecha: dto.fechaEmision ? dto.fechaEmision.split('T')[0] : new Date().toISOString().split('T')[0],
+          clienteNombre: dto.clienteNombre || 'Mostrador',
+          clienteDocumento: dto.clienteNumeroDocumento || '—',
+          totalItems: dto.items?.length || 0,
+          totalNetoCop: dto.totalNeto || 0,
+          anticipoCop: dto.totalAnticiposImputados || 0,
+          saldoCop: dto.saldoPendiente || 0,
+          estado: dto.estado === 'ASENTADO' ? 'ASENTADA' : 'ASENTADA',
+        }));
+        setSolicitudesApiList(mapeadas);
+      } else {
+        setSolicitudesApiList([]);
+      }
+    } catch (err) {
+      console.warn('No se pudieron cargar solicitudes desde backend:', err);
+      setSolicitudesApiList([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchSolicitudes();
+  }, [fetchSolicitudes]);
+
+  const todasSolicitudes = useMemo(() => {
+    const list = [...solicitudesExtra];
+    solicitudesApiList.forEach((s) => {
+      if (!list.some((e) => e.numeroSolicitud === s.numeroSolicitud)) {
+        list.push(s);
+      }
+    });
+    return list;
+  }, [solicitudesExtra, solicitudesApiList]);
 
   const formatCOP = (val: number) => {
     return `$ ${val.toLocaleString('es-CO')}`;
@@ -78,114 +79,107 @@ export function HistorialSolicitudesView({ onNuevaSolicitud }: HistorialSolicitu
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Historial de Solicitudes</h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Consulta consolidada de órdenes de mostrador, saldos pendientes y estado de ejecución.
-          </p>
+      {/* Contenedor Principal con Loading Centrado o Tabla CRUD */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center p-16 border border-slate-800 rounded-xl bg-slate-950/60 min-h-[340px] gap-2.5 text-slate-400">
+          <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-semibold tracking-wide text-slate-300">Cargando solicitudes...</span>
         </div>
-
-        <Button variant="primary" onClick={onNuevaSolicitud}>
-          + Nueva Solicitud (POS)
-        </Button>
-      </div>
-
-      {/* Tabla CRUD */}
-      <CRUDTable<SolicitudHistorialItem>
-        data={SOLICITUDES_MOCK}
-        columns={[
-          {
-            key: 'numeroSolicitud',
-            label: 'Consecutivo',
-            sortable: true,
-            render: (v: any, r: SolicitudHistorialItem) => (
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-indigo-400">{String(v)}</span>
-                <Badge variant={r.subtipo === 'SOL-PREF' ? 'warning' : 'neutral'} size="sm">
-                  {r.subtipo}
-                </Badge>
-              </div>
-            ),
-          },
-          {
-            key: 'fecha',
-            label: 'Fecha Emisión',
-            sortable: true,
-            render: (v: any) => <span className="text-slate-300 font-mono text-xs">{String(v)}</span>,
-          },
-          {
-            key: 'clienteNombre',
-            label: 'Cliente',
-            sortable: true,
-            render: (v: any, r: SolicitudHistorialItem) => (
-              <div>
-                <div className="font-semibold text-white text-xs">{String(v)}</div>
-                <div className="text-[11px] text-slate-500 font-mono">{r.clienteDocumento}</div>
-              </div>
-            ),
-          },
-          {
-            key: 'totalItems',
-            label: 'Ítems',
-            align: 'center',
-            render: (v: any) => <span className="font-bold text-slate-200">{Number(v)}</span>,
-          },
-          {
-            key: 'totalNetoCop',
-            label: 'Total Neto',
-            align: 'right',
-            sortable: true,
-            render: (v: any) => <span className="font-mono font-bold text-white">{formatCOP(Number(v))}</span>,
-          },
-          {
-            key: 'anticipoCop',
-            label: 'Anticipo',
-            align: 'right',
-            render: (v: any) => <span className="font-mono text-emerald-400">{formatCOP(Number(v))}</span>,
-          },
-          {
-            key: 'saldoCop',
-            label: 'Saldo Pendiente',
-            align: 'right',
-            render: (v: any) => {
-              const num = Number(v);
-              return (
-                <span className={`font-mono font-bold ${num > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                  {num > 0 ? formatCOP(num) : 'Pagado'}
-                </span>
-              );
+      ) : (
+        <CRUDTable<SolicitudHistorialItem>
+          data={todasSolicitudes}
+          columns={[
+            {
+              key: 'numeroSolicitud',
+              label: 'Consecutivo',
+              sortable: true,
+              render: (v: any, r: SolicitudHistorialItem) => (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-indigo-400">{String(v)}</span>
+                  <Badge variant={r.subtipo === 'SOL-PREF' ? 'warning' : 'neutral'} size="sm">
+                    {r.subtipo}
+                  </Badge>
+                </div>
+              ),
             },
-          },
-          {
-            key: 'estado',
-            label: 'Estado',
-            sortable: true,
-            render: (v: any) => {
-              const est = String(v);
-              const variant =
-                est === 'ENTREGADA' ? 'success' : est === 'EN_TALLER' ? 'info' : est === 'ASENTADA' ? 'warning' : 'neutral';
-              return <Badge variant={variant}>{est.replace('_', ' ')}</Badge>;
+            {
+              key: 'fecha',
+              label: 'Fecha Emisión',
+              sortable: true,
+              render: (v: any) => <span className="text-slate-300 font-mono text-xs">{String(v)}</span>,
             },
-          },
-        ]}
-        rowActions={[
-          {
-            id: 'ver_detalle',
-            label: 'Ver Detalle',
-            icon: <span>👁️</span>,
-            tooltip: 'Ver detalle de la solicitud y comprobante',
-            variant: 'secondary',
-            onClick: (r: SolicitudHistorialItem) => setSolicitudDetalle(r),
-          },
-        ]}
-        searchable={true}
-        searchPlaceholder="Buscar por consecutivo, cliente o documento..."
-        pagination={true}
-        pageSize={10}
-        emptyMessage="No se registran solicitudes para los filtros aplicados."
-      />
+            {
+              key: 'clienteNombre',
+              label: 'Cliente',
+              sortable: true,
+              render: (v: any, r: SolicitudHistorialItem) => (
+                <div>
+                  <div className="font-semibold text-white text-xs">{String(v)}</div>
+                  <div className="text-[11px] text-slate-500 font-mono">{r.clienteDocumento}</div>
+                </div>
+              ),
+            },
+            {
+              key: 'totalItems',
+              label: 'Ítems',
+              align: 'center',
+              render: (v: any) => <span className="font-bold text-slate-200">{Number(v)}</span>,
+            },
+            {
+              key: 'totalNetoCop',
+              label: 'Total Neto',
+              align: 'right',
+              sortable: true,
+              render: (v: any) => <span className="font-mono font-bold text-white">{formatCOP(Number(v))}</span>,
+            },
+            {
+              key: 'anticipoCop',
+              label: 'Anticipo',
+              align: 'right',
+              render: (v: any) => <span className="font-mono text-emerald-400">{formatCOP(Number(v))}</span>,
+            },
+            {
+              key: 'saldoCop',
+              label: 'Saldo Pendiente',
+              align: 'right',
+              render: (v: any) => {
+                const num = Number(v);
+                return (
+                  <span className={`font-mono font-bold ${num > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                    {num > 0 ? formatCOP(num) : 'Pagado'}
+                  </span>
+                );
+              },
+            },
+            {
+              key: 'estado',
+              label: 'Estado',
+              sortable: true,
+              render: (v: any) => {
+                const est = String(v);
+                const variant =
+                  est === 'ENTREGADA' ? 'success' : est === 'EN_TALLER' ? 'info' : est === 'ASENTADA' ? 'warning' : 'neutral';
+                return <Badge variant={variant}>{est.replace('_', ' ')}</Badge>;
+              },
+            },
+          ]}
+          rowActions={[
+            {
+              id: 'ver_detalle',
+              label: 'Ver Detalle',
+              icon: <span>👁️</span>,
+              tooltip: 'Ver detalle de la solicitud y comprobante',
+              variant: 'secondary',
+              onClick: (r: SolicitudHistorialItem) => setSolicitudDetalle(r),
+            },
+          ]}
+          searchable={true}
+          searchPlaceholder="Buscar por consecutivo, cliente o documento..."
+          pagination={true}
+          pageSize={10}
+          emptyMessage="No hay registros en el historial de solicitudes."
+        />
+      )}
 
       {/* Modal de Detalle */}
       {solicitudDetalle && (

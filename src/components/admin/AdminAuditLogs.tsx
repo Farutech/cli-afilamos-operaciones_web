@@ -116,12 +116,17 @@ export default function AdminAuditLogs({ token }: { token?: string }) {
 
               return (
                 <div className="client-row" key={log.id}>
-                  <div className="client-avatar">
+                  <div className="client-cell-main">
+
+                    <div className="client-avatar">
                     <ShieldCheck className="w-4 h-4 text-violet-300" />
                   </div>
-                  <div className="client-main">
+
+                    <div className="client-main">
                     <strong>{dateStr}</strong>
                     <span>ID: {log.entityId}</span>
+                  </div>
+
                   </div>
                   <span className="client-contact font-medium text-slate-200">
                     {log.actorName || log.userId || 'Sistema'}

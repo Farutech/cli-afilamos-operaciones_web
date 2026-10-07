@@ -121,52 +121,39 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
             aria-label="Buscar ítem"
             className="item-selector__input"
           />
-          {loading && (
-            <span
-              style={{
-                position: 'absolute',
-                right: '0.75rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                fontSize: '0.8rem',
-                color: '#94a3b8',
-              }}
-            >
-              Buscando...
-            </span>
-          )}
+          <div className="item-selector__actions">
+            {loading && (
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginRight: '6px' }}>Buscando...</span>
+            )}
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setIsOpen(false);
+                }}
+                className="item-selector__btn-clear"
+                title="Limpiar"
+              >
+                ✕
+              </button>
+            )}
+            {habilitarModalBusqueda && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsModalOpen(true);
+                }}
+                title="Búsqueda especializada con filtros (código, nombre, categoría, naturaleza)"
+                aria-label="Abrir búsqueda especializada de ítems"
+                className="item-selector__btn-search"
+              >
+                🔍
+              </button>
+            )}
+          </div>
         </div>
-
-        {/* Botón Lupa: abre el modal especializado con filtros y detalle del ítem */}
-        {habilitarModalBusqueda && (
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              setIsModalOpen(true);
-            }}
-            title="Búsqueda especializada con filtros (código, nombre, categoría, naturaleza)"
-            aria-label="Abrir búsqueda especializada de ítems"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.35rem',
-              padding: '0 0.85rem',
-              borderRadius: '0.375rem',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-primary, #4f46e5)',
-              color: '#fff',
-              fontSize: '0.85rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <span style={{ fontSize: '1rem' }}>🔍</span>
-            <span>Buscar</span>
-          </button>
-        )}
       </div>
 
       {isOpen && (

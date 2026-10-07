@@ -6,9 +6,9 @@ describe('LoginScreen Component', () => {
   it('renders Ordeon brand and form inputs', () => {
     render(<LoginScreen onSubmit={vi.fn()} loading={false} error="" />);
 
-    expect(screen.getByText(/ordeon/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/ordeon/i)[0]).toBeInTheDocument();
     expect(screen.getByText(/Bienvenido de nuevo/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/usuario o tu@empresa.com/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Ej\. admin o CAJERO1/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Ingresa tu contraseña/i)).toBeInTheDocument();
   });
 
@@ -30,7 +30,7 @@ describe('LoginScreen Component', () => {
     const handleSubmit = vi.fn((e) => e.preventDefault());
     render(<LoginScreen onSubmit={handleSubmit} loading={false} error="" />);
 
-    const submitBtn = screen.getByRole('button', { name: /Iniciar sesión/i });
+    const submitBtn = screen.getByRole('button', { name: /Ingresar a Ordeon/i });
     const form = submitBtn.closest('form')!;
     fireEvent.submit(form);
     expect(handleSubmit).toHaveBeenCalledTimes(1);

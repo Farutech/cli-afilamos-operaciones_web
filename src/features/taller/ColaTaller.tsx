@@ -429,8 +429,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
       {/* MODAL TRANSICIÓN */}
       {isTransicionModalOpen && itemSeleccionado && transicionSeleccionada && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg p-6 space-y-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
             <h3 className="text-lg font-bold text-white">
               Ejecutar Transición: {transicionSeleccionada.nombre}
             </h3>
@@ -441,7 +441,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Notas técnicas</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Notas técnicas</label>
                 <Input
                   value={transicionNotas}
                   onChange={(e) => setTransicionNotas(e.target.value)}
@@ -450,7 +450,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Insumos / Materiales</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Insumos / Materiales</label>
                 <Input
                   value={transicionInsumos}
                   onChange={(e) => setTransicionInsumos(e.target.value)}
@@ -460,8 +460,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
               {/* VoBo Supervisor requerido */}
               {transicionSeleccionada.requiereAprobacion && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
-                  <div className="text-xs font-bold text-amber-800 flex items-center gap-1">
+                <div className="p-3 bg-amber-950/50 border border-amber-700/50 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                     <span>🔒</span> Esta transición requiere VoBo de Supervisor
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -495,7 +495,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
               <Button variant="secondary" onClick={() => setIsTransicionModalOpen(false)}>
                 Cancelar
               </Button>
@@ -509,8 +509,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
       {/* MODAL REGISTRAR ACTIVIDAD TÉCNICA (T034) */}
       {isActividadModalOpen && itemSeleccionado && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg p-6 space-y-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
             <h3 className="text-lg font-bold text-white">Registrar Actividad Técnica</h3>
             <p className="text-sm text-slate-400">
               Ítem: <span className="font-semibold">{itemSeleccionado.descripcion}</span> ({itemSeleccionado.itemCodigo})
@@ -518,7 +518,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Nombre de la Actividad *</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre de la Actividad *</label>
                 <Input
                   value={actividadNombre}
                   onChange={(e) => setActividadNombre(e.target.value)}
@@ -528,7 +528,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Subactividades</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Subactividades</label>
                 <Input
                   value={subactividades}
                   onChange={(e) => setSubactividades(e.target.value)}
@@ -537,7 +537,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Insumos Utilizados</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Insumos Utilizados</label>
                 <Input
                   value={insumosUtilizados}
                   onChange={(e) => setInsumosUtilizados(e.target.value)}
@@ -546,7 +546,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">URL Evidencia Fotográfica</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">URL Evidencia Fotográfica</label>
                 <Input
                   value={evidenciaUrl}
                   onChange={(e) => setEvidenciaUrl(e.target.value)}
@@ -555,7 +555,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
               <Button variant="secondary" onClick={() => setIsActividadModalOpen(false)}>
                 Cancelar
               </Button>
@@ -569,16 +569,16 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
       {/* MODAL CANCELAR ÍTEM (Invariante #8) */}
       {isCancelarModalOpen && itemSeleccionado && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4">
-            <h3 className="text-lg font-bold text-red-600">Cancelar Ítem de Taller</h3>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg p-6 space-y-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
+            <h3 className="text-lg font-bold text-rose-400">Cancelar Ítem de Taller</h3>
             <p className="text-sm text-slate-400">
               Se cancelará el ítem <span className="font-semibold">{itemSeleccionado.descripcion}</span> en la OT {itemSeleccionado.documentoOtNumero}.
             </p>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Motivo de Cancelación *</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Motivo de Cancelación *</label>
                 <Input
                   value={motivoCancelacion}
                   onChange={(e) => setMotivoCancelacion(e.target.value)}
@@ -588,8 +588,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               {!itemSeleccionado.permiteCancelacionDirecta && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-3">
-                  <div className="text-xs font-bold text-red-800">
+                <div className="p-3 bg-rose-950/50 border border-rose-700/50 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-rose-300">
                     ⚠️ Invariante #8: El ítem se encuentra en una etapa técnica avanzada ({itemSeleccionado.etapaActualNombre}). Requiere VoBo de Supervisor.
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -623,7 +623,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
               <Button variant="secondary" onClick={() => setIsCancelarModalOpen(false)}>
                 Volver
               </Button>
@@ -641,8 +641,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
       {/* MODAL HISTORIAL / BITÁCORA */}
       {isHistorialModalOpen && itemSeleccionado && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-xl p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-xl p-6 space-y-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">
                 Historial Técnico: {itemSeleccionado.itemCodigo}
@@ -660,7 +660,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                 <div className="text-center py-6 text-gray-400 text-sm">Sin eventos registrados aún.</div>
               ) : (
                 itemSeleccionado.historial.map((ev, idx) => (
-                  <div key={idx} className="p-3 bg-slate-950/80 border border-gray-100 rounded-lg text-xs space-y-1">
+                  <div key={idx} className="p-3 bg-slate-950/80 border border-slate-800 rounded-lg text-xs space-y-1">
                     <div className="flex justify-between font-semibold text-gray-700">
                       <span>{ev.accion} ({ev.etapaNombre})</span>
                       <span className="text-gray-400">{new Date(ev.fechaHoraUtc).toLocaleString()}</span>
@@ -674,7 +674,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               )}
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-gray-100">
+            <div className="flex justify-end pt-4 border-t border-slate-800">
               <Button variant="secondary" onClick={() => setIsHistorialModalOpen(false)}>
                 Cerrar
               </Button>

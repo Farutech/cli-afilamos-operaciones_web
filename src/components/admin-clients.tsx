@@ -12,7 +12,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
 import { ordeonRequest } from '@/lib/api-client';
 
 export type Customer = {
@@ -296,17 +296,19 @@ export default function AdminClients({ token }: { token: string }) {
           >
             {visible.map((customer) => (
               <div className="client-row" key={customer.id}>
-                <div className="client-avatar">
-                  {(customer.name || customer.code || '?')
-                    .split(' ')
-                    .map((part) => part[0])
-                    .slice(0, 2)
-                    .join('')
-                    .toUpperCase()}
-                </div>
-                <div className="client-main">
-                  <strong>{customer.name || 'Sin nombre'}</strong>
-                  <span>{customer.phone || customer.code || 'Sin teléfono'}</span>
+                <div className="client-cell-main">
+                  <div className="client-avatar">
+                    {(customer.name || customer.code || '?')
+                      .split(' ')
+                      .map((part) => part[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()}
+                  </div>
+                  <div className="client-main">
+                    <strong>{customer.name || 'Sin nombre'}</strong>
+                    <span>{customer.phone || customer.code || 'Sin teléfono'}</span>
+                  </div>
                 </div>
                 <span className="client-contact">{customer.email || 'Sin correo'}</span>
                 <span className="client-orders">{customer.ordersCount ?? '—'}</span>
@@ -467,70 +469,100 @@ export default function AdminClients({ token }: { token: string }) {
         }
         icon={<Users className="w-5 h-5 text-violet-400" />}
         size="md"
-        extraActions={
-          modal && modal !== 'new' ? (
-            <Button
-              variant="danger"
-              size="sm"
-              type="button"
-              onClick={() => void toggleStatus(modal)}
-            >
-              <Power className="w-3.5 h-3.5 mr-1.5" />
-              {modal.isActive === false ? 'Activar cliente' : 'Desactivar cliente'}
-            </Button>
-          ) : undefined
-        }
         footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setModal(null)}
-              disabled={saving}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              type="submit"
-              form="customer-edit-form"
-              disabled={saving}
-            >
-              {saving ? 'Guardando…' : modal === 'new' ? 'Crear cliente' : 'Guardar cambios'}
-            </Button>
-          </>
+          <div className="modal-footer-standard">
+            <div>
+              {modal && modal !== 'new' && (
+                <button
+                  type="button"
+                  onClick={() => void toggleStatus(modal)}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold whitespace-nowrap transition-colors"
+                >
+                  <Power className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span>{modal.isActive === false ? 'Activar cliente' : 'Desactivar cliente'}</span>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2.5 ml-auto">
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold whitespace-nowrap transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="customer-edit-form"
+                disabled={saving}
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold whitespace-nowrap transition-colors shadow-sm"
+              >
+                {saving ? 'Guardando…' : modal === 'new' ? 'Crear cliente' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
         }
       >
         {modal && (
           <form id="customer-edit-form" onSubmit={saveCustomer}>
             <div className="client-modal-grid">
-              <FloatingInput
-                label="Código o documento"
-                name="code"
-                defaultValue={modal === 'new' ? '' : modal.code || ''}
-                required
-                tooltip="NIT, Cédula de ciudadanía o identificación fiscal del cliente"
-              />
-              <FloatingInput
-                label="Nombre completo o Razón Social"
-                name="name"
-                defaultValue={modal === 'new' ? '' : modal.name || ''}
-                required
-                tooltip="Nombre comercial o razón social completa"
-              />
-              <FloatingInput
-                label="Teléfono de contacto"
-                name="phone"
-                type="tel"
-                defaultValue={modal === 'new' ? '' : modal.phone || ''}
-                tooltip="Teléfono fijo o móvil para coordinar entregas y avisos"
-              />
-              <FloatingInput
-                label="Correo electrónico"
-                name="email"
-                type="email"
-                defaultValue={modal === 'new' ? '' : modal.email || ''}
-                tooltip="Correo electrónico para facturas y cotizaciones"
-              />
+              <div className="form-field">
+                <label className="form-label" htmlFor="cli-code">
+                  Código o Documento (NIT / C.C.) *
+                </label>
+                <input
+                  id="cli-code"
+                  name="code"
+                  className="form-input font-mono"
+                  placeholder="Ej: 900123456-1 o 1020304050"
+                  defaultValue={modal === 'new' ? '' : modal.code || ''}
+                  required
+                />
+              </div>
+
+              <div className="form-field">
+                <label className="form-label" htmlFor="cli-name">
+                  Nombre completo o Razón Social *
+                </label>
+                <input
+                  id="cli-name"
+                  name="name"
+                  className="form-input"
+                  placeholder="Ej: Afilados del Valle S.A.S."
+                  defaultValue={modal === 'new' ? '' : modal.name || ''}
+                  required
+                />
+              </div>
+
+              <div className="form-field">
+                <label className="form-label" htmlFor="cli-phone">
+                  Teléfono de contacto
+                </label>
+                <input
+                  id="cli-phone"
+                  name="phone"
+                  type="tel"
+                  className="form-input"
+                  placeholder="Ej: +57 300 123 4567"
+                  defaultValue={modal === 'new' ? '' : modal.phone || ''}
+                />
+              </div>
+
+              <div className="form-field">
+                <label className="form-label" htmlFor="cli-email">
+                  Correo electrónico
+                </label>
+                <input
+                  id="cli-email"
+                  name="email"
+                  type="email"
+                  className="form-input"
+                  placeholder="Ej: contacto@empresa.com"
+                  defaultValue={modal === 'new' ? '' : modal.email || ''}
+                />
+              </div>
             </div>
           </form>
         )}

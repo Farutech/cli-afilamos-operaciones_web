@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Tag, Wrench, DollarSign, Clock } from 'lucide-react';
 import { dashboardApi } from '@/services/dashboardApi';
-import { cajaApi } from '@/services/cajaApi';
+import * as cajaApi from '@/services/cajaApi';
+import { apiBaseUrl } from '@/lib/api-client';
 
 export interface OrdeonDashboardProps {
   userName: string;
@@ -15,17 +16,22 @@ function Metric({
   label,
   value,
   change,
+  variant = 'violet',
   icon: Icon = Tag,
 }: {
   label: string;
   value: string;
   change: string;
+  variant?: 'violet' | 'amber' | 'green' | 'blue';
   icon?: typeof Tag;
 }) {
   return (
     <article className="metric-card">
-      <div className="metric-icon">
-        <Icon className="w-4 h-4" />
+      <div className="metric-topline">
+        <div className={`metric-icon ${variant}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <span className="metric-trend">{change.replace(' vs. ayer', '')}</span>
       </div>
       <div className="metric-info">
         <span className="metric-label">{label}</span>
@@ -38,9 +44,17 @@ function Metric({
         </strong>
         <span className="metric-period">Comparado con ayer</span>
       </div>
-      <span className="metric-trend">{change.replace(' vs. ayer', '')}</span>
     </article>
   );
+}
+
+interface ActividadRecienteItem {
+  id: string;
+  orden: string;
+  cliente: string;
+  estado: string;
+  hora: string;
+  total: string;
 }
 
 export function OrdeonDashboard({
@@ -51,16 +65,19 @@ export function OrdeonDashboard({
   onNavigateSection,
 }: OrdeonDashboardProps) {
   const [metricData, setMetricData] = useState({
-    solicitudesHoy: '24',
-    ordenesTaller: '18',
-    ingresosDia: '$ 18,460',
-    porCobrar: '$ 42,850',
-    saldoCaja: '$ 26,480.00',
-    ingresosCaja: '+ $ 31,820.00',
-    egresosCaja: '- $ 5,340.00',
-    transacciones: '18 transacciones',
-    turnoAbierto: true,
+    solicitudesHoy: '0',
+    ordenesTaller: '0',
+    ingresosDia: '$ 0',
+    porCobrar: '$ 0',
+    saldoCaja: '$ 0',
+    ingresosCaja: '$ 0',
+    egresosCaja: '$ 0',
+    transacciones: '0 transacciones',
+    turnoAbierto: false,
   });
+
+  const [actividadReciente, setActividadReciente] = useState<ActividadRecienteItem[]>([]);
+  const [loadingActividad, setLoadingActividad] = useState(true);
 
   const formattedDate = new Intl.DateTimeFormat('es-CO', {
     weekday: 'long',
@@ -71,31 +88,40 @@ export function OrdeonDashboard({
     .format(new Date())
     .toUpperCase();
 
-  const firstName = userName ? userName.split(' ')[0] : 'Javier';
-  const shouldShowCash = showCashSummary && metricData.turnoAbierto;
+  const firstName = userName ? userName.split(' ')[0] : 'Usuario';
+  const shouldShowCash = showCashSummary && (token ? metricData.turnoAbierto : true);
 
   useEffect(() => {
     if (!token) return;
     let isMounted = true;
+    setLoadingActividad(true);
+
     Promise.all([
       dashboardApi.getMetricas(token).catch(() => null),
       cajaApi.obtenerTurnoActivo('CAJA-01', token).catch(() => null),
-    ]).then(([metricas, turno]) => {
+      fetch(`${apiBaseUrl()}/api/v1/work-orders?page=1&pageSize=5`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]).then(([metricas, turno, workOrdersRes]) => {
       if (!isMounted) return;
+
       if (metricas) {
         setMetricData((prev) => ({
           ...prev,
-          solicitudesHoy: String(metricas.solicitudesActivasCount ?? prev.solicitudesHoy),
-          ordenesTaller: String(metricas.itemsEnTallerCount ?? prev.ordenesTaller),
+          solicitudesHoy: String(metricas.solicitudesActivasCount ?? 0),
+          ordenesTaller: String(metricas.itemsEnTallerCount ?? 0),
           ingresosDia: metricas.totalRecaudosHoy
             ? `$ ${metricas.totalRecaudosHoy.toLocaleString('es-CO')}`
-            : prev.ingresosDia,
-          porCobrar: '$ 42,850',
+            : '$ 0',
+          porCobrar: '$ 0',
           saldoCaja: metricas.saldoEfectivoActual
             ? `$ ${metricas.saldoEfectivoActual.toLocaleString('es-CO')}`
-            : prev.saldoCaja,
+            : '$ 0',
         }));
       }
+
       if (turno) {
         setMetricData((prev) => ({
           ...prev,
@@ -105,7 +131,25 @@ export function OrdeonDashboard({
             : prev.saldoCaja,
         }));
       }
+
+      const rawOrders = workOrdersRes?.items || (Array.isArray(workOrdersRes) ? workOrdersRes : []);
+      if (rawOrders && rawOrders.length > 0) {
+        setActividadReciente(
+          rawOrders.slice(0, 5).map((o: any) => ({
+            id: o.id || o.workOrderId || String(Math.random()),
+            orden: o.number || o.workOrderNumber || 'OT-0000',
+            cliente: o.customerName || 'Cliente Mostrador',
+            estado: o.statusName || (o.isCompleted ? 'Finalizado' : 'En taller'),
+            hora: o.createdAt ? new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
+            total: o.totalAmount ? `$ ${Number(o.totalAmount).toLocaleString('es-CO')}` : '—',
+          }))
+        );
+      } else {
+        setActividadReciente([]);
+      }
+      setLoadingActividad(false);
     });
+
     return () => {
       isMounted = false;
     };
@@ -129,24 +173,28 @@ export function OrdeonDashboard({
           label="Solicitudes de hoy"
           value={metricData.solicitudesHoy}
           change="+12.5% vs. ayer"
+          variant="violet"
           icon={Tag}
         />
         <Metric
           label="Órdenes en taller"
           value={metricData.ordenesTaller}
           change="4 urgentes vs. ayer"
+          variant="amber"
           icon={Wrench}
         />
         <Metric
           label="Ingresos del día"
           value={metricData.ingresosDia}
           change="+8.2% vs. ayer"
+          variant="green"
           icon={DollarSign}
         />
         <Metric
           label="Por cobrar"
           value={metricData.porCobrar}
           change="12 cuentas vs. ayer"
+          variant="blue"
           icon={Clock}
         />
       </div>
@@ -177,33 +225,53 @@ export function OrdeonDashboard({
                 </tr>
               </thead>
               <tbody>
-                {[
-                  ['OT-2026-0148', 'María Fernanda López', 'En taller', '09:42', '$ 1,280.00'],
-                  ['OT-2026-0147', 'Restaurante La Casona', 'Listo para entrega', '09:15', '$ 3,640.00'],
-                  ['OT-2026-0146', 'Carlos Ramírez', 'Pendiente', '08:50', '$ 760.00'],
-                  ['OT-2026-0145', 'Hotel Casa Real', 'En taller', '08:30', '$ 5,420.00'],
-                ].map((row) => (
-                  <tr
-                    key={row[0]}
-                    onClick={() => onNavigateSection?.('Órdenes de trabajo')}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <td>
-                      <strong className="order-id">{row[0]}</strong>
-                    </td>
-                    <td>
-                      <strong>{row[1]}</strong>
-                      <span className="table-detail">Servicio operativo</span>
-                    </td>
-                    <td>
-                      <span className="status-pill">● {row[2]}</span>
-                    </td>
-                    <td className="muted-cell">{row[3]}</td>
-                    <td>
-                      <strong>{row[4]}</strong>
+                {loadingActividad ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '36px 16px', color: '#94a3b8' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="spinner" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: '#38bdf8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                        <span>Cargando actividad reciente...</span>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                ) : actividadReciente.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '36px 16px', color: '#64748b' }}>
+                      No hay actividad u órdenes de trabajo registradas recientemente.
+                    </td>
+                  </tr>
+                ) : (
+                  actividadReciente.map((row) => (
+                    <tr
+                      key={row.id}
+                      onClick={() => onNavigateSection?.('Órdenes de trabajo')}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td>
+                        <strong className="order-id">{row.orden}</strong>
+                      </td>
+                      <td>
+                        <strong>{row.cliente}</strong>
+                        <span className="table-detail">Servicio operativo</span>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${
+                          row.estado.toLowerCase().includes('taller') || row.estado.toLowerCase().includes('proceso')
+                            ? 'status-progress'
+                            : row.estado.toLowerCase().includes('listo') || row.estado.toLowerCase().includes('finaliz')
+                            ? 'status-ready'
+                            : 'status-pending'
+                        }`}>
+                          <i /> {row.estado}
+                        </span>
+                      </td>
+                      <td className="muted-cell">{row.hora}</td>
+                      <td>
+                        <strong>{row.total}</strong>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

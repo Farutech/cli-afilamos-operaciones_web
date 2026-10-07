@@ -124,6 +124,24 @@ export const adminApi = {
     );
   },
 
+  async actualizarCapacidadesUsuario(
+    uuid: string,
+    capabilities: {
+      canBeCashier: boolean;
+      canSuperviseCash?: boolean;
+      canForceCloseCash?: boolean;
+      canApproveAdvanceWaiver?: boolean;
+      canApproveDelivery?: boolean;
+    },
+    token?: string,
+  ): Promise<void> {
+    await apiClient<void>(
+      `/users/${uuid}/capabilities`,
+      { method: 'PATCH', body: JSON.stringify(capabilities) },
+      token,
+    );
+  },
+
   async getRoles(token?: string): Promise<string[]> {
     try {
       const res = await apiClient<string[]>('/users/roles', { method: 'GET' }, token);

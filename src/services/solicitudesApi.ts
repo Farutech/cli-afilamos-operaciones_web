@@ -57,6 +57,19 @@ function mapRequestDetails(res: any): SolicitudDetalleDto {
 }
 
 export const solicitudesApi = {
+  async getSolicitudes(params?: { page?: number; pageSize?: number }, token?: string): Promise<{ items: SolicitudDetalleDto[]; total: number }> {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+    const endpoint = `/requests${qs.toString() ? `?${qs.toString()}` : ''}`;
+    const res = await api.get<any>(endpoint, token);
+    const rawItems = Array.isArray(res) ? res : (res?.items || []);
+    return {
+      items: rawItems.map(mapRequestDetails),
+      total: res?.total ?? rawItems.length,
+    };
+  },
+
   async crearSolicitud(data: CrearSolicitudRequest, token?: string): Promise<SolicitudDetalleDto> {
     const res = await api.post<any>('/requests', {
       customerId: data.clientePublicId,

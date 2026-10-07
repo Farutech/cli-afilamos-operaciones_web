@@ -40,6 +40,47 @@ vi.mock('../../features/catalogos/ItemSelector', () => ({
   ),
 }))
 
+vi.mock('../../services/catalogosApi', () => ({
+  catalogosApi: {
+    getTiposDocumento: vi.fn().mockResolvedValue({
+      tipos: [
+        {
+          uuid: 'tipo-sol-1',
+          codigoBase: 'SOL',
+          nombre: 'Solicitud de servicio',
+          subtipos: [
+            {
+              uuid: 'sub-sol-1',
+              codigoSubtipo: 'SOL_EST',
+              nombre: 'Solicitud estándar',
+              prefijo: 'SOL',
+              folioActual: 101,
+              formatoPlantilla: 'TIRILLA',
+            },
+          ],
+        },
+      ],
+    }),
+    getSubtiposPorTipo: vi.fn().mockResolvedValue({ subtipos: [] }),
+    getPoliticaPrecios: vi.fn().mockResolvedValue({
+      permiteModificarPrecio: true,
+      maxDiferenciaPorcentaje: 15,
+      requiereVoBoSuperaTolerancia: true,
+      permitirMultiplicadorLista: true,
+    }),
+    getListasPrecio: vi.fn().mockResolvedValue({ listas: [] }),
+    getMediosPagoInstrumentos: vi.fn().mockResolvedValue({
+      instrumentos: [
+        { uuid: 'medio-1', codigo: 'CREDITO_INTERNO', nombre: 'Crédito interno', activo: true },
+        { uuid: 'medio-2', codigo: 'EFECTIVO', nombre: 'Efectivo', activo: true },
+      ],
+    }),
+    getClientes: vi.fn().mockResolvedValue([]),
+    buscarClientesPredictivo: vi.fn().mockResolvedValue([]),
+    getDocumentSubtypes: vi.fn().mockResolvedValue([]),
+  },
+}))
+
 const mockCanales: CanalOrigen[] = [
   { uuid: 'canal-1', codigo: 'MOSTRADOR', nombre: 'Mostrador Principal', activo: true },
 ]
@@ -119,8 +160,12 @@ describe('SolicitudCapturaMixta Component', () => {
     const asentarBtn = screen.getByRole('button', { name: /Asentar Solicitud/i })
     expect(asentarBtn).toBeDisabled()
 
-    // Simular el cobro total del inventario
-    fireEvent.click(screen.getByRole('button', { name: /Simular Cobro Total de Inventario/i }))
+    // Autorizar VoBo de supervisor para asentar con excepción de inventario
+    fireEvent.click(screen.getByRole('button', { name: /Solicitar VoBo Supervisor/i }))
+    fireEvent.change(screen.getByLabelText(/Código de Supervisor/i), { target: { value: 'SUPERVISOR_01' } })
+    fireEvent.change(screen.getByLabelText(/PIN de Autorización/i), { target: { value: '9999' } })
+    fireEvent.change(screen.getByLabelText(/Justificación Obligatoria/i), { target: { value: 'Entrega autorizada por gerencia' } })
+    fireEvent.click(screen.getByRole('button', { name: /Autorizar VoBo/i }))
 
     // Una vez cubierto el inventario al 100%, el botón de asentar debe habilitarse
     await waitFor(() => {
@@ -198,4 +243,30 @@ describe('SolicitudCapturaMixta Component', () => {
     const asentarBtn = screen.getByRole('button', { name: /Asentar Solicitud/i })
     expect(asentarBtn).not.toBeDisabled()
   })
+
+  it('muestra la distribución de Medios de Pago y Abonos con campos requeridos y botón de registro', () => {
+    render(
+      <SolicitudCapturaMixta
+        canales={mockCanales}
+        tiposDocumento={mockTiposDoc}
+        clientes={mockClientes}
+        onAsentarSolicitud={vi.fn()}
+      />,
+    )
+
+    // Cabecera: Título y Botón Registrar Abono
+    expect(screen.getByText('MEDIOS DE PAGO Y ABONOS DE LA SOLICITUD')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /\+ Registrar Abono/i })).toBeInTheDocument()
+
+    // Fila 1: Instrumento de pago y Monto
+    expect(screen.getByLabelText(/Instrumento de pago/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^Monto/i)).toBeInTheDocument()
+
+    // Fila 2: Referencia / Comprobante
+    expect(screen.getByLabelText(/Referencia \/ Comprobante/i)).toBeInTheDocument()
+
+    // Fila 3: Observaciones del Recaudo / Pago
+    expect(screen.getByLabelText(/Observaciones del Recaudo \/ Pago/i)).toBeInTheDocument()
+  })
 })
+

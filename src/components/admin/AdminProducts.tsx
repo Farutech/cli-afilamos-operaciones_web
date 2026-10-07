@@ -12,9 +12,9 @@ import {
   Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
 import { catalogosApi } from '@/services/catalogosApi';
-import type { ItemCatalogo } from '@/types/catalogos';
+import type { ItemCatalogo, UnidadPresentacion } from '@/types/catalogos';
 
 const FALLBACK_PRODUCTS: ItemCatalogo[] = [
   { uuid: 'prd-1', codigoReferencia: 'MAT-001', nombre: 'Diente Widia K20 4.2mm', descripcion: 'Plaquita de carburo de tungsteno grano medio para discos de corte de madera.', naturaleza: 'INVENTARIO', precioBase: 12500, stockReferencial: 140, activo: true },
@@ -26,6 +26,7 @@ const FALLBACK_PRODUCTS: ItemCatalogo[] = [
 
 export default function AdminProducts({ token }: { token?: string }) {
   const [products, setProducts] = useState<ItemCatalogo[]>(FALLBACK_PRODUCTS);
+  const [unidades, setUnidades] = useState<UnidadPresentacion[]>([]);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -58,6 +59,7 @@ export default function AdminProducts({ token }: { token?: string }) {
 
   useEffect(() => {
     void loadProducts();
+    catalogosApi.getUnidades().then((res) => setUnidades(res.unidades)).catch(() => {});
   }, [page, pageSize, query, token]);
 
   async function saveProduct(event: FormEvent<HTMLFormElement>) {
@@ -71,6 +73,7 @@ export default function AdminProducts({ token }: { token?: string }) {
       descripcion: String(data.get('descripcion') || '').trim(),
       precioBase: Number(data.get('precioBase') || 0),
       stockReferencial: Number(data.get('stockReferencial') || 0),
+      uuidUnidadPresentacion: String(data.get('uuidUnidadPresentacion') || '28ef0c77-3ec8-46af-bae5-7646a650af67'),
     };
 
     try {
@@ -82,7 +85,7 @@ export default function AdminProducts({ token }: { token?: string }) {
           naturaleza: 'INVENTARIO',
           precioBase: body.precioBase,
           stockReferencial: body.stockReferencial,
-          uuidUnidadPresentacion: 'und-1',
+          uuidUnidadPresentacion: body.uuidUnidadPresentacion,
           categoriaUuid: 'cat-2',
         });
       } else {
@@ -91,7 +94,7 @@ export default function AdminProducts({ token }: { token?: string }) {
           descripcion: body.descripcion,
           precioBase: body.precioBase,
           stockReferencial: body.stockReferencial,
-          uuidUnidadPresentacion: 'und-1',
+          uuidUnidadPresentacion: body.uuidUnidadPresentacion,
         });
       }
       setModal(null);
@@ -198,12 +201,17 @@ export default function AdminProducts({ token }: { token?: string }) {
           <div className="client-list">
             {visible.map((product) => (
               <div className="client-row" key={product.uuid}>
-                <div className="client-avatar">
+                <div className="client-cell-main">
+
+                  <div className="client-avatar">
                   <Boxes className="w-4 h-4" />
                 </div>
-                <div className="client-main">
+
+                  <div className="client-main">
                   <strong>{product.nombre}</strong>
                   <span>{product.descripcion || 'Sin descripción adicional'}</span>
+                </div>
+
                 </div>
                 <span className="client-contact font-mono text-xs">{product.codigoReferencia}</span>
                 <span className={`client-orders font-bold ${(product.stockReferencial || 0) > 10 ? 'text-emerald-400' : 'text-amber-400'}`}>
@@ -385,48 +393,105 @@ export default function AdminProducts({ token }: { token?: string }) {
         {modal && (
           <form id="product-form" onSubmit={saveProduct}>
             <div className="client-modal-grid">
-              <FloatingInput
-                name="codigoReferencia"
-                label="Código de referencia (ej: MAT-010)"
-                defaultValue={modal === 'new' ? '' : modal.codigoReferencia}
-                tooltip="Código de barra o referencia de inventario interna."
-                required
-              />
+              <div className="form-field">
+                <label className="form-label" htmlFor="prod-codigo">
+                  Código de referencia (ej: MAT-010) *
+                </label>
+                <input
+                  id="prod-codigo"
+                  name="codigoReferencia"
+                  className="form-input font-mono"
+                  placeholder="Ej: MAT-010"
+                  defaultValue={modal === 'new' ? '' : modal.codigoReferencia}
+                  required
+                />
+              </div>
 
-              <FloatingInput
-                name="nombre"
-                label="Nombre del producto / material"
-                defaultValue={modal === 'new' ? '' : modal.nombre}
-                tooltip="Descripción comercial del material, repuesto o accesorio."
-                required
-              />
+              <div className="form-field">
+                <label className="form-label" htmlFor="prod-nombre">
+                  Nombre del producto / material *
+                </label>
+                <input
+                  id="prod-nombre"
+                  name="nombre"
+                  className="form-input"
+                  placeholder="Ej: Diente Widia K20"
+                  defaultValue={modal === 'new' ? '' : modal.nombre}
+                  required
+                />
+              </div>
 
-              <FloatingInput
-                name="stockReferencial"
-                type="number"
-                min="0"
-                label="Stock referencial"
-                defaultValue={modal === 'new' ? '' : modal.stockReferencial ?? 0}
-                tooltip="Cantidad física o proyectada disponible en almacén."
-                required
-              />
+                            <div className="form-field">
+                <label className="form-label" htmlFor="prod-unidad">
+                  Unidad de Medida del Sistema *
+                </label>
+                <select
+                  id="prod-unidad"
+                  name="uuidUnidadPresentacion"
+                  className="form-input"
+                  defaultValue={modal === 'new' ? '28ef0c77-3ec8-46af-bae5-7646a650af67' : modal.unidadPresentacion?.uuid || '28ef0c77-3ec8-46af-bae5-7646a650af67'}
+                  required
+                >
+                  {unidades.length === 0 ? (
+                    <>
+                      <option value="28ef0c77-3ec8-46af-bae5-7646a650af67">UND - Unidad</option>
+                      <option value="bb41ad8f-1fb8-4b02-9652-7124853d7649">KG - Kilogramo</option>
+                      <option value="915fda04-7175-4b2a-b577-d09648599bed">LT - Litro</option>
+                    </>
+                  ) : (
+                    unidades.filter((u) => u.codigo !== 'SRV').map((u) => (
+                      <option key={u.uuid} value={u.uuid}>
+                        {u.codigo} - {u.nombre}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
 
-              <FloatingInput
-                name="precioBase"
-                type="number"
-                min="0"
-                label="Precio unitario base (COP)"
-                defaultValue={modal === 'new' ? '' : modal.precioBase}
-                tooltip="Precio de venta unitario al público sin aplicar descuentos."
-                required
-              />
+              <div className="form-field">
+                <label className="form-label" htmlFor="prod-stock">
+                  Stock referencial *
+                </label>
+                <input
+                  id="prod-stock"
+                  name="stockReferencial"
+                  type="number"
+                  min="0"
+                  className="form-input font-mono"
+                  placeholder="0"
+                  defaultValue={modal === 'new' ? '' : modal.stockReferencial ?? 0}
+                  required
+                />
+              </div>
 
-              <div style={{ gridColumn: '1 / -1' }}>
-                <FloatingInput
+              <div className="form-field">
+                <label className="form-label" htmlFor="prod-precio">
+                  Precio unitario base (COP) *
+                </label>
+                <input
+                  id="prod-precio"
+                  name="precioBase"
+                  type="number"
+                  min="0"
+                  step="100"
+                  className="form-input font-mono"
+                  placeholder="0"
+                  defaultValue={modal === 'new' ? '' : modal.precioBase}
+                  required
+                />
+              </div>
+
+              <div className="form-field full-width">
+                <label className="form-label" htmlFor="prod-desc">
+                  Descripción detallada o especificación
+                </label>
+                <textarea
+                  id="prod-desc"
                   name="descripcion"
-                  label="Descripción detallada o especificación"
+                  rows={2}
+                  className="form-textarea"
+                  placeholder="Especificaciones de dimensiones, grados de aleación o uso..."
                   defaultValue={modal === 'new' ? '' : modal.descripcion || ''}
-                  tooltip="Especificaciones de dimensiones, grados de aleación o uso."
                 />
               </div>
             </div>

@@ -155,76 +155,77 @@ export const ClienteBuscarModal: React.FC<ClienteBuscarModalProps> = ({
           </div>
         </div>
 
-        {/* Tabla de Resultados */}
-        <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-slate-800 text-slate-400 bg-slate-900/80">
-                <th className="py-2.5 px-3 font-semibold">Documento</th>
-                <th className="py-2.5 px-3 font-semibold">Nombre / Razón Social</th>
-                <th className="py-2.5 px-3 font-semibold">Teléfono</th>
-                <th className="py-2.5 px-3 font-semibold">Estado</th>
-                <th className="py-2.5 px-3 font-semibold text-center">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {itemsPagina.length === 0 ? (
+        {/* Tabla de Resultados Estandarizada tipo CRUD */}
+        <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60 flex flex-col">
+          <div className="overflow-x-auto max-h-[380px] overflow-y-auto pb-2">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="sticky top-0 z-10 bg-slate-900 border-b border-slate-800 text-slate-400">
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
-                    No se encontraron clientes con los filtros aplicados.
-                  </td>
+                  <th className="py-2.5 px-3 font-semibold">Documento</th>
+                  <th className="py-2.5 px-3 font-semibold">Nombre / Razón Social</th>
+                  <th className="py-2.5 px-3 font-semibold">Teléfono</th>
+                  <th className="py-2.5 px-3 font-semibold">Estado</th>
+                  <th className="py-2.5 px-3 font-semibold text-center">Acción</th>
                 </tr>
-              ) : (
-                itemsPagina.map((cli) => (
-                  <tr
-                    key={cli.uuid}
-                    className="hover:bg-indigo-950/20 transition-colors cursor-pointer group"
-                    onClick={() => {
-                      onSeleccionarCliente(cli);
-                      onClose();
-                    }}
-                  >
-                    <td className="py-2.5 px-3 font-mono text-amber-300 font-semibold">
-                      {cli.numeroDocumento}
-                    </td>
-                    <td className="py-2.5 px-3 font-medium text-white group-hover:text-indigo-300 transition-colors">
-                      {cli.nombreRazonSocial}
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-400 font-mono">
-                      {cli.telefono || "—"}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <Badge variant={cli.activo ? "success" : "neutral"}>
-                        {cli.activo ? "Activo" : "Inactivo"}
-                      </Badge>
-                    </td>
-                    <td className="py-2.5 px-3 text-center">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-semibold text-[11px] transition-colors"
-                      >
-                        <UserCheck className="w-3 h-3" /> Seleccionar
-                      </button>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {itemsPagina.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-400">
+                      No se encontraron clientes con los filtros aplicados.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  itemsPagina.map((cli) => (
+                    <tr
+                      key={cli.uuid}
+                      className="hover:bg-indigo-950/20 transition-colors cursor-pointer group"
+                      onClick={() => {
+                        onSeleccionarCliente(cli);
+                        onClose();
+                      }}
+                    >
+                      <td className="py-2.5 px-3 font-mono text-amber-300 font-semibold">
+                        {cli.numeroDocumento}
+                      </td>
+                      <td className="py-2.5 px-3 font-medium text-white group-hover:text-indigo-300 transition-colors">
+                        {cli.nombreRazonSocial}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-400 font-mono">
+                        {cli.telefono || "—"}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <Badge variant={cli.activo ? "success" : "neutral"}>
+                          {cli.activo ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-semibold text-[11px] transition-colors"
+                        >
+                          <UserCheck className="w-3 h-3" /> Seleccionar
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Paginación */}
-        {totalPaginas > 1 && (
-          <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+          {/* Barra de Paginación Estandarizada */}
+          <div className="flex items-center justify-between text-xs text-slate-400 px-3 py-2.5 bg-slate-900/80 border-t border-slate-800">
             <span>
-              Página {pagina} de {totalPaginas}
+              Mostrando {clientesFiltrados.length === 0 ? 0 : (pagina - 1) * porPagina + 1} - {Math.min(pagina * porPagina, clientesFiltrados.length)} de <strong>{clientesFiltrados.length}</strong> registros
             </span>
-            <div className="flex gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-500">Pág. {pagina} / {totalPaginas}</span>
               <button
                 type="button"
                 disabled={pagina <= 1}
                 onClick={() => setPagina((p) => Math.max(1, p - 1))}
-                className="px-2 py-1 bg-slate-900 border border-slate-700 rounded disabled:opacity-40"
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed transition-colors"
               >
                 ◀ Anterior
               </button>
@@ -232,13 +233,13 @@ export const ClienteBuscarModal: React.FC<ClienteBuscarModalProps> = ({
                 type="button"
                 disabled={pagina >= totalPaginas}
                 onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-                className="px-2 py-1 bg-slate-900 border border-slate-700 rounded disabled:opacity-40"
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed transition-colors"
               >
                 Siguiente ▶
               </button>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </Modal>
   );

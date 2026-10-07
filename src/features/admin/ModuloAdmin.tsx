@@ -397,9 +397,10 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
 
   const handleGuardarParametroDinamico = async (clave: string, valorActualizado: any) => {
     try {
-      await (adminApi as any).actualizarParametro?.(clave, valorActualizado);
+      await catalogosApi.actualizarParametro(clave, valorActualizado, token);
+      setSuccessMsg(`Parámetro '${clave}' guardado exitosamente en el servidor.`);
     } catch {
-      // fallback
+      setSuccessMsg(`Parámetro '${clave}' actualizado en la sesión.`);
     }
     setParametros((prev) =>
       prev.map((p) =>

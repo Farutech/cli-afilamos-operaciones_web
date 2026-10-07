@@ -141,12 +141,17 @@ export default function AdminSegments({ token: _token }: { token?: string }) {
           <div className="client-list">
             {visible.map((seg) => (
               <div className="client-row" key={seg.id}>
-                <div className="client-avatar">
+                <div className="client-cell-main">
+
+                  <div className="client-avatar">
                   <Users2 className="w-4 h-4" />
                 </div>
-                <div className="client-main">
+
+                  <div className="client-main">
                   <strong>{seg.nombre}</strong>
                   <span>{seg.descripcion}</span>
+                </div>
+
                 </div>
                 <span className="client-contact font-mono text-xs">{seg.codigo}</span>
                 <span className="client-orders text-violet-300 font-bold">

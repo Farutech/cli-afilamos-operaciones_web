@@ -314,12 +314,17 @@ export default function AdminCreditLimits({ token }: { token?: string }) {
 
               return (
                 <div className="client-row" key={item.id}>
-                  <div className="client-avatar">
+                  <div className="client-cell-main">
+
+                    <div className="client-avatar">
                     <CreditCard className="w-4 h-4" />
                   </div>
-                  <div className="client-main">
+
+                    <div className="client-main">
                     <strong>{item.clienteNombre}</strong>
                     <span>{item.clienteCodigo} · {item.diasPlazo} días de plazo</span>
+                  </div>
+
                   </div>
                   <span className="client-contact font-bold text-slate-100">
                     ${item.limiteCredito.toLocaleString('es-CO')} COP

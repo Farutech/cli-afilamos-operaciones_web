@@ -1,15 +1,14 @@
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { Toaster, toast } from 'sonner';
-import { DesignSystemProvider } from '@farutech/design-system';
+import { DesignSystemProvider, SegmentedControl } from '@farutech/design-system';
 
 import { apiBaseUrl } from '@/lib/api-client';
 import { LoginScreen } from '@/features/auth/LoginScreen';
 import { AppShell } from '@/components/layout/AppShell';
 import { OrdeonDashboard } from '@/features/dashboard/OrdeonDashboard';
 import AdminClients from '@/components/admin-clients';
-import AdminServices from '@/components/admin/AdminServices';
-import AdminProducts from '@/components/admin/AdminProducts';
+import AdminItems from '@/components/admin/AdminItems';
 import AdminPrices from '@/components/admin/AdminPrices';
 import AdminUnitsCategories from '@/components/admin/AdminUnitsCategories';
 import AdminTaxDiscount from '@/components/admin/AdminTaxDiscount';
@@ -22,6 +21,7 @@ import { SectionPage } from '@/components/pages/SectionPage';
 import { RequestModal } from '@/components/modals/RequestModal';
 
 import { catalogosApi } from '@/services/catalogosApi';
+import { solicitudesApi } from '@/services/solicitudesApi';
 import type { CanalOrigen, TipoDocumentoIdentidad, Cliente } from '@/types/catalogos';
 
 // Operaciones módulos integrados
@@ -31,7 +31,7 @@ import { ModuloEntregas } from '@/features/entregas/ModuloEntregas';
 import { ModuloCaja } from '@/features/caja/ModuloCaja';
 import { ModuloReportes } from '@/features/reportes/ModuloReportes';
 import { SolicitudCapturaMixta } from '@/features/solicitudes/SolicitudCapturaMixta';
-import { HistorialSolicitudesView } from '@/features/solicitudes/HistorialSolicitudesView';
+import { HistorialSolicitudesView, type SolicitudHistorialItem } from '@/features/solicitudes/HistorialSolicitudesView';
 import { ModuloAdmin } from '@/features/admin/ModuloAdmin';
 
 export interface UserSession {
@@ -66,6 +66,135 @@ export function App() {
   const [canales, setCanales] = useState<CanalOrigen[]>([]);
   const [tiposDoc, setTiposDoc] = useState<TipoDocumentoIdentidad[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [solicitudesCreadas, setSolicitudesCreadas] = useState<SolicitudHistorialItem[]>([]);
+
+  const handleAsentarSolicitud = async (solicitud: {
+    canalUuid: string;
+    clienteUuid: string;
+    tipoDocumentoUuid?: string;
+    tipoDocumentoCodigo?: string;
+    subtipoUuid?: string;
+    subtipoCodigo?: string;
+    lineas: any[];
+    totalPagadoInventario: number;
+    anticipoVoBoAutorizado: boolean;
+    observaciones?: string;
+    pagosAbono?: any[];
+    esSoloGuardar?: boolean;
+  }) => {
+    const clienteObj = clientes.find((c) => c.uuid === solicitud.clienteUuid);
+    const subtotalCalc = solicitud.lineas.reduce(
+      (acc, l) => acc + (l.subtotal || l.cantidad * l.precioUnitario),
+      0
+    );
+    const totalAbonado = (solicitud.pagosAbono || []).reduce((acc, p) => acc + (p.monto || 0), 0);
+    const saldo = Math.max(0, subtotalCalc - totalAbonado);
+    const nuevoNumero = `SOL-${String(Math.floor(1000 + Math.random() * 9000))}`;
+
+    const tieneServicios = solicitud.lineas.some((l) => l.naturaleza === 'SERVICIO');
+    const esBorrador = solicitud.esSoloGuardar === true;
+
+    const nuevaSolicitudHistorial: SolicitudHistorialItem = {
+      numeroSolicitud: nuevoNumero,
+      subtipo: solicitud.subtipoCodigo || solicitud.tipoDocumentoCodigo || 'SOL_EST',
+      fecha: new Date().toISOString().split('T')[0],
+      clienteNombre: clienteObj ? clienteObj.nombreRazonSocial : 'Cliente Mostrador',
+      clienteDocumento: clienteObj ? clienteObj.numeroDocumento : '—',
+      totalItems: solicitud.lineas.length,
+      totalNetoCop: subtotalCalc,
+      anticipoCop: totalAbonado,
+      saldoCop: saldo,
+      estado: esBorrador ? 'BORRADOR' : 'ASENTADA',
+    };
+
+    try {
+      toast.loading(
+        esBorrador
+          ? 'Guardando borrador de la solicitud...'
+          : 'Consumiendo servicio de backend para asentar solicitud...',
+        { id: 'asentar-sol' }
+      );
+      // 1. Invocar POST /requests en backend
+      const resSolicitud = await solicitudesApi.crearSolicitud(
+        {
+          subtipoPublicId: solicitud.subtipoUuid || solicitud.tipoDocumentoUuid || 'SOL_EST',
+          clientePublicId: solicitud.clienteUuid,
+          canalPublicId: solicitud.canalUuid,
+          notas: solicitud.observaciones,
+        },
+        session?.token
+      );
+
+      const uuidSol = resSolicitud.publicId;
+
+      // 2. Agregar ítems al backend si tienen identificador en catálogo
+      for (const linea of solicitud.lineas) {
+        if (linea.itemCatalogoId) {
+          try {
+            await solicitudesApi.agregarItem(
+              uuidSol,
+              {
+                itemCatalogoPublicId: linea.itemCatalogoId,
+                naturaleza: linea.naturaleza,
+                cantidad: linea.cantidad,
+                precioUnitario: linea.precioUnitario,
+                descripcion: linea.descripcion,
+              },
+              session?.token
+            );
+          } catch (itemErr) {
+            console.warn('Error al agregar ítem a solicitud:', itemErr);
+          }
+        }
+      }
+
+      nuevaSolicitudHistorial.numeroSolicitud = resSolicitud.codigo || nuevoNumero;
+
+      // 3. Confirmar / Asentar solicitud solo si no es solo guardar
+      if (!esBorrador) {
+        await solicitudesApi.asentarSolicitud(
+          uuidSol,
+          {
+            usuarioAsientaId: 1,
+            usuarioAsientaCodigo: session?.codigo || 'admin',
+          },
+          session?.token
+        );
+
+        if (tieneServicios) {
+          toast.success(
+            `Solicitud ${nuevaSolicitudHistorial.numeroSolicitud} asentada. Se generó la orden de trabajo para taller.`,
+            {
+              id: 'asentar-sol',
+              action: {
+                label: 'Ir a Taller',
+                onClick: () => setActiveSection('Órdenes de trabajo'),
+              },
+            }
+          );
+        } else {
+          toast.success(`Solicitud ${nuevaSolicitudHistorial.numeroSolicitud} asentada con éxito.`, {
+            id: 'asentar-sol',
+          });
+        }
+      } else {
+        toast.success(`Solicitud ${nuevaSolicitudHistorial.numeroSolicitud} guardada como borrador con éxito.`, {
+          id: 'asentar-sol',
+        });
+      }
+    } catch (err: any) {
+      console.error('Error al consumir el servicio backend para asentar solicitud:', err);
+      const errMsg = err?.message || 'Error desconocido al invocar la API del backend';
+      toast.error(`Aviso Backend: ${errMsg}`, {
+        id: 'asentar-sol',
+        duration: 10000,
+        description: 'El servicio del backend generó este error al procesar la solicitud. Se registró en el historial local.',
+      });
+    } finally {
+      setSolicitudesCreadas((prev) => [nuevaSolicitudHistorial, ...prev]);
+      setSolicitudesSubView('lista');
+    }
+  };
 
   useEffect(() => {
     if (!session?.token) return;
@@ -184,7 +313,7 @@ export function App() {
   // Enrutamiento de contenido
   let content = <SectionPage title={activeSection} />;
 
-  if (activeSection === 'Resumen') {
+  if (activeSection === 'Resumen' || activeSection === 'Operación') {
     content = (
       <OrdeonDashboard
         userName={session.name}
@@ -236,30 +365,29 @@ export function App() {
             <h1>Gestión de Solicitudes</h1>
             <p className="heading-copy">Captura y consulta solicitudes operativas de afilado y servicios.</p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              className={solicitudesSubView === 'lista' ? 'primary-button' : 'secondary-button'}
-              onClick={() => setSolicitudesSubView('lista')}
-            >
-              Historial
-            </button>
-            <button
-              className={solicitudesSubView === 'nueva' ? 'primary-button' : 'secondary-button'}
-              onClick={() => setSolicitudesSubView('nueva')}
-            >
-              + Nueva Solicitud
-            </button>
-          </div>
+          <SegmentedControl
+            size="sm"
+            value={solicitudesSubView}
+            onChange={(val) => setSolicitudesSubView(val as 'nueva' | 'lista')}
+            options={[
+              { value: 'nueva', label: 'Captura (POS)' },
+              { value: 'lista', label: 'Historial' },
+            ]}
+          />
         </div>
 
         {solicitudesSubView === 'lista' ? (
-          <HistorialSolicitudesView onNuevaSolicitud={() => setSolicitudesSubView('nueva')} />
+          <HistorialSolicitudesView
+            onNuevaSolicitud={() => setSolicitudesSubView('nueva')}
+            solicitudesExtra={solicitudesCreadas}
+            token={session?.token}
+          />
         ) : (
           <SolicitudCapturaMixta
             canales={canales}
             tiposDocumento={tiposDoc}
             clientes={clientes}
-            onAsentarSolicitud={async () => setSolicitudesSubView('lista')}
+            onAsentarSolicitud={handleAsentarSolicitud}
           />
         )}
       </div>
@@ -336,17 +464,20 @@ export function App() {
         <ModuloCaja userRole={session.role} token={session.token} />
       </div>
     );
-  } else if (activeSection === 'Catálogos' || activeSection === 'Servicios') {
-    content = <AdminServices token={session.token} />;
-  } else if (activeSection === 'Productos y materiales') {
-    content = <AdminProducts token={session.token} />;
+  } else if (
+    activeSection === 'Catálogos' ||
+    activeSection === 'Productos y servicios' ||
+    activeSection === 'Servicios' ||
+    activeSection === 'Productos y materiales'
+  ) {
+    content = <AdminItems token={session.token} />;
   } else if (activeSection === 'Precios') {
     content = <AdminPrices token={session.token} />;
   } else if (activeSection === 'Unidades y categorías') {
     content = <AdminUnitsCategories token={session.token} />;
   } else if (activeSection === 'Impuestos y descuentos') {
     content = <AdminTaxDiscount token={session.token} />;
-  } else if (activeSection === 'Reportes' || activeSection.startsWith('Operación') || activeSection.startsWith('Ventas') || activeSection.startsWith('Inventario') || activeSection === 'Clientes') {
+  } else if (activeSection === 'Reportes' || activeSection === 'Reportes y Estadísticas' || activeSection === 'Reporte Z' || activeSection === 'Reportes de Ventas' || activeSection === 'Reportes de Inventario') {
     content = (
       <div className="page-content">
         <div className="page-heading">
