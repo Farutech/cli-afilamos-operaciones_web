@@ -29,6 +29,7 @@ import { ColaTaller } from '@/features/taller/ColaTaller';
 import { TableroKanbanTaller } from '@/features/taller/TableroKanbanTaller';
 import { ModuloEntregas } from '@/features/entregas/ModuloEntregas';
 import { ModuloCaja } from '@/features/caja/ModuloCaja';
+import { ModuloPagosCredito } from '@/features/pagos/ModuloPagosCredito';
 import { ModuloReportes } from '@/features/reportes/ModuloReportes';
 import { SolicitudCapturaMixta } from '@/features/solicitudes/SolicitudCapturaMixta';
 import { HistorialSolicitudesView, type SolicitudHistorialItem } from '@/features/solicitudes/HistorialSolicitudesView';
@@ -624,7 +625,13 @@ export function App() {
         />
       </div>
     );
-  } else if (activeSection === 'Caja y turnos' || activeSection === 'Pagos y crédito') {
+  } else if (activeSection === 'Pagos y crédito') {
+    content = (
+      <div className="page-content">
+        <ModuloPagosCredito token={session.token} userRole={session.role} />
+      </div>
+    );
+  } else if (activeSection === 'Caja y turnos') {
     content = (
       <div className="page-content">
         <div className="page-heading">

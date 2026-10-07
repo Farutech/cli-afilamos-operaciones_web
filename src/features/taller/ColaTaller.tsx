@@ -383,6 +383,12 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                         </Button>
                       ))}
 
+                      {item.esFinal && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                          ✓ Finalizado
+                        </span>
+                      )}
+
                       {/* Registrar Actividad (T034) */}
                       {!item.esFinal && (
                         <Button

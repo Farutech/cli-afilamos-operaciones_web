@@ -98,12 +98,11 @@ export function TableroKanbanTaller() {
 
   const handleAvanzarPaso = async (card: KanbanCardData, colActualIndex: number) => {
     const nextCol = columns[colActualIndex + 1];
-    if (!nextCol) return;
+    if (!nextCol || card.isCompleted) return;
 
     setAvanzandoId(card.workOrderItemId);
     try {
-      await api.post('/work-orders/advance-step', {
-        workOrderItemId: card.workOrderItemId,
+      await api.post(`/work-orders/items/${card.workOrderItemId}/advance`, {
         targetStepId: nextCol.stepId,
         technicalNotes: 'Paso avanzado desde el tablero Kanban de taller',
       });
@@ -304,7 +303,14 @@ export function TableroKanbanTaller() {
                             🕒 {fechaPromesa}
                           </span>
 
-                          {!esUltimaCol && (
+                          {esUltimaCol || card.isCompleted ? (
+                            <span
+                              className="text-[10px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-sm"
+                              title="El ítem ha completado todas las etapas de taller y no tiene más pasos pendientes."
+                            >
+                              <span>✓</span> Etapa Finalizada
+                            </span>
+                          ) : (
                             <Button
                               variant="primary"
                               size="sm"

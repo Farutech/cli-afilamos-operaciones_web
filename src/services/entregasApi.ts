@@ -51,7 +51,49 @@ function mapDeliveryDetails(res: any, defaultUuid?: string): RemisionDetalle {
   };
 }
 
+export interface GenerarEntregaConsolidadaData {
+  clienteUuid: string;
+  items: { itemPublicId: string; cantidad: number }[];
+  pagoLiquidacion?: {
+    instrumentoPublicId: string;
+    monto: number;
+    referencia?: string;
+  };
+  recibidoPorNombre?: string;
+  recibidoPorDocumento?: string;
+  notas?: string;
+}
+
 export const entregasApi = {
+  async generarEntregaConsolidada(data: GenerarEntregaConsolidadaData, token?: string): Promise<RemisionDetalle> {
+    const res = await api.post<any>(
+      '/deliveries',
+      {
+        customerId: data.clienteUuid,
+        itemsToDeliver: data.items.map((i) => ({
+          documentItemId: i.itemPublicId,
+          quantityToDeliver: i.cantidad,
+        })),
+        settlementPayments:
+          data.pagoLiquidacion && data.pagoLiquidacion.monto > 0
+            ? [
+                {
+                  paymentMethodId: data.pagoLiquidacion.instrumentoPublicId,
+                  amount: data.pagoLiquidacion.monto,
+                  referenceNumber: data.pagoLiquidacion.referencia || '',
+                },
+              ]
+            : [],
+        recipientName: data.recibidoPorNombre,
+        recipientIdNumber: data.recibidoPorDocumento,
+        observation: data.notas,
+        notes: data.notas,
+      },
+      token,
+    );
+    return mapDeliveryDetails(res, res?.id || res?.deliveryId);
+  },
+
   async getItemsListos(q?: string, clienteUuid?: string, token?: string): Promise<ItemListoEntrega[]> {
     try {
       const endpoint = clienteUuid
