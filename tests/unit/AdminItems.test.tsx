@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import AdminItems from '../../components/admin/AdminItems';
+import AdminItems from '@/components/admin/AdminItems';
 
 vi.mock('@/services/catalogosApi', () => ({
   catalogosApi: {

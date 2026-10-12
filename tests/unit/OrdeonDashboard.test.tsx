@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { OrdeonDashboard } from '../../features/dashboard/OrdeonDashboard';
+import { OrdeonDashboard } from '@/features/dashboard/OrdeonDashboard';
 
 describe('OrdeonDashboard Component', () => {
   it('renders greeting with user name and metric cards', () => {

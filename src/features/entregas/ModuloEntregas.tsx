@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Button, Badge, Input, Modal } from '@farutech/design-system';
+import { FileText } from 'lucide-react';
 import { entregasApi } from '../../services/entregasApi';
 import { catalogosApi } from '../../services/catalogosApi';
 import type {
@@ -842,14 +843,19 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                         ${sol.saldoPendiente.toLocaleString('es-CO')}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => handleGenerarRemision(sol.solicitudPublicId)}
-                          disabled={loading}
-                        >
-                          📄 Generar Remisión
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleGenerarRemision(sol.solicitudPublicId)}
+                            disabled={loading}
+                            title="Generar remisión de entrega y despacho"
+                            className="p-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span className="sr-only sm:not-sr-only text-[11px] font-semibold">Remisión</span>
+                            <span className="sr-only">📄 Generar Remisión</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

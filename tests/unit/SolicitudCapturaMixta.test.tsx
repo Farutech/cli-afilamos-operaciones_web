@@ -1,9 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { SolicitudCapturaMixta } from '../../features/solicitudes/SolicitudCapturaMixta'
-import type { CanalOrigen, TipoDocumentoIdentidad, Cliente } from '../../types/catalogos'
+import { SolicitudCapturaMixta } from '@/features/solicitudes/SolicitudCapturaMixta'
+import type { CanalOrigen, TipoDocumentoIdentidad, Cliente } from '@/types/catalogos'
 
-vi.mock('../../features/catalogos/ItemSelector', () => ({
+vi.mock('@/features/catalogos/ItemSelector', () => ({
   ItemSelector: ({ onSelectItem }: { onSelectItem: (item: unknown) => void }) => (
     <div data-testid="mock-item-selector">
       <button
@@ -40,7 +40,7 @@ vi.mock('../../features/catalogos/ItemSelector', () => ({
   ),
 }))
 
-vi.mock('../../services/catalogosApi', () => ({
+vi.mock('@/services/catalogosApi', () => ({
   catalogosApi: {
     getTiposDocumento: vi.fn().mockResolvedValue({
       tipos: [

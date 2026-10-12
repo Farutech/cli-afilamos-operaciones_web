@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Button, Badge, Input } from '@farutech/design-system';
+import {
+  Eye,
+  Zap,
+  ArrowRight,
+  ClipboardList,
+  X,
+  ShieldCheck,
+} from 'lucide-react';
 import { tallerApi } from '../../services/tallerApi';
 import type {
   ItemTaller,
@@ -371,79 +379,88 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                         {item.etapaActualNombre}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                      {/* Botón Recepción Rápida (T032) */}
-                      {item.etapaActualCodigo === 'RECEPCION_TECNICA' && (
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => handleRecepcionRapida(item)}
-                          disabled={loading}
-                        >
-                          ⚡ Recibir en Taller
-                        </Button>
-                      )}
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Botón Recepción Rápida (T032) */}
+                        {item.etapaActualCodigo === 'RECEPCION_TECNICA' && (
+                          <button
+                            type="button"
+                            onClick={() => handleRecepcionRapida(item)}
+                            disabled={loading}
+                            title="Recibir en Taller"
+                            className="p-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 hover:bg-amber-600/50 text-amber-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+                          >
+                            <Zap className="w-3.5 h-3.5" />
+                            <span className="sr-only sm:not-sr-only text-[11px] font-semibold">Recibir</span>
+                            <span className="sr-only">⚡ Recibir en Taller</span>
+                          </button>
+                        )}
 
-                      {/* Transiciones permitidas */}
-                      {item.transicionesPermitidas.map((tr) => (
-                        <Button
-                          key={tr.transicionPublicId}
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleAbrirTransicion(item, tr)}
-                          disabled={loading}
-                        >
-                          {tr.nombre}
-                          {tr.requiereAprobacion && ' 🔒'}
-                        </Button>
-                      ))}
+                        {/* Transiciones permitidas */}
+                        {item.transicionesPermitidas.map((tr) => (
+                          <button
+                            key={tr.transicionPublicId}
+                            type="button"
+                            onClick={() => handleAbrirTransicion(item, tr)}
+                            disabled={loading}
+                            title={`Avanzar a: ${tr.nombre}`}
+                            className="p-1.5 rounded-lg border border-indigo-500/30 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                            <span className="sr-only sm:not-sr-only text-[11px] font-semibold max-w-[120px] truncate">{tr.nombre}</span>
+                            {tr.requiereAprobacion && <ShieldCheck className="w-3 h-3 text-amber-400" />}
+                          </button>
+                        ))}
 
-                      {item.esFinal && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
-                          ✓ Finalizado
-                        </span>
-                      )}
-
-                      {/* Registrar Actividad (T034) */}
-                      {!item.esFinal && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleAbrirActividad(item)}
-                          disabled={loading}
-                        >
-                          📝 Actividad
-                        </Button>
-                      )}
-
-                      {/* Historial */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setItemSeleccionado(item);
-                          setIsHistorialModalOpen(true);
-                        }}
-                      >
-                        👁 Ver
-                      </Button>
-
-                      {/* Cancelar ítem (Invariante #8) */}
-                      {!item.esFinal && (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => handleAbrirCancelar(item)}
-                          disabled={loading}
-                          title="Cancelar orden de ítem (Invariante #8)"
-                          className="px-2.5 py-1 text-xs"
-                        >
-                          <span className="flex items-center gap-1">
-                            <span>✕</span>
-                            <span className="hidden sm:inline">Cancelar</span>
+                        {item.esFinal && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Finalizado
                           </span>
-                        </Button>
-                      )}
+                        )}
+
+                        {/* Registrar Actividad (T034) */}
+                        {!item.esFinal && (
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirActividad(item)}
+                            disabled={loading}
+                            title="Registrar bitácora / actividad técnica"
+                            className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5" />
+                            <span className="sr-only sm:not-sr-only text-[11px]">Actividad</span>
+                          </button>
+                        )}
+
+                        {/* Historial / Ver Detalle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemSeleccionado(item);
+                            setIsHistorialModalOpen(true);
+                          }}
+                          title="Ver detalle e historial de la orden de trabajo"
+                          className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span className="sr-only sm:not-sr-only text-[11px]">Ver</span>
+                          <span className="sr-only">👁 Ver</span>
+                        </button>
+
+                        {/* Cancelar ítem (Invariante #8) */}
+                        {!item.esFinal && (
+                          <button
+                            type="button"
+                            onClick={() => handleAbrirCancelar(item)}
+                            disabled={loading}
+                            title="Cancelar orden de ítem (Invariante #8)"
+                            className="p-1.5 rounded-lg border border-rose-500/40 bg-rose-950/40 hover:bg-rose-600/60 text-rose-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span className="sr-only">✕</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { ModuloAdmin } from '../../features/admin/ModuloAdmin';
-import { adminApi } from '../../services/adminApi';
+import { ModuloAdmin } from '@/features/admin/ModuloAdmin';
+import { adminApi } from '@/services/adminApi';
 import type {
   UsuarioAdminDto,
   CuentaBancariaConfigDto,
   WorkflowDefinicionAdminDto,
-} from '../../types/admin';
+} from '@/types/admin';
 
-vi.mock('../../services/adminApi', () => ({
+vi.mock('@/services/adminApi', () => ({
   adminApi: {
     getUsuarios: vi.fn(),
     crearUsuario: vi.fn(),

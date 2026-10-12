@@ -1,11 +1,11 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { ColaTaller } from '../../features/taller/ColaTaller';
-import { tallerApi } from '../../services/tallerApi';
-import type { ItemTaller } from '../../types/taller';
+import { ColaTaller } from '@/features/taller/ColaTaller';
+import { tallerApi } from '@/services/tallerApi';
+import type { ItemTaller } from '@/types/taller';
 
-vi.mock('../../services/tallerApi', () => ({
+vi.mock('@/services/tallerApi', () => ({
   tallerApi: {
     getCola: vi.fn(),
     confirmarRecepcion: vi.fn(),

@@ -1,11 +1,11 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { DashboardOperativo } from '../../features/dashboard/DashboardOperativo';
-import { dashboardApi } from '../../services/dashboardApi';
-import type { DashboardMetricasDto } from '../../types/dashboard';
+import { DashboardOperativo } from '@/features/dashboard/DashboardOperativo';
+import { dashboardApi } from '@/services/dashboardApi';
+import type { DashboardMetricasDto } from '@/types/dashboard';
 
-vi.mock('../../services/dashboardApi', () => ({
+vi.mock('@/services/dashboardApi', () => ({
   dashboardApi: {
     getMetricas: vi.fn(),
   },

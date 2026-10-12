@@ -12,11 +12,9 @@ import {
   CheckCircle2,
   DollarSign,
   Receipt,
-  Wallet,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { catalogosApi } from '../../services/catalogosApi';
-import { ModuloCaja } from '../caja/ModuloCaja';
 import type { MedioPagoInstrumento } from '../../types/catalogos';
 
 interface ModuloPagosCreditoProps {
@@ -54,9 +52,9 @@ interface PagoHistorial {
 
 export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
   token,
-  userRole = 'Cajero',
+  userRole: _userRole = 'Cajero',
 }) => {
-  const [tabActiva, setTabActiva] = useState<'abono' | 'historial' | 'caja'>('abono');
+  const [tabActiva, setTabActiva] = useState<'abono' | 'historial'>('abono');
 
   // Estados para Registro de Abono
   const [criterioBusqueda, setCriterioBusqueda] = useState('');
@@ -429,18 +427,6 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
             <Receipt className="w-3.5 h-3.5" />
             <span>Historial de Pagos</span>
           </button>
-          <button
-            onClick={() => setTabActiva('caja')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              tabActiva === 'caja'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Gestión de caja y turnos POS"
-          >
-            <Wallet className="w-3.5 h-3.5" />
-            <span>Caja y Turnos</span>
-          </button>
         </div>
       </div>
 
@@ -554,20 +540,24 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10 text-xs font-mono">
-                      <div>
-                        <span className="text-[10px] text-slate-500 uppercase block">Total</span>
-                        <span className="text-slate-200 font-bold">${solicitudAbono.total.toLocaleString('es-CO')}</span>
+                    {/* 4 Elementos Clave en 1 Sola Fila */}
+                    <div className="grid grid-cols-4 gap-2 pt-2 border-t border-white/10 text-xs font-mono bg-slate-900/90 p-2.5 rounded-xl border border-white/5">
+                      <div className="text-center">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Orden</span>
+                        <span className="font-bold text-indigo-400 truncate block">{solicitudAbono.number}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-500 uppercase block">Abonado</span>
-                        <span className="text-emerald-400 font-bold">${solicitudAbono.paidAmount.toLocaleString('es-CO')}</span>
+                      <div className="text-center">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Total</span>
+                        <span className="font-bold text-white block">${solicitudAbono.total.toLocaleString('es-CO')}</span>
                       </div>
-                    </div>
-
-                    <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/20 flex items-center justify-between text-xs font-mono">
-                      <span className="text-rose-300 font-medium">Saldo Pendiente:</span>
-                      <span className="text-rose-400 font-black text-sm">${solicitudAbono.balanceDue.toLocaleString('es-CO')}</span>
+                      <div className="text-center">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Abonado</span>
+                        <span className="font-bold text-emerald-400 block">${solicitudAbono.paidAmount.toLocaleString('es-CO')}</span>
+                      </div>
+                      <div className="text-center border-l pl-1 border-rose-500/20">
+                        <span className="text-[10px] text-rose-300 uppercase tracking-wider block font-bold">Saldo</span>
+                        <span className="font-black text-rose-400 block">${solicitudAbono.balanceDue.toLocaleString('es-CO')}</span>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -621,18 +611,50 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
                             <span className="text-white font-medium">{s.customerName}</span>
                           </div>
                           <div className="text-right whitespace-nowrap flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-rose-400 mr-1">${s.balanceDue.toLocaleString('es-CO')}</span>
-                            <Button
-                              size="sm"
-                              variant="primary"
+                            <button
+                              type="button"
                               onClick={() => handleAbrirModalAbono(s)}
+                              title={`Registrar abono a solicitud ${s.number}`}
+                              className="p-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-600/60 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
                             >
-                              💰 Abonar
-                            </Button>
+                              <DollarSign className="w-3.5 h-3.5" />
+                              <span className="sr-only sm:not-sr-only text-[11px] font-semibold">Abonar</span>
+                              <span className="sr-only">💰 Abonar</span>
+                            </button>
                           </div>
                         </div>
                       ))
                     )}
+                  </div>
+
+                  {/* Paginación similar a Solicitudes */}
+                  <div className="pt-2 mt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
+                    <span>
+                      Mostrando <strong className="text-white">{solicitudesFiltradas.length > 0 ? (paginaActual - 1) * itemsPorPagina + 1 : 0}</strong> a{' '}
+                      <strong className="text-white">{Math.min(paginaActual * itemsPorPagina, solicitudesFiltradas.length)}</strong> de{' '}
+                      <strong className="text-white">{solicitudesFiltradas.length}</strong>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={paginaActual <= 1}
+                        onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white cursor-pointer"
+                        title="Página anterior"
+                      >
+                        ←
+                      </button>
+                      <span className="font-mono text-white px-1 font-semibold">{paginaActual}/{totalPaginas}</span>
+                      <button
+                        type="button"
+                        disabled={paginaActual >= totalPaginas}
+                        onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white cursor-pointer"
+                        title="Página siguiente"
+                      >
+                        →
+                      </button>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -995,13 +1017,6 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
               </div>
             </div>
           </Card>
-        </div>
-      )}
-
-      {/* PESTAÑA 3: CAJA Y TURNOS */}
-      {tabActiva === 'caja' && (
-        <div className="space-y-4">
-          <ModuloCaja userRole={userRole} token={token} />
         </div>
       )}
 

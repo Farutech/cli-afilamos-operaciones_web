@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import AdminClients from '../../components/admin-clients';
+import AdminClients from '@/components/admin-clients';
 
 vi.mock('@/lib/api-client', () => ({
   ordeonRequest: vi.fn().mockResolvedValue([

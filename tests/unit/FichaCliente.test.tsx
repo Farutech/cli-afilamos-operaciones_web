@@ -1,11 +1,11 @@
 ﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { FichaCliente } from '../../features/clientes/FichaCliente';
-import { catalogosApi } from '../../services/catalogosApi';
-import type { Cliente, ClienteHistorico } from '../../types/catalogos';
+import { FichaCliente } from '@/features/clientes/FichaCliente';
+import { catalogosApi } from '@/services/catalogosApi';
+import type { Cliente, ClienteHistorico } from '@/types/catalogos';
 
-vi.mock('../../services/catalogosApi', () => ({
+vi.mock('@/services/catalogosApi', () => ({
   catalogosApi: {
     getClientes: vi.fn(),
     getClienteHistorico: vi.fn(),

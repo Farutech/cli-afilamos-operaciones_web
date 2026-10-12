@@ -32,12 +32,12 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
-    "src",
-    "tests"
+    "src"
   ],
   "exclude": [
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
-    "src/setupTests.ts"
+    "src/setupTests.ts",
+    "tests"
   ]
 }

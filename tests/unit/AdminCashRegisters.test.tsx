@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import AdminCashRegisters from '../../components/admin/AdminCashRegisters';
-import { catalogosApi } from '../../services/catalogosApi';
+import AdminCashRegisters from '@/components/admin/AdminCashRegisters';
+import { catalogosApi } from '@/services/catalogosApi';
 
-vi.mock('../../services/catalogosApi', () => ({
+vi.mock('@/services/catalogosApi', () => ({
   catalogosApi: {
     getCajas: vi.fn(),
     crearCaja: vi.fn(),

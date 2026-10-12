@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { LoginScreen } from '../../features/auth/LoginScreen';
+import { LoginScreen } from '@/features/auth/LoginScreen';
 
 describe('LoginScreen Component', () => {
   it('renders Ordeon brand and form inputs', () => {

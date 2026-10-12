@@ -1,10 +1,10 @@
 ﻿import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ItemSelector } from '../../features/catalogos/ItemSelector'
-import { catalogosApi } from '../../services/catalogosApi'
-import type { ItemCatalogo } from '../../types/catalogos'
+import { ItemSelector } from '@/features/catalogos/ItemSelector'
+import { catalogosApi } from '@/services/catalogosApi'
+import type { ItemCatalogo } from '@/types/catalogos'
 
-vi.mock('../../services/catalogosApi', () => ({
+vi.mock('@/services/catalogosApi', () => ({
   catalogosApi: {
     getItems: vi.fn(),
   },

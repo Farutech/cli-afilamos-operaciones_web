@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatearNumeroDocumento } from '../../utils/documentFormat';
+import { formatearNumeroDocumento } from '@/utils/documentFormat';
 
 describe('formatearNumeroDocumento', () => {
   it('concatena directamente prefijo y padding de 4 ceros sin guiones inventados', () => {

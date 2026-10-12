@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { ModuloCaja } from '../../features/caja/ModuloCaja';
-import * as cajaApi from '../../services/cajaApi';
-import type { TurnoDto, DetalleSupervisorCierreDto } from '../../types/caja';
+import { ModuloCaja } from '@/features/caja/ModuloCaja';
+import * as cajaApi from '@/services/cajaApi';
+import type { TurnoDto, DetalleSupervisorCierreDto } from '@/types/caja';
 
-vi.mock('../../services/cajaApi', () => ({
+vi.mock('@/services/cajaApi', () => ({
   abrirTurno: vi.fn(),
   obtenerTurnoActivo: vi.fn(),
   registrarEgreso: vi.fn(),

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { ModuloEntregas } from '../../features/entregas/ModuloEntregas';
-import { entregasApi } from '../../services/entregasApi';
-import type { ItemListoEntrega, RemisionDetalle } from '../../types/entregas';
+import { ModuloEntregas } from '@/features/entregas/ModuloEntregas';
+import { entregasApi } from '@/services/entregasApi';
+import type { ItemListoEntrega, RemisionDetalle } from '@/types/entregas';
 
-vi.mock('../../services/entregasApi', () => ({
+vi.mock('@/services/entregasApi', () => ({
   entregasApi: {
     getItemsListos: vi.fn(),
     generarRemision: vi.fn(),
