@@ -112,6 +112,7 @@ export interface SubtipoDocumento {
   nombre: string;
   descripcion: string;
   prefijo: string;
+  sufijo?: string;
   folioActual: number;
   formatoPlantilla: string;
   formatoPapel: string;

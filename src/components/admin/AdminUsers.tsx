@@ -142,8 +142,20 @@ const FALLBACK_USERS: UsuarioAdminDto[] = [
   { uuid: 'u-5', codigo: 'entrega01', nombreCompleto: 'Mariana Salazar', email: 'mariana.salazar@afilamos.local', rol: 'ENTREGA', activo: false, tienePin: false, creadoEn: '2026-02-01T00:00:00Z' },
 ];
 
-export default function AdminUsers({ token }: { token?: string }) {
-  const [activeTab, setActiveTab] = useState<'usuarios' | 'roles'>('usuarios');
+export default function AdminUsers({
+  token,
+  initialTab = 'usuarios',
+}: {
+  token?: string;
+  initialTab?: 'usuarios' | 'roles';
+}) {
+  const [activeTab, setActiveTab] = useState<'usuarios' | 'roles'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [users, setUsers] = useState<UsuarioAdminDto[]>(FALLBACK_USERS);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);

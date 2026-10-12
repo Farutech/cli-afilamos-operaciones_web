@@ -226,7 +226,7 @@ export function TableroKanbanTaller() {
           return (
             <div
               key={col.stepId || col.stepCode}
-              className="p-3.5 rounded-2xl border border-slate-800 bg-slate-900/70 backdrop-blur-md flex flex-col gap-3 min-h-[520px] shadow-lg"
+              className="p-3.5 rounded-2xl border border-slate-800 bg-slate-900/70 backdrop-blur-md flex flex-col gap-3 min-h-[540px] max-h-[680px] shadow-lg"
             >
               {/* Cabecera de Columna */}
               <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
@@ -238,8 +238,8 @@ export function TableroKanbanTaller() {
                 </Badge>
               </div>
 
-              {/* Lista de Tarjetas */}
-              <div className="space-y-3 flex-1">
+              {/* Lista de Tarjetas con Scroll Interno Controlado */}
+              <div className="space-y-3 flex-1 overflow-y-auto pr-1.5 custom-scrollbar max-h-[600px]">
                 {loading ? (
                   <div className="p-8 text-center text-xs text-slate-500 italic">
                     Cargando etapa...

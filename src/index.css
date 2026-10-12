@@ -3066,3 +3066,46 @@ div:has(> nav[aria-label="Navegación de páginas"]) input:focus {
   color: #64748b !important;
   font-size: 12px !important;
 }
+
+/* =============================================================================
+   REGLAS DE IMPRESIÓN (Window.print() para Comprobantes y Reportes)
+   ============================================================================= */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #printable-document,
+  #printable-document * {
+    visibility: visible;
+  }
+
+  #printable-document {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 16px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Ocultar elementos no imprimibles */
+  .no-print,
+  button,
+  .modal-overlay,
+  .app-sidebar,
+  .app-header {
+    display: none !important;
+  }
+}
+

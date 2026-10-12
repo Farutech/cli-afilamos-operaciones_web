@@ -17,6 +17,7 @@ import {
   WalletCards,
   Wrench,
   Settings,
+  UserCheck,
 } from 'lucide-react';
 import { ProfileModal } from '@/components/modals/ProfileModal';
 
@@ -51,19 +52,39 @@ export const navigationGroups: { label: string; items: NavItem[] }[] = [
     label: 'Administración',
     items: [
       {
-        label: 'Clientes',
-        icon: Users,
-        children: ['Directorio', 'Segmentos', 'Crédito y límites', 'Historial de solicitudes'],
-      },
-      {
         label: 'Catálogos',
         icon: ShoppingBag,
         children: [
+          'Cajas y terminales',
           'Productos y servicios',
           'Precios',
           'Unidades y categorías',
           'Impuestos y descuentos',
         ],
+      },
+      {
+        label: 'Clientes',
+        icon: Users,
+        children: ['Directorio', 'Segmentos', 'Crédito y límites', 'Historial de solicitudes'],
+      },
+      {
+        label: 'Configuración',
+        icon: Settings,
+        children: [
+          'Formas y medios de pago',
+          'Subtipos de documento',
+          'Parámetros del sistema',
+        ],
+      },
+      {
+        label: 'Seguridad',
+        icon: UserCheck,
+        children: ['Usuarios', 'Roles y permisos'],
+      },
+      {
+        label: 'Auditoría',
+        icon: ShieldCheck,
+        children: ['Registro de actividad', 'Aprobaciones pendientes'],
       },
       {
         label: 'Reportes',
@@ -75,20 +96,6 @@ export const navigationGroups: { label: string; items: NavItem[] }[] = [
           'Caja y turnos',
           'Clientes',
           'Auditoría',
-        ],
-      },
-      {
-        label: 'Auditoría',
-        icon: ShieldCheck,
-        children: ['Registro de actividad', 'Aprobaciones pendientes', 'Usuarios'],
-      },
-      {
-        label: 'Configuración',
-        icon: Settings,
-        children: [
-          'Formas y medios de pago',
-          'Subtipos de documento',
-          'Parámetros del sistema',
         ],
       },
     ],
@@ -242,15 +249,20 @@ export function AppShell({
     { label: 'Historial de Solicitudes', section: 'Historial de solicitudes', modulo: 'Clientes', icon: '📑', desc: 'Pedidos históricos y documentos' },
 
     // Catálogos
+    { label: 'Cajas y Terminales POS', section: 'Cajas y terminales', modulo: 'Catálogos', icon: '🏧', desc: 'Configuración de terminales de caja' },
     { label: 'Productos y Servicios', section: 'Productos y servicios', modulo: 'Catálogos', icon: '🛒', desc: 'Catálogo de referencias y precios' },
     { label: 'Listas de Precios', section: 'Precios', modulo: 'Catálogos', icon: '🏷️', desc: 'Políticas y listas comerciales' },
     { label: 'Unidades y Categorías', section: 'Unidades y categorías', modulo: 'Catálogos', icon: '⚖️', desc: 'Unidades de presentación' },
     { label: 'Impuestos y Descuentos', section: 'Impuestos y descuentos', modulo: 'Catálogos', icon: '🧾', desc: 'Reglas tributarias y descuentos' },
 
-    // Reportes & Auditoría
+    // Seguridad
+    { label: 'Usuarios del Sistema', section: 'Usuarios', modulo: 'Seguridad', icon: '👤', desc: 'Control de cuentas y personal' },
+    { label: 'Roles y Permisos', section: 'Roles y permisos', modulo: 'Seguridad', icon: '🛡️', desc: 'Matriz de permisos por rol' },
+
+    // Auditoría & Reportes
+    { label: 'Registro de Actividad', section: 'Registro de actividad', modulo: 'Auditoría', icon: '🔍', desc: 'Logs de trazabilidad del sistema' },
+    { label: 'Aprobaciones Pendientes', section: 'Aprobaciones pendientes', modulo: 'Auditoría', icon: '⭐', desc: 'Excepciones y VoBo de supervisor' },
     { label: 'Módulo de Reportes', section: 'Reportes', modulo: 'Reportes', icon: '📈', desc: 'Ventas, inventario y finanzas' },
-    { label: 'Registro de Actividad', section: 'Auditoría', modulo: 'Auditoría', icon: '🔍', desc: 'Logs de trazabilidad del sistema' },
-    { label: 'Personal, Usuarios y Roles', section: 'Usuarios', modulo: 'Seguridad', icon: '👤', desc: 'Control de cuentas y permisos' },
 
     // Configuración
     { label: 'Parámetros del Sistema', section: 'Parámetros del sistema', modulo: 'Configuración', icon: '⚙️', desc: 'Reglas globales y políticas' },

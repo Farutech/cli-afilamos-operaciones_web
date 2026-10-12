@@ -322,6 +322,9 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                 formatoPapel: cambios.formatoPapel,
                 imprimeAlAsentar: cambios.imprimeAlAsentar,
                 longitudCeros: cambios.longitudCeros,
+                sufijo: cambios.sufijo,
+                politicaEliminacionDocumentos: cambios.politicaEliminacionDocumentos,
+                activo: cambios.activo,
               }
             : st
         ),

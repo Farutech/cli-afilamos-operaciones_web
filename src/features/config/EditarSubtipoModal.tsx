@@ -5,27 +5,35 @@ import type { SubtipoDocumento } from '../../types/catalogos';
 /**
  * Modal Unificado de Gestión de Subtipos de Documento (Estilo Novasoft ERP).
  *
- * Integra en UN solo maestro sin duplicar acciones:
- *  1. Maestro del Documento: Código, Nombre, Prefijo, Ceros de relleno, Formato de papel.
- *  2. Numeración / Consecutivo: Permite saltar o ajustar el folio actual directamente.
- *  3. Política de Eliminación: Configura si la eliminación es FÍSICA (borrado permanente)
- *     o LÓGICA (marcar inactivo para conservar auditoría y trazabilidad).
+ * Configura los parámetros maestros de un subtipo de documento:
+ *  1. Maestro del Documento: Código, Nombre, Prefijo, Sufijo, Ceros de relleno, Formato de papel.
+ *     (La concatenación es directa: Prefijo + Folio + Sufijo sin insertar '-' automáticamente).
+ *  2. Numeración / Consecutivo: Ajuste o salto directo del folio actual con bitácora.
+ *  3. Política de Eliminación de Documentos Creados & Estado Operativo:
+ *     - Política de cómo se eliminan o anulan los DOCUMENTOS generados con este tipo:
+ *       Lógica (Anulación contable conservando consecutivo) vs Física (Purga de borradores).
+ *     - Estado del Subtipo (Activo / Inactivo para permitir o bloquear la emisión de nuevos documentos).
  */
 
 export type SubtipoConTipoBaseLocal = SubtipoDocumento & {
   tipoBaseCodigo?: string;
   tipoBaseNombre?: string;
   tipoBaseUuid?: string;
+  sufijo?: string;
+  politicaEliminacionDocumentos?: 'LOGICO' | 'FISICO';
 };
 
 export interface CambiosSubtipoDoc {
   nombre: string;
   descripcion: string;
   prefijo: string;
+  sufijo: string;
   formatoPlantilla: string;
   formatoPapel: string;
   imprimeAlAsentar: boolean;
   longitudCeros: number;
+  politicaEliminacionDocumentos: 'LOGICO' | 'FISICO';
+  activo: boolean;
 }
 
 interface EditarSubtipoModalProps {
@@ -39,7 +47,7 @@ interface EditarSubtipoModalProps {
     nuevoFolio: number,
     motivo: string
   ) => Promise<void>;
-  onEliminar: (uuid: string, modo: 'FISICO' | 'LOGICO', motivo: string) => Promise<void>;
+  onEliminar?: (uuid: string, modo: 'FISICO' | 'LOGICO', motivo: string) => Promise<void>;
   onReactivar?: (uuid: string) => Promise<void>;
   tipoEliminacionPermitido?: 'AMBAS' | 'LOGICA' | 'FISICA';
 }
@@ -50,9 +58,6 @@ export function EditarSubtipoModal({
   subtipo,
   onGuardarCampos,
   onSaltarConsecutivo,
-  onEliminar,
-  onReactivar,
-  tipoEliminacionPermitido = 'AMBAS',
 }: EditarSubtipoModalProps) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,10 +68,13 @@ export function EditarSubtipoModal({
     nombre: '',
     descripcion: '',
     prefijo: '',
+    sufijo: '',
     formatoPlantilla: 'TIRILLA_80MM',
     formatoPapel: 'TIRILLA_80MM',
     imprimeAlAsentar: true,
     longitudCeros: 4,
+    politicaEliminacionDocumentos: 'LOGICO',
+    activo: true,
   });
 
   // --- Consecutivo / Renumerar (Novasoft Style) ---
@@ -74,40 +82,40 @@ export function EditarSubtipoModal({
   const [folioActual, setFolioActual] = useState<number>(1);
   const [motivoSalto, setMotivoSalto] = useState<string>('Ajuste contable / Salto de consecutivo');
 
-  // --- Política de Eliminación ---
-  const [modoEliminacion, setModoEliminacion] = useState<'LOGICO' | 'FISICO'>('LOGICO');
-  const [motivoEliminacion, setMotivoEliminacion] = useState('');
-  const [confirmacionFisica, setConfirmacionFisica] = useState('');
-  const [mostrarSeccionEliminar, setMostrarSeccionEliminar] = useState(false);
-
   useEffect(() => {
     if (subtipo) {
       setForm({
         nombre: subtipo.nombre || '',
         descripcion: subtipo.descripcion || '',
         prefijo: subtipo.prefijo || '',
+        sufijo: subtipo.sufijo || (subtipo as any).suffix || '',
         formatoPlantilla: (subtipo as any).formatoPlantilla || 'TIRILLA_80MM',
         formatoPapel: (subtipo as any).formatoPapel || 'TIRILLA_80MM',
         imprimeAlAsentar: (subtipo as any).imprimeAlAsentar ?? true,
-        longitudCeros: (subtipo as any).longitudCeros ?? 4,
+        longitudCeros: (subtipo as any).longitudCeros ?? (subtipo as any).numberLength ?? 4,
+        politicaEliminacionDocumentos:
+          ((subtipo as any).politicaEliminacionDocumentos as 'LOGICO' | 'FISICO') || 'LOGICO',
+        activo: subtipo.activo ?? true,
       });
       const folio = subtipo.folioActual ?? 1;
       setFolioOriginal(folio);
       setFolioActual(folio);
-      setModoEliminacion(tipoEliminacionPermitido === 'FISICA' ? 'FISICO' : 'LOGICO');
-      setMotivoEliminacion('');
-      setConfirmacionFisica('');
-      setMostrarSeccionEliminar(false);
       setError(null);
       setExito(null);
     }
-  }, [subtipo, tipoEliminacionPermitido]);
+  }, [subtipo]);
 
   if (!isOpen || !subtipo) return null;
 
-  const formatearFolio = (num: number, prefijoStr = form.prefijo, ceros = form.longitudCeros) => {
+  // Concatenación directa: Prefijo + Folio Relleno + Sufijo (sin guiones inventados)
+  const formatearFolio = (
+    num: number,
+    prefijoStr = form.prefijo,
+    ceros = form.longitudCeros,
+    sufijoStr = form.sufijo
+  ) => {
     const pad = String(Math.max(1, num)).padStart(Math.max(1, ceros), '0');
-    return prefijoStr ? `${prefijoStr}-${pad}` : pad;
+    return `${prefijoStr || ''}${pad}${sufijoStr || ''}`;
   };
 
   const handleGuardarMaestro = async (e: React.FormEvent) => {
@@ -121,7 +129,7 @@ export function EditarSubtipoModal({
     setExito(null);
 
     try {
-      // 1. Guardar atributos del maestro
+      // 1. Guardar atributos del maestro y políticas del subtipo
       await onGuardarCampos(subtipo.uuid, form);
 
       // 2. Si se modificó el folio actual, aplicar el salto / renumeración
@@ -130,58 +138,12 @@ export function EditarSubtipoModal({
         await onSaltarConsecutivo(tipoBaseCod, subtipo.codigoSubtipo, folioActual, motivoSalto);
       }
 
-      setExito('✓ Maestro del documento y consecutivo actualizados correctamente.');
+      setExito('✓ Maestro del documento, políticas y consecutivo actualizados correctamente.');
       setTimeout(() => {
         onClose();
       }, 700);
     } catch (err: any) {
       setError(err?.message || 'Error al guardar los cambios del subtipo.');
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  const handleEjecutarEliminacion = async () => {
-    if (!motivoEliminacion.trim()) {
-      setError('Debe indicar el motivo de la desactivación/eliminación.');
-      return;
-    }
-    if (modoEliminacion === 'FISICO' && confirmacionFisica.trim().toUpperCase() !== 'ELIMINAR') {
-      setError('Para eliminación física debe escribir la palabra "ELIMINAR" como confirmación.');
-      return;
-    }
-
-    setGuardando(true);
-    setError(null);
-    try {
-      await onEliminar(subtipo.uuid, modoEliminacion, motivoEliminacion.trim());
-      setExito(
-        modoEliminacion === 'FISICO'
-          ? 'Subtipo eliminado físicamente de la base de datos.'
-          : 'Subtipo marcado como inactivo (eliminación lógica conservando histórico).'
-      );
-      setTimeout(() => {
-        onClose();
-      }, 700);
-    } catch (err: any) {
-      setError(err?.message || 'Error al procesar la eliminación del subtipo.');
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  const handleReactivar = async () => {
-    if (!onReactivar) return;
-    setGuardando(true);
-    setError(null);
-    try {
-      await onReactivar(subtipo.uuid);
-      setExito('✓ Subtipo reactivado correctamente.');
-      setTimeout(() => {
-        onClose();
-      }, 700);
-    } catch (err: any) {
-      setError(err?.message || 'Error al reactivar el subtipo.');
     } finally {
       setGuardando(false);
     }
@@ -211,8 +173,8 @@ export function EditarSubtipoModal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant={subtipo.activo ? 'success' : 'neutral'}>
-              {subtipo.activo ? 'Activo' : 'Inactivo'}
+            <Badge variant={form.activo ? 'success' : 'neutral'}>
+              {form.activo ? 'Activo para Emisión' : 'Inactivo (Bloqueado)'}
             </Badge>
             <span className="text-xs font-mono text-slate-400">
               Folio Actual: <strong className="text-emerald-400 font-bold">{formatearFolio(folioOriginal)}</strong>
@@ -236,9 +198,9 @@ export function EditarSubtipoModal({
           {/* SECCIÓN 1: PROPIEDADES DOCUMENTALES */}
           <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
             <span className="text-xs font-bold text-indigo-400 uppercase tracking-wide flex items-center gap-1.5">
-              <span>📋</span> Definición del Documento
+              <span>📋</span> Definición del Documento & Estructura de Serie
             </span>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div className="sm:col-span-2 space-y-1">
                 <label className="text-[11px] font-semibold text-slate-300">
                   Nombre del Subtipo *
@@ -254,16 +216,36 @@ export function EditarSubtipoModal({
 
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold text-slate-300">
-                  Prefijo Documental
+                  Prefijo (Ej: <span className="text-amber-400 font-mono">SOL-</span> ó <span className="text-amber-400 font-mono">SG</span>)
                 </label>
                 <input
                   type="text"
-                  maxLength={5}
+                  maxLength={10}
                   value={form.prefijo}
                   onChange={(e) => setForm({ ...form, prefijo: e.target.value.toUpperCase() })}
-                  placeholder="Ej: SG"
+                  placeholder="SOL-"
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-indigo-500"
                 />
+                <span className="text-[10px] text-slate-500 block">
+                  Si requiere guión, inclúyalo aquí.
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-300">
+                  Sufijo (Ej: <span className="text-amber-400 font-mono">-VIP</span> ó <span className="text-amber-400 font-mono">-2026</span>)
+                </label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={form.sufijo}
+                  onChange={(e) => setForm({ ...form, sufijo: e.target.value.toUpperCase() })}
+                  placeholder="Opcional"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-indigo-500"
+                />
+                <span className="text-[10px] text-slate-500 block">
+                  Si requiere guión, inclúyalo aquí.
+                </span>
               </div>
             </div>
 
@@ -322,8 +304,8 @@ export function EditarSubtipoModal({
                 <span>🔢</span> Numeración & Consecutivo Actual (Novasoft)
               </span>
               <span className="text-xs text-slate-400 font-mono">
-                Siguiente folio generado:{' '}
-                <strong className="text-emerald-400 font-bold">
+                Ejemplo consecutivo resultante:{' '}
+                <strong className="text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-600/30">
                   {formatearFolio(folioActual)}
                 </strong>
               </span>
@@ -380,151 +362,101 @@ export function EditarSubtipoModal({
             )}
           </div>
 
-          {/* SECCIÓN 3: POLÍTICA DE ELIMINACIÓN (CONFIGURACIÓN FÍSICA VS LÓGICA) */}
+          {/* SECCIÓN 3: POLÍTICA DE ELIMINACIÓN DE DOCUMENTOS CREADOS & ESTADO DEL SUBTIPO */}
           <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-rose-400 uppercase tracking-wide flex items-center gap-1.5">
-                <span>🛡️</span> Política de Eliminación & Estado
+              <span className="text-xs font-bold text-sky-400 uppercase tracking-wide flex items-center gap-1.5">
+                <span>🛡️</span> Política de Eliminación de Documentos Creados & Estado
               </span>
-              <button
-                type="button"
-                onClick={() => setMostrarSeccionEliminar(!mostrarSeccionEliminar)}
-                className="text-xs text-slate-400 hover:text-white underline cursor-pointer"
-              >
-                {mostrarSeccionEliminar ? 'Ocultar opciones de eliminación' : 'Configurar eliminación'}
-              </button>
+              <span className="text-[11px] text-slate-400">
+                Reglas aplicadas a documentos de este tipo
+              </span>
             </div>
 
-            {mostrarSeccionEliminar ? (
-              <div className="space-y-3 pt-2 border-t border-slate-800">
-                <p className="text-xs text-slate-400">
-                  Seleccione cómo se procesa la eliminación de este subtipo:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label
-                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                      modoEliminacion === 'LOGICO'
-                        ? 'bg-amber-950/30 border-amber-600/50'
-                        : 'bg-slate-950/60 border-slate-800'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="modo-elim"
-                      value="LOGICO"
-                      checked={modoEliminacion === 'LOGICO'}
-                      onChange={() => setModoEliminacion('LOGICO')}
-                      className="mt-0.5 accent-amber-500 cursor-pointer"
-                    />
-                    <div className="text-xs">
-                      <span className="block font-bold text-amber-300">
-                        🚫 Eliminación Lógica (Recomendada)
-                      </span>
-                      <span className="text-slate-400 block mt-0.5">
-                        Marca el documento como inactivo. No permite nuevas emisiones, pero conserva
-                        todo el histórico de documentos y consecutivos para auditoría.
-                      </span>
-                    </div>
-                  </label>
+            <p className="text-xs text-slate-400">
+              Configure cómo debe actuar el sistema cuando un usuario desea eliminar o anular un documento emitido bajo este subtipo:
+            </p>
 
-                  <label
-                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                      modoEliminacion === 'FISICO'
-                        ? 'bg-rose-950/30 border-rose-600/50'
-                        : 'bg-slate-950/60 border-slate-800'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="modo-elim"
-                      value="FISICO"
-                      checked={modoEliminacion === 'FISICO'}
-                      onChange={() => setModoEliminacion('FISICO')}
-                      className="mt-0.5 accent-rose-500 cursor-pointer"
-                    />
-                    <div className="text-xs">
-                      <span className="block font-bold text-rose-300">
-                        🗑️ Eliminación Física (Destructiva)
-                      </span>
-                      <span className="text-slate-400 block mt-0.5">
-                        Borra todo el registro de la base de datos como si el documento nunca hubiera
-                        existido. Solo para errores de digitación iniciales sin movimientos.
-                      </span>
-                    </div>
-                  </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  form.politicaEliminacionDocumentos === 'LOGICO'
+                    ? 'bg-amber-950/30 border-amber-600/50'
+                    : 'bg-slate-950/60 border-slate-800'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="politica-elim-doc"
+                  value="LOGICO"
+                  checked={form.politicaEliminacionDocumentos === 'LOGICO'}
+                  onChange={() => setForm({ ...form, politicaEliminacionDocumentos: 'LOGICO' })}
+                  className="mt-0.5 accent-amber-500 cursor-pointer"
+                />
+                <div className="text-xs">
+                  <span className="block font-bold text-amber-300">
+                    🚫 Eliminación Lógica (Anulación & Auditoría - Recomendada)
+                  </span>
+                  <span className="text-slate-400 block mt-0.5">
+                    Al eliminar un documento creado con este subtipo, se marca como <strong>ANULADO</strong>.
+                    Conserva el consecutivo numérico y todo el historial para auditoría contable y fiscal.
+                  </span>
                 </div>
+              </label>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-300">
-                    Motivo de Eliminación / Desactivación
-                  </label>
-                  <input
-                    type="text"
-                    value={motivoEliminacion}
-                    onChange={(e) => setMotivoEliminacion(e.target.value)}
-                    placeholder="Ej: Subtipo duplicado o reemplazado por nueva serie..."
-                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-rose-500"
-                  />
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  form.politicaEliminacionDocumentos === 'FISICO'
+                    ? 'bg-rose-950/30 border-rose-600/50'
+                    : 'bg-slate-950/60 border-slate-800'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="politica-elim-doc"
+                  value="FISICO"
+                  checked={form.politicaEliminacionDocumentos === 'FISICO'}
+                  onChange={() => setForm({ ...form, politicaEliminacionDocumentos: 'FISICO' })}
+                  className="mt-0.5 accent-rose-500 cursor-pointer"
+                />
+                <div className="text-xs">
+                  <span className="block font-bold text-rose-300">
+                    🗑️ Eliminación Física (Purga de Borradores)
+                  </span>
+                  <span className="text-slate-400 block mt-0.5">
+                    Permite borrar físicamente de la base de datos documentos creados bajo este subtipo
+                    que se encuentren en borrador o sin movimientos contables ni cobros asentados.
+                  </span>
                 </div>
+              </label>
+            </div>
 
-                {modoEliminacion === 'FISICO' && (
-                  <div className="p-2.5 bg-rose-950/30 border border-rose-700/50 rounded-lg space-y-1">
-                    <label className="text-[11px] font-semibold text-rose-300">
-                      Escriba "ELIMINAR" para confirmar el borrado físico permanente:
-                    </label>
-                    <input
-                      type="text"
-                      value={confirmacionFisica}
-                      onChange={(e) => setConfirmacionFisica(e.target.value)}
-                      placeholder="ELIMINAR"
-                      className="w-full px-3 py-1.5 bg-slate-900 border border-rose-600 rounded-lg text-xs text-rose-200 font-mono font-bold focus:outline-none"
-                    />
-                  </div>
-                )}
-
-                <div className="flex justify-end pt-1">
-                  <Button
-                    type="button"
-                    variant={modoEliminacion === 'FISICO' ? 'danger' : 'secondary'}
-                    size="sm"
-                    onClick={handleEjecutarEliminacion}
-                    disabled={guardando}
-                  >
-                    {modoEliminacion === 'FISICO' ? 'Ejecutar Eliminación Física' : 'Desactivar Subtipo (Lógica)'}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400">
-                Política activa: {modoEliminacion === 'LOGICO' ? 'Lógica (inactivar conservando histórico)' : 'Física (borrado total)'}. Estado actual: {subtipo.activo ? 'Activo' : 'Inactivo'}.
-              </p>
-            )}
+            <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+              <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.activo}
+                  onChange={(e) => setForm({ ...form, activo: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-700 text-emerald-600 focus:ring-0 cursor-pointer"
+                />
+                <span className="font-semibold">
+                  Subtipo Activo para Emisión (Permite crear nuevas solicitudes/documentos)
+                </span>
+              </label>
+              <Badge variant={form.activo ? 'success' : 'neutral'} size="sm">
+                {form.activo ? 'Emisión Habilitada' : 'Emisión Bloqueada'}
+              </Badge>
+            </div>
           </div>
 
           {/* ACCIONES DEL FORMULARIO PRINCIPAL */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
-            <div>
-              {!subtipo.activo && onReactivar && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleReactivar}
-                  disabled={guardando}
-                >
-                  ♻️ Reactivar Subtipo
-                </Button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Button type="button" variant="secondary" onClick={onClose} disabled={guardando}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary" loading={guardando}>
-                ✓ Guardar Maestro Subtipo
-              </Button>
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={guardando}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" loading={guardando}>
+              ✓ Guardar Maestro Subtipo
+            </Button>
           </div>
         </form>
       </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { CRUDTable, Badge, Button, Modal } from '@farutech/design-system';
 import { solicitudesApi } from '../../services/solicitudesApi';
+import { ModalComprobanteSolicitud } from './ModalComprobanteSolicitud';
 
 export interface SolicitudHistorialItem {
   id?: string;
@@ -39,6 +40,7 @@ export function HistorialSolicitudesView({
   const [solicitudesApiList, setSolicitudesApiList] = useState<SolicitudHistorialItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [solicitudDetalle, setSolicitudDetalle] = useState<SolicitudHistorialItem | null>(null);
+  const [solicitudParaImprimir, setSolicitudParaImprimir] = useState<SolicitudHistorialItem | null>(null);
 
   const fetchSolicitudes = useCallback(async () => {
     setLoading(true);
@@ -189,55 +191,55 @@ export function HistorialSolicitudesView({
               label: 'Acciones',
               align: 'right',
               render: (_: any, r: SolicitudHistorialItem) => (
-                <div className="flex items-center justify-end gap-1.5">
+                <div className="flex items-center justify-end gap-1.5 flex-wrap">
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => setSolicitudDetalle(r)}
+                    className="px-2.5 py-1 text-xs font-semibold"
+                    title="Ver resumen y detalle de la solicitud"
                   >
                     👁️ Ver
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSolicitudParaImprimir(r)}
+                    className="px-2.5 py-1 text-xs font-semibold text-indigo-300 hover:text-white hover:bg-indigo-600/40 border-indigo-500/30"
+                    title="Imprimir comprobante o reporte de la solicitud"
+                  >
+                    🖨️ Imprimir
                   </Button>
                   {r.estado === 'BORRADOR' && onEditarSolicitud && (
                     <Button
                       variant="primary"
                       size="sm"
                       onClick={() => onEditarSolicitud(r)}
-                      className="bg-amber-600 hover:bg-amber-500 text-white font-medium shadow-sm"
+                      className="px-2.5 py-1 text-xs bg-amber-600 hover:bg-amber-500 text-white font-semibold shadow-sm"
+                      title="Continuar con la captura y asentar la solicitud"
                     >
-                      ✏️ Continuar / Editar
+                      ✏️ Editar
                     </Button>
                   )}
                 </div>
               ),
             },
           ]}
-          rowActions={[
-            {
-              id: 'ver_detalle',
-              label: 'Ver Detalle',
-              icon: <span>👁️</span>,
-              tooltip: 'Ver detalle de la solicitud y comprobante',
-              variant: 'secondary',
-              onClick: (r: SolicitudHistorialItem) => setSolicitudDetalle(r),
-            },
-            ...(onEditarSolicitud
-              ? [
-                  {
-                    id: 'editar_borrador',
-                    label: 'Continuar / Editar',
-                    icon: <span>✏️</span>,
-                    tooltip: 'Continuar y asentar solicitud en borrador',
-                    variant: 'primary' as const,
-                    onClick: (r: SolicitudHistorialItem) => onEditarSolicitud(r),
-                  },
-                ]
-              : []),
-          ]}
           searchable={true}
           searchPlaceholder="Buscar por consecutivo, cliente o documento..."
           pagination={true}
           pageSize={10}
           emptyMessage="No hay registros en el historial de solicitudes."
+          footerSlot={
+            <div className="px-4 py-2.5 bg-slate-950/70 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-2">
+              <span className="font-semibold text-slate-300">Leyenda de Acciones:</span>
+              <div className="flex flex-wrap items-center gap-4">
+                <span>👁️ <strong className="text-slate-300">Ver:</strong> Consultar resumen</span>
+                <span>🖨️ <strong className="text-slate-300">Comprobante:</strong> Recibo térmico / PDF</span>
+                <span>✏️ <strong className="text-slate-300">Editar:</strong> Continuar borrador</span>
+              </div>
+            </div>
+          }
         />
       )}
 
@@ -286,26 +288,76 @@ export function HistorialSolicitudesView({
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setSolicitudDetalle(null)}>
-                Cerrar
+            <div className="pt-2 flex justify-between items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const target = solicitudDetalle;
+                  setSolicitudDetalle(null);
+                  setSolicitudParaImprimir(target);
+                }}
+                className="text-indigo-300 hover:text-white"
+              >
+                🖨️ Imprimir Comprobante
               </Button>
-              {solicitudDetalle.estado === 'BORRADOR' && onEditarSolicitud && (
-                <Button
-                  variant="primary"
-                  className="bg-amber-600 hover:bg-amber-500 font-bold text-white"
-                  onClick={() => {
-                    const target = solicitudDetalle;
-                    setSolicitudDetalle(null);
-                    onEditarSolicitud(target);
-                  }}
-                >
-                  ✏️ Continuar / Editar esta Solicitud
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setSolicitudDetalle(null)}>
+                  Cerrar
                 </Button>
-              )}
+                {solicitudDetalle.estado === 'BORRADOR' && onEditarSolicitud && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="bg-amber-600 hover:bg-amber-500 font-bold text-white"
+                    onClick={() => {
+                      const target = solicitudDetalle;
+                      setSolicitudDetalle(null);
+                      onEditarSolicitud(target);
+                    }}
+                  >
+                    ✏️ Continuar / Editar
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Modal de Impresión / Comprobante */}
+      {solicitudParaImprimir && (
+        <ModalComprobanteSolicitud
+          isOpen={Boolean(solicitudParaImprimir)}
+          onClose={() => setSolicitudParaImprimir(null)}
+          solicitud={{
+            numeroSolicitud: solicitudParaImprimir.numeroSolicitud,
+            subtipo: solicitudParaImprimir.subtipo,
+            fecha: solicitudParaImprimir.fecha,
+            clienteNombre: solicitudParaImprimir.clienteNombre,
+            clienteDocumento: solicitudParaImprimir.clienteDocumento,
+            observaciones: solicitudParaImprimir.observaciones,
+            lineas: solicitudParaImprimir.lineas?.map((l: any) => ({
+              descripcion: l.descripcion,
+              naturaleza: l.naturaleza,
+              cantidad: l.cantidad,
+              precioUnitario: l.precioUnitario,
+              subtotal: l.subtotal || l.cantidad * l.precioUnitario,
+              fechaEntregaCompromiso: l.fechaEntregaCompromiso,
+              franjaCompromiso: l.franjaCompromiso,
+              observaciones: l.observaciones,
+            })),
+            pagosAbono: solicitudParaImprimir.pagosAbono?.map((p: any) => ({
+              instrumentoNombre: p.instrumentoNombre,
+              monto: p.monto,
+              referencia: p.referencia,
+            })),
+            totalNetoCop: solicitudParaImprimir.totalNetoCop,
+            anticipoCop: solicitudParaImprimir.anticipoCop,
+            saldoCop: solicitudParaImprimir.saldoCop,
+            estado: solicitudParaImprimir.estado,
+          }}
+        />
       )}
     </div>
   );

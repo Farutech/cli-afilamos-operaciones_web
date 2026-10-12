@@ -42,6 +42,10 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Paginación estándar
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [itemsPorPagina, setItemsPorPagina] = useState(10);
+
   // Modales
   const [itemSeleccionado, setItemSeleccionado] = useState<ItemTaller | null>(null);
   const [transicionSeleccionada, setTransicionSeleccionada] = useState<TransicionDisponible | null>(null);
@@ -108,6 +112,17 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
       );
     });
   }, [items, busqueda]);
+
+  // Reset de página al cambiar filtros
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [filtroEtapa, busqueda, itemsPorPagina]);
+
+  const totalPaginas = Math.max(1, Math.ceil(itemsFiltrados.length / itemsPorPagina));
+  const itemsPaginados = useMemo(() => {
+    const inicio = (paginaActual - 1) * itemsPorPagina;
+    return itemsFiltrados.slice(inicio, inicio + itemsPorPagina);
+  }, [itemsFiltrados, paginaActual, itemsPorPagina]);
 
   // T032: Recepción Rápida (< 500ms)
   const handleRecepcionRapida = async (item: ItemTaller) => {
@@ -323,14 +338,14 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
-              {itemsFiltrados.length === 0 ? (
+              {itemsPaginados.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
                     {loading ? 'Cargando cola de taller...' : 'No hay ítems en la cola de taller para los criterios seleccionados.'}
                   </td>
                 </tr>
               ) : (
-                itemsFiltrados.map((item) => (
+                itemsPaginados.map((item) => (
                   <tr key={item.itemPublicId} className="hover:bg-slate-950/80 transition-colors">
                     <td className="px-4 py-3">
                       <div className="font-bold text-white">{item.documentoOtNumero}</div>
@@ -420,8 +435,13 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                           variant="danger"
                           onClick={() => handleAbrirCancelar(item)}
                           disabled={loading}
+                          title="Cancelar orden de ítem (Invariante #8)"
+                          className="px-2.5 py-1 text-xs"
                         >
-                          ✕
+                          <span className="flex items-center gap-1">
+                            <span>✕</span>
+                            <span className="hidden sm:inline">Cancelar</span>
+                          </span>
                         </Button>
                       )}
                     </td>
@@ -430,6 +450,58 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Paginación Estandarizada */}
+        <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-3">
+            <span>
+              Mostrando{' '}
+              <strong className="text-white">
+                {itemsFiltrados.length > 0 ? (paginaActual - 1) * itemsPorPagina + 1 : 0}
+              </strong>{' '}
+              a{' '}
+              <strong className="text-white">
+                {Math.min(paginaActual * itemsPorPagina, itemsFiltrados.length)}
+              </strong>{' '}
+              de <strong className="text-white">{itemsFiltrados.length}</strong> órdenes
+            </span>
+
+            <div className="flex items-center gap-1.5 border-l pl-3 border-slate-800">
+              <span>Por página:</span>
+              <select
+                value={itemsPorPagina}
+                onChange={(e) => setItemsPorPagina(Number(e.target.value))}
+                className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-white text-xs cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={paginaActual <= 1}
+              onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
+            >
+              ← Anterior
+            </Button>
+            <span className="font-mono px-2.5 py-1 bg-slate-900 rounded border border-slate-700 text-white font-bold">
+              {paginaActual} / {totalPaginas}
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={paginaActual >= totalPaginas}
+              onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+            >
+              Siguiente →
+            </Button>
+          </div>
         </div>
       </Card>
 

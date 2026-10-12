@@ -64,7 +64,7 @@ describe('HistorialSolicitudesView Component', () => {
     expect(screen.getByText('BORRADOR')).toBeDefined();
   });
 
-  it('permite hacer clic en "Continuar / Editar" cuando la solicitud está en BORRADOR', async () => {
+  it('permite hacer clic en "Editar" cuando la solicitud está en BORRADOR', async () => {
     const handleEditar = vi.fn();
     render(
       <HistorialSolicitudesView
@@ -78,7 +78,7 @@ describe('HistorialSolicitudesView Component', () => {
       expect(screen.getByText('SOL-5555')).toBeDefined();
     });
 
-    const editButtons = screen.getAllByText(/Continuar \/ Editar/i);
+    const editButtons = screen.getAllByText(/Editar/i);
     expect(editButtons.length).toBeGreaterThan(0);
 
     fireEvent.click(editButtons[0]);
@@ -88,5 +88,32 @@ describe('HistorialSolicitudesView Component', () => {
       numeroSolicitud: 'SOL-5555',
       estado: 'BORRADOR',
     }));
+  });
+
+  it('abre el modal de impresión al hacer clic en Imprimir y dispara window.print', async () => {
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+    render(
+      <HistorialSolicitudesView
+        onNuevaSolicitud={vi.fn()}
+        solicitudesExtra={[dummyAsentada]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('SOL-1111')).toBeDefined();
+    });
+
+    const printBtn = screen.getByText(/Imprimir/i);
+    fireEvent.click(printBtn);
+
+    // Modal de comprobante debe estar abierto
+    expect(screen.getByText(/Comprobante de Solicitud: SOL-1111/i)).toBeDefined();
+
+    // Clic en Imprimir Comprobante
+    const printActionBtn = screen.getByText(/Imprimir Comprobante/i);
+    fireEvent.click(printActionBtn);
+
+    expect(printSpy).toHaveBeenCalled();
+    printSpy.mockRestore();
   });
 });

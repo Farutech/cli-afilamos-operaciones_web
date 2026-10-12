@@ -6,6 +6,7 @@ import { ItemBuscarModal } from '../catalogos/ItemBuscarModal';
 import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
 import { ClienteBuscarModal } from '../clientes/ClienteBuscarModal';
 import { catalogosApi } from '../../services/catalogosApi';
+import { formatearNumeroDocumento } from '../../utils/documentFormat';
 import { Edit2, Trash2, Eye } from 'lucide-react';
 import type {
   ItemCatalogo,
@@ -53,7 +54,9 @@ export interface SubtipoDocOpcion {
   codigoSubtipo: string;
   nombre: string;
   prefijo: string;
+  sufijo?: string;
   folioActual: number;
+  longitudCeros?: number;
   formatoPlantilla: 'TIRILLA' | 'MEDIA_CARTA' | 'CARTA';
 }
 
@@ -63,12 +66,17 @@ interface SolicitudCapturaMixtaProps {
   clientes: Cliente[];
   onAsentarSolicitud: (solicitud: {
     requestId?: string;
+    numeroDocumentoVisible?: string;
     canalUuid: string;
     clienteUuid: string;
     tipoDocumentoUuid?: string;
     tipoDocumentoCodigo?: string;
     subtipoUuid?: string;
     subtipoCodigo?: string;
+    prefijo?: string;
+    sufijo?: string;
+    folio?: number;
+    longitudCeros?: number;
     lineas: LineaDetalleLocal[];
     totalPagadoInventario: number;
     anticipoVoBoAutorizado: boolean;
@@ -307,7 +315,9 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
             codigoSubtipo: st.codigoSubtipo || primerTipo.codigoBase,
             nombre: st.nombre || primerTipo.nombre,
             prefijo: st.prefijo || primerTipo.codigoBase,
+            sufijo: (st as any).sufijo || '',
             folioActual: st.folioActual || 1,
+            longitudCeros: (st as any).longitudCeros || 4,
             formatoPlantilla: (st.formatoPlantilla as 'TIRILLA' | 'MEDIA_CARTA' | 'CARTA') || 'TIRILLA',
           }));
 
@@ -319,7 +329,9 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
               codigoSubtipo: primerTipo.codigoBase,
               nombre: primerTipo.nombre,
               prefijo: primerTipo.codigoBase,
+              sufijo: '',
               folioActual: 1,
+              longitudCeros: 4,
               formatoPlantilla: 'TIRILLA',
             });
           }
@@ -354,7 +366,9 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         codigoSubtipo: 'SOL',
         nombre: 'Solicitud estándar',
         prefijo: 'SOL',
+        sufijo: '',
         folioActual: 1,
+        longitudCeros: 4,
         formatoPlantilla: 'TIRILLA',
       }
     );
@@ -380,13 +394,18 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   // Detalle / Concepto general
   const [observacionesDocumento, setObservacionesDocumento] = useState<string>('');
 
-  // Número visible final
+  // Número visible final con prefijo, padding y sufijo
   const numeroDocumentoVisible = useMemo(() => {
     if (modoNumeracion === 'MANUAL' && numeroDocManual.trim()) {
       return numeroDocManual.trim().toUpperCase();
     }
-    return String(consecutivoNumero);
-  }, [modoNumeracion, numeroDocManual, consecutivoNumero]);
+    return formatearNumeroDocumento(
+      subtipoActual.prefijo,
+      consecutivoNumero,
+      subtipoActual.sufijo,
+      subtipoActual.longitudCeros || 4
+    );
+  }, [modoNumeracion, numeroDocManual, consecutivoNumero, subtipoActual]);
 
   // =========================================================================
   // GESTIÓN DEL PACTO DE ENTREGA (POR ÍTEM CON HERENCIA)
@@ -902,12 +921,17 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
 
     await onAsentarSolicitud({
       requestId: solicitudInicial?.requestId,
+      numeroDocumentoVisible,
       canalUuid: selectedCanal || canales[0]?.uuid,
       clienteUuid: selectedCliente || clientes[0]?.uuid,
       tipoDocumentoUuid: tipoDocActual?.uuid,
       tipoDocumentoCodigo: tipoDocActual?.codigoBase,
       subtipoUuid: subtipoActual?.uuid,
       subtipoCodigo: subtipoActual?.codigoSubtipo,
+      prefijo: subtipoActual?.prefijo,
+      sufijo: subtipoActual?.sufijo,
+      folio: consecutivoNumero,
+      longitudCeros: subtipoActual?.longitudCeros,
       lineas,
       totalPagadoInventario: cobroInventarioEfectivo,
       anticipoVoBoAutorizado: false,
@@ -954,12 +978,17 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
 
     await onAsentarSolicitud({
       requestId: solicitudInicial?.requestId,
+      numeroDocumentoVisible,
       canalUuid: selectedCanal || canales[0]?.uuid,
       clienteUuid: selectedCliente || clientes[0]?.uuid,
       tipoDocumentoUuid: tipoDocActual?.uuid,
       tipoDocumentoCodigo: tipoDocActual?.codigoBase,
       subtipoUuid: subtipoActual?.uuid,
       subtipoCodigo: subtipoActual?.codigoSubtipo,
+      prefijo: subtipoActual?.prefijo,
+      sufijo: subtipoActual?.sufijo,
+      folio: consecutivoNumero,
+      longitudCeros: subtipoActual?.longitudCeros,
       lineas,
       totalPagadoInventario: cobroInventarioEfectivo,
       anticipoVoBoAutorizado: voboAutorizado || voboExcepcionAnticipo,
@@ -1078,14 +1107,14 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 </div>
                 {modoNumeracion === 'AUTOMATICO' ? (
                   <div className="w-full h-9 px-3 flex items-center justify-center bg-[#020617] border border-emerald-500/50 rounded-lg font-mono font-black text-sm text-emerald-400 text-center shadow-inner tracking-wider">
-                    {consecutivoNumero}
+                    {numeroDocumentoVisible}
                   </div>
                 ) : (
                   <input
                     type="text"
                     value={numeroDocManual}
                     onChange={(e) => setNumeroDocManual(e.target.value.toUpperCase())}
-                    placeholder={String(consecutivoNumero)}
+                    placeholder={numeroDocumentoVisible}
                     className="w-full h-9 px-3 bg-slate-900 border border-indigo-500 rounded-lg font-mono font-black text-sm text-emerald-300 text-center tracking-wider focus:outline-none"
                   />
                 )}
@@ -2045,7 +2074,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       <Modal
         isOpen={isPlantillaModalOpen}
         onClose={() => setIsPlantillaModalOpen(false)}
-        title={`Vista Previa de Documento: ${subtipoActual.prefijo}-${numeroDocumentoVisible} (${plantillaFormato})`}
+        title={`Vista Previa de Documento: ${numeroDocumentoVisible} (${plantillaFormato})`}
         size="lg"
       >
         <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
@@ -2062,7 +2091,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
               <h3 className="font-black m-0 text-sm">ORDEON POS & TALLER</h3>
               <p className="text-[10px] text-gray-600 m-0">Afilamos Operaciones S.A.S.</p>
               <div className="mt-2 font-mono font-bold text-sm bg-gray-100 p-1 rounded inline-block">
-                {subtipoActual.prefijo}-{numeroDocumentoVisible}
+                {numeroDocumentoVisible}
               </div>
             </div>
             <div className="text-[11px] space-y-1">

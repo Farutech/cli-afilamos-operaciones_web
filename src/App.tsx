@@ -17,6 +17,7 @@ import AdminCreditLimits from '@/components/admin/AdminCreditLimits';
 import AdminAuditLogs from '@/components/admin/AdminAuditLogs';
 import AdminApprovals from '@/components/admin/AdminApprovals';
 import AdminUsers from '@/components/admin/AdminUsers';
+import AdminCashRegisters from '@/components/admin/AdminCashRegisters';
 import { SectionPage } from '@/components/pages/SectionPage';
 import { RequestModal } from '@/components/modals/RequestModal';
 
@@ -33,6 +34,7 @@ import { ModuloPagosCredito } from '@/features/pagos/ModuloPagosCredito';
 import { ModuloReportes } from '@/features/reportes/ModuloReportes';
 import { SolicitudCapturaMixta } from '@/features/solicitudes/SolicitudCapturaMixta';
 import { HistorialSolicitudesView, type SolicitudHistorialItem } from '@/features/solicitudes/HistorialSolicitudesView';
+import { ModalComprobanteSolicitud, type ComprobanteSolicitudData } from '@/features/solicitudes/ModalComprobanteSolicitud';
 import { ModuloAdmin } from '@/features/admin/ModuloAdmin';
 
 export interface UserSession {
@@ -132,6 +134,10 @@ export function App() {
     pagosAbono?: any[];
   } | null>(null);
 
+  // Estado para modal de notificación de impresión post-asentar solicitud
+  const [solicitudParaImprimirPostAsentar, setSolicitudParaImprimirPostAsentar] =
+    useState<ComprobanteSolicitudData | null>(null);
+
   const handleEditarSolicitud = async (sol: SolicitudHistorialItem) => {
     let lineasCargadas = sol.lineas || [];
     let obs = sol.observaciones || '';
@@ -185,6 +191,7 @@ export function App() {
 
   const handleAsentarSolicitud = async (solicitud: {
     requestId?: string;
+    numeroDocumentoVisible?: string;
     canalUuid: string;
     clienteUuid: string;
     tipoDocumentoUuid?: string;
@@ -206,9 +213,9 @@ export function App() {
     );
     const totalAbonado = (solicitud.pagosAbono || []).reduce((acc, p) => acc + (p.monto || 0), 0);
     const saldo = Math.max(0, subtotalCalc - totalAbonado);
-    const nuevoNumero = solicitud.requestId
+    const nuevoNumero = solicitud.numeroDocumentoVisible || (solicitud.requestId
       ? (solicitudEnEdicion?.numeroDocumentoVisible || `SOL-${solicitud.requestId.slice(0, 8)}`)
-      : `SOL-${String(Math.floor(1000 + Math.random() * 9000))}`;
+      : `SOL-${String(Math.floor(1000 + Math.random() * 9000))}`);
 
     const tieneServicios = solicitud.lineas.some((l) => l.naturaleza === 'SERVICIO');
     const esBorrador = solicitud.esSoloGuardar === true;
@@ -347,6 +354,36 @@ export function App() {
       });
       setSolicitudEnEdicion(null);
       setSolicitudesSubView('lista');
+
+      if (!esBorrador) {
+        setSolicitudParaImprimirPostAsentar({
+          numeroSolicitud: nuevaSolicitudHistorial.numeroSolicitud,
+          subtipo: nuevaSolicitudHistorial.subtipo,
+          fecha: nuevaSolicitudHistorial.fecha,
+          clienteNombre: nuevaSolicitudHistorial.clienteNombre,
+          clienteDocumento: nuevaSolicitudHistorial.clienteDocumento,
+          observaciones: nuevaSolicitudHistorial.observaciones,
+          lineas: nuevaSolicitudHistorial.lineas?.map((l: any) => ({
+            descripcion: l.descripcion,
+            naturaleza: l.naturaleza,
+            cantidad: l.cantidad,
+            precioUnitario: l.precioUnitario,
+            subtotal: l.subtotal || l.cantidad * l.precioUnitario,
+            fechaEntregaCompromiso: l.fechaEntregaCompromiso,
+            franjaCompromiso: l.franjaCompromiso,
+            observaciones: l.observaciones,
+          })),
+          pagosAbono: nuevaSolicitudHistorial.pagosAbono?.map((p: any) => ({
+            instrumentoNombre: p.instrumentoNombre,
+            monto: p.monto,
+            referencia: p.referencia,
+          })),
+          totalNetoCop: nuevaSolicitudHistorial.totalNetoCop,
+          anticipoCop: nuevaSolicitudHistorial.anticipoCop,
+          saldoCop: nuevaSolicitudHistorial.saldoCop,
+          estado: nuevaSolicitudHistorial.estado,
+        });
+      }
     }
   };
 
@@ -650,13 +687,19 @@ export function App() {
       </div>
     );
   } else if (
+    activeSection === 'Cajas y terminales' ||
+    activeSection === 'Cajas' ||
+    activeSection === 'Terminales'
+  ) {
+    content = <AdminCashRegisters token={session.token} />;
+  } else if (
     activeSection === 'Catálogos' ||
     activeSection === 'Productos y servicios' ||
     activeSection === 'Servicios' ||
     activeSection === 'Productos y materiales'
   ) {
     content = <AdminItems token={session.token} />;
-  } else if (activeSection === 'Precios') {
+  } else if (activeSection === 'Precios' || activeSection === 'Listas de precios') {
     content = <AdminPrices token={session.token} />;
   } else if (activeSection === 'Unidades y categorías') {
     content = <AdminUnitsCategories token={session.token} />;
@@ -679,7 +722,7 @@ export function App() {
     content = <AdminAuditLogs token={session.token} />;
   } else if (activeSection === 'Aprobaciones pendientes') {
     content = <AdminApprovals token={session.token} />;
-    } else if (activeSection === 'Formas y medios de pago' || activeSection === 'Formas de pago') {
+  } else if (activeSection === 'Formas y medios de pago' || activeSection === 'Formas de pago') {
     content = (
       <div className="page-content">
         <ModuloAdmin
@@ -712,8 +755,10 @@ export function App() {
         />
       </div>
     );
-  } else if (activeSection === 'Usuarios') {
-    content = <AdminUsers token={session.token} />;
+  } else if (activeSection === 'Usuarios' || activeSection === 'Usuarios y personal') {
+    content = <AdminUsers token={session.token} initialTab="usuarios" />;
+  } else if (activeSection === 'Roles y permisos' || activeSection === 'Roles') {
+    content = <AdminUsers token={session.token} initialTab="roles" />;
   }
 
   return (
@@ -735,6 +780,15 @@ export function App() {
             setActiveSection('Solicitudes');
             setSolicitudesSubView('lista');
           }}
+        />
+      )}
+
+      {solicitudParaImprimirPostAsentar && (
+        <ModalComprobanteSolicitud
+          isOpen={Boolean(solicitudParaImprimirPostAsentar)}
+          onClose={() => setSolicitudParaImprimirPostAsentar(null)}
+          solicitud={solicitudParaImprimirPostAsentar}
+          esConfirmacionAsentada={true}
         />
       )}
     </DesignSystemProvider>

@@ -468,7 +468,9 @@ export const catalogosApi = {
             nombre: st.nombre || st.name || d.name,
             activo: st.activo ?? st.active ?? true,
             prefijo: st.prefijo || d.code || d.codigo,
+            sufijo: st.sufijo || st.suffix || '',
             folioActual: st.folioActual ?? 1,
+            longitudCeros: st.longitudCeros ?? st.numberLength ?? 4,
             formatoPlantilla: st.formatoPlantilla || 'TIRILLA',
           })),
         })),
@@ -490,7 +492,9 @@ export const catalogosApi = {
           nombre: st.nombre || st.name || '',
           descripcion: st.description || st.descripcion || '',
           prefijo: st.prefijo || st.codigo || st.code || 'DOC',
+          sufijo: st.sufijo || st.suffix || '',
           folioActual: st.folioActual ?? 1,
+          longitudCeros: st.longitudCeros ?? st.numberLength ?? 4,
           formatoPlantilla: st.formatoPlantilla || 'TIRILLA',
           formatoPapel: st.formatoPapel || 'TIRILLA_80MM',
           imprimeAlAsentar: st.imprimeAlAsentar ?? false,
@@ -536,17 +540,18 @@ export const catalogosApi = {
     return { uuid, codigoAnterior: '', codigoNuevo: nuevoCodigo };
   },
 
-  async getCajas(): Promise<{ cajas: Caja[] }> {
+  async getCajas(includeInactive: boolean = false, token?: string): Promise<{ cajas: Caja[] }> {
     try {
-      const res = await api.get<any>('/configuration/cash-registers');
+      const query = includeInactive ? '?includeInactive=true' : '';
+      const res = await api.get<any>(`/configuration/cash-registers${query}`, token);
       const raw = Array.isArray(res) ? res : (res?.registers || res?.cajas || []);
       return {
         cajas: raw.map((r: any) => ({
-          uuid: r.id,
-          codigoCaja: r.code,
-          nombre: r.name,
-          ubicacion: r.physicalLocation || '',
-          activa: r.active ?? true,
+          uuid: r.id || r.uuid,
+          codigoCaja: r.code || r.codigoCaja,
+          nombre: r.name || r.nombre,
+          ubicacion: r.physicalLocation || r.ubicacion || '',
+          activa: r.active ?? r.activa ?? true,
         })),
       };
     } catch {
@@ -554,16 +559,37 @@ export const catalogosApi = {
     }
   },
 
-  async crearCaja(dto: { codigoCaja: string; nombre: string; ubicacion: string }): Promise<Caja> {
-    return api.post<Caja>('/configuration/cash-registers', dto);
+  async crearCaja(
+    dto: { codigoCaja: string; nombre: string; ubicacion: string; [key: string]: any },
+    token?: string
+  ): Promise<Caja> {
+    const payload = {
+      code: dto.codigoCaja,
+      codigoCaja: dto.codigoCaja,
+      name: dto.nombre,
+      nombre: dto.nombre,
+      physicalLocation: dto.ubicacion,
+      ubicacion: dto.ubicacion,
+    };
+    return api.post<Caja>('/configuration/cash-registers', payload, token);
   },
 
-  async actualizarCaja(uuid: string, dto: { nombre: string; ubicacion: string }): Promise<Caja> {
-    return api.put<Caja>(`/configuration/cash-registers/${uuid}`, dto);
+  async actualizarCaja(
+    uuid: string,
+    dto: { nombre: string; ubicacion: string; [key: string]: any },
+    token?: string
+  ): Promise<Caja> {
+    const payload = {
+      name: dto.nombre,
+      nombre: dto.nombre,
+      physicalLocation: dto.ubicacion,
+      ubicacion: dto.ubicacion,
+    };
+    return api.put<Caja>(`/configuration/cash-registers/${uuid}`, payload, token);
   },
 
-  async setCajaActiva(uuid: string, activo: boolean): Promise<void> {
-    await api.patch<void>(`/configuration/cash-registers/${uuid}/active`, { activo });
+  async setCajaActiva(uuid: string, activo: boolean, token?: string): Promise<void> {
+    await api.patch<void>(`/configuration/cash-registers/${uuid}/active`, { activo, active: activo }, token);
   },
 
   async getMediosPagoArbol(): Promise<{ categorias: MedioPagoCategoria[] }> {

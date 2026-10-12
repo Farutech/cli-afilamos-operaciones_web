@@ -68,6 +68,9 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
   const [historialPagos, setHistorialPagos] = useState<PagoHistorial[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [busquedaHistorial, setBusquedaHistorial] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [filtroMedioPago, setFiltroMedioPago] = useState('');
   const [paginaHistorial, setPaginaHistorial] = useState(1);
   const [itemsHistorialPorPagina, setItemsHistorialPorPagina] = useState(10);
 
@@ -273,16 +276,39 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
 
   // Filtrado y Paginación de Historial
   const historialFiltrado = useMemo(() => {
+    let result = historialPagos;
+
+    if (filtroMedioPago) {
+      result = result.filter((p) =>
+        p.paymentMethodName.toLowerCase().includes(filtroMedioPago.toLowerCase())
+      );
+    }
+
+    if (fechaDesde) {
+      result = result.filter((p) => p.receivedAt.split('T')[0] >= fechaDesde);
+    }
+
+    if (fechaHasta) {
+      result = result.filter((p) => p.receivedAt.split('T')[0] <= fechaHasta);
+    }
+
     const q = busquedaHistorial.trim().toLowerCase();
-    if (!q) return historialPagos;
-    return historialPagos.filter(
-      (p) =>
-        p.customerName.toLowerCase().includes(q) ||
-        (p.documentNumber && p.documentNumber.toLowerCase().includes(q)) ||
-        p.paymentMethodName.toLowerCase().includes(q) ||
-        (p.reference && p.reference.toLowerCase().includes(q))
-    );
-  }, [historialPagos, busquedaHistorial]);
+    if (q) {
+      result = result.filter(
+        (p) =>
+          p.customerName.toLowerCase().includes(q) ||
+          (p.documentNumber && p.documentNumber.toLowerCase().includes(q)) ||
+          p.paymentMethodName.toLowerCase().includes(q) ||
+          (p.reference && p.reference.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [historialPagos, busquedaHistorial, filtroMedioPago, fechaDesde, fechaHasta]);
+
+  // Reset de página al cambiar filtros en historial
+  useEffect(() => {
+    setPaginaHistorial(1);
+  }, [busquedaHistorial, filtroMedioPago, fechaDesde, fechaHasta, itemsHistorialPorPagina]);
 
   const totalPaginasHistorial = Math.max(1, Math.ceil(historialFiltrado.length / itemsHistorialPorPagina));
   const historialPaginado = useMemo(() => {
@@ -605,16 +631,60 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="w-64">
-                <Input
-                  value={busquedaHistorial}
-                  onChange={(e) => setBusquedaHistorial(e.target.value)}
-                  placeholder="Buscar en historial..."
-                />
-              </div>
               <Button size="sm" variant="secondary" onClick={cargarHistorial} disabled={cargandoHistorial}>
                 {cargandoHistorial ? 'Cargando...' : '🔄 Refrescar'}
               </Button>
+            </div>
+          </div>
+
+          {/* Barra de Filtros Historial */}
+          <div className="p-4 border-b border-white/10 bg-slate-950/40 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 Desde</label>
+              <input
+                type="date"
+                value={fechaDesde}
+                onChange={(e) => setFechaDesde(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 Hasta</label>
+              <input
+                type="date"
+                value={fechaHasta}
+                onChange={(e) => setFechaHasta(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">💳 Medio de Pago</label>
+              <select
+                value={filtroMedioPago}
+                onChange={(e) => setFiltroMedioPago(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              >
+                <option value="">Todos los medios</option>
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia bancaria</option>
+                <option value="Nequi">Nequi</option>
+                <option value="Daviplata">Daviplata</option>
+                <option value="Tarjeta">Tarjeta (débito/crédito)</option>
+                <option value="Crédito">Crédito interno</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">🔍 Buscar Referencia / Cliente</label>
+              <input
+                type="text"
+                value={busquedaHistorial}
+                onChange={(e) => setBusquedaHistorial(e.target.value)}
+                placeholder="SOL-..., Nequi ref, cliente..."
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder-slate-500"
+              />
             </div>
           </div>
 
