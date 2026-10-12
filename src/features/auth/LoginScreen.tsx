@@ -1,9 +1,11 @@
 import type { FormEvent } from 'react';
 import React, { useState } from 'react';
 import { Card, Button, Badge } from '@farutech/design-system';
+import { apiBaseUrl } from '@/lib/api-client';
 
 export interface LoginScreenProps {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onForgotPasswordSubmit?: (emailOrIdentifier: string) => Promise<boolean | void>;
   loading?: boolean;
   error?: string | null;
 }
@@ -21,9 +23,7 @@ const OrdeonBlade: React.FC = () => (
 
       {/* Dientes exteriores de la sierra con giro suave */}
       <g className="blade-spin">
-        {/* Anillo dentado */}
         <circle cx="100" cy="100" r="86" fill="none" stroke="#cbd5e1" strokeWidth="16" strokeDasharray="9 7" />
-        {/* Cuerpo del disco de sierra */}
         <circle cx="100" cy="100" r="74" fill="#1e242b" stroke="#334155" strokeWidth="2.5" />
         <circle cx="100" cy="100" r="68" fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="4 4" />
 
@@ -44,13 +44,56 @@ const OrdeonBlade: React.FC = () => (
       <circle cx="100" cy="100" r="30" fill="url(#blade-core-glow)" />
       <circle cx="100" cy="100" r="24" fill="#0b1322" stroke="#38bdf8" strokeWidth="2.5" />
       <circle cx="100" cy="100" r="16" fill="none" stroke="#0ea5e9" strokeWidth="2" strokeDasharray="5 3" />
-      <circle cx="100" cy="100" r="7" fill="#38bdf8" />
+      <circle cx="100" cy="7" fill="#38bdf8" />
     </svg>
   </div>
 );
 
-export function LoginScreen({ onSubmit, loading = false, error }: LoginScreenProps) {
+export function LoginScreen({
+  onSubmit,
+  onForgotPasswordSubmit,
+  loading = false,
+  error,
+}: LoginScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const [viewMode, setViewMode] = useState<'login' | 'forgot-password'>('login');
+  const [forgotInput, setForgotInput] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotInput.trim()) {
+      setForgotError('Ingresa tu usuario, código o correo corporativo.');
+      return;
+    }
+
+    setForgotLoading(true);
+    setForgotError(null);
+
+    try {
+      if (onForgotPasswordSubmit) {
+        await onForgotPasswordSubmit(forgotInput.trim());
+      } else {
+        const baseUrl = apiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: forgotInput.trim(), username: forgotInput.trim() }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.message || 'Error al procesar la solicitud.');
+        }
+      }
+      setForgotSubmitted(true);
+    } catch (err) {
+      setForgotError(err instanceof Error ? err.message : 'Error al procesar la recuperación.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   return (
     <main className="login-page">
@@ -101,93 +144,186 @@ export function LoginScreen({ onSubmit, loading = false, error }: LoginScreenPro
               <span className="login-heading__wordmark">ORDEON</span>
             </div>
 
-            <p className="login-heading__eyebrow">ACCESO SEGURO</p>
-            <h2>Bienvenido de nuevo</h2>
-            <p className="login-heading__subtitle">
-              Ingresa tus credenciales para continuar con tus operaciones.
-            </p>
+            {viewMode === 'login' ? (
+              <>
+                <p className="login-heading__eyebrow">ACCESO SEGURO</p>
+                <h2>Bienvenido de nuevo</h2>
+                <p className="login-heading__subtitle">
+                  Ingresa tus credenciales para continuar con tus operaciones.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="login-heading__eyebrow">RECUPERACIÓN DE ACCESO</p>
+                <h2>Recuperar Contraseña</h2>
+                <p className="login-heading__subtitle">
+                  Ingresa tu usuario, código o correo para recibir instrucciones de restablecimiento.
+                </p>
+              </>
+            )}
           </div>
 
-          <form onSubmit={onSubmit} className="login-form">
-            <div className="login-field">
-              <label htmlFor="login-codigo">Usuario o código de operario</label>
-              <div className="login-input-group">
-                <input
-                  id="login-codigo"
-                  name="identifier"
-                  type="text"
-                  placeholder="Ej. admin o CAJERO1"
-                  defaultValue="admin"
-                  required
-                  autoFocus
-                  autoComplete="username"
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  className="login-field__pill-btn"
-                  title="Opciones de acceso"
-                  aria-hidden="true"
-                >
-                  ···
-                </button>
-              </div>
-            </div>
-
-            <div className="login-field">
-              <div className="login-field__label-row">
-                <label htmlFor="login-password">Contraseña</label>
-                <span className="login-field__hint">Protegida</span>
-              </div>
-              <div className="login-input-group">
-                <input
-                  id="login-password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Ingresa tu contraseña"
-                  defaultValue="Admin123!"
-                  required
-                  autoComplete="current-password"
-                  disabled={loading}
-                />
-                <div className="login-password__actions">
+          {viewMode === 'login' ? (
+            <form onSubmit={onSubmit} className="login-form">
+              <div className="login-field">
+                <label htmlFor="login-codigo">Usuario o código de operario</label>
+                <div className="login-input-group">
+                  <input
+                    id="login-codigo"
+                    name="identifier"
+                    type="text"
+                    placeholder="Ej. admin o CAJERO1"
+                    defaultValue="admin"
+                    required
+                    autoFocus
+                    autoComplete="username"
+                    disabled={loading}
+                  />
                   <button
                     type="button"
                     tabIndex={-1}
                     className="login-field__pill-btn"
-                    title="Opciones"
+                    title="Opciones de acceso"
                     aria-hidden="true"
                   >
                     ···
                   </button>
-                  <button
-                    type="button"
-                    className="login-password__toggle"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  >
-                    {showPassword ? 'Ocultar' : 'Mostrar'}
-                  </button>
                 </div>
               </div>
-            </div>
 
-            {error && (
-              <div className="login-error" role="alert">
-                {error}
+              <div className="login-field">
+                <div className="login-field__label-row">
+                  <label htmlFor="login-password">Contraseña</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('forgot-password');
+                      setForgotSubmitted(false);
+                      setForgotError(null);
+                    }}
+                    className="text-xs text-sky-400 hover:text-sky-300 hover:underline transition-colors font-medium cursor-pointer"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
+                <div className="login-input-group">
+                  <input
+                    id="login-password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Ingresa tu contraseña"
+                    defaultValue="Admin.Prueba.2026"
+                    required
+                    autoComplete="current-password"
+                    disabled={loading}
+                  />
+                  <div className="login-password__actions">
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      className="login-field__pill-btn"
+                      title="Opciones"
+                      aria-hidden="true"
+                    >
+                      ···
+                    </button>
+                    <button
+                      type="button"
+                      className="login-password__toggle"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    >
+                      {showPassword ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
 
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={loading}
-              className="login-submit"
-            >
-              {loading ? 'Validando acceso…' : 'Ingresar a Ordeon'}
-            </Button>
-          </form>
+              {error && (
+                <div className="login-error" role="alert">
+                  {error}
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={loading}
+                className="login-submit"
+              >
+                {loading ? 'Validando acceso…' : 'Ingresar a Ordeon'}
+              </Button>
+            </form>
+          ) : (
+            <div className="login-form">
+              {forgotSubmitted ? (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-5 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h3 className="text-base font-semibold text-white">Solicitud enviada</h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Si el usuario o correo <strong className="text-white">{forgotInput}</strong> está registrado, se han enviado las instrucciones de recuperación. También puedes notificar a tu supervisor operativo.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full mt-4"
+                    onClick={() => {
+                      setViewMode('login');
+                      setForgotSubmitted(false);
+                    }}
+                  >
+                    Volver a Iniciar Sesión
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotSubmit} className="space-y-4">
+                  <div className="login-field">
+                    <label htmlFor="forgot-identifier">Usuario o Correo Registrado</label>
+                    <div className="login-input-group">
+                      <input
+                        id="forgot-identifier"
+                        type="text"
+                        placeholder="Ej. admin o correo@empresa.com"
+                        value={forgotInput}
+                        onChange={(e) => setForgotInput(e.target.value)}
+                        required
+                        autoFocus
+                        disabled={forgotLoading}
+                      />
+                    </div>
+                  </div>
+
+                  {forgotError && (
+                    <div className="login-error" role="alert">
+                      {forgotError}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={forgotLoading}
+                    className="login-submit"
+                  >
+                    {forgotLoading ? 'Enviando solicitud…' : 'Enviar instrucciones'}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full text-xs"
+                    onClick={() => setViewMode('login')}
+                  >
+                    ← Volver a Iniciar Sesión
+                  </Button>
+                </form>
+              )}
+            </div>
+          )}
 
           <div className="login-card__meta">
             <Badge variant="success" className="login-badge-pill">

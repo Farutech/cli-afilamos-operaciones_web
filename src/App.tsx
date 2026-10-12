@@ -435,6 +435,22 @@ export function App() {
     }
   }
 
+  async function handleForgotPassword(emailOrIdentifier: string) {
+    const API_URL = apiBaseUrl();
+    const response = await fetch(`${API_URL}/api/v1/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email: emailOrIdentifier, username: emailOrIdentifier }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Error al procesar la solicitud.');
+    }
+    toast.success('Solicitud enviada', {
+      description: 'Si la cuenta está registrada, se enviaron las instrucciones.',
+    });
+  }
+
   function handleLogout() {
     setSession(null);
     toast.info('Sesión cerrada correctamente');
@@ -444,7 +460,12 @@ export function App() {
     return (
       <DesignSystemProvider colorMode="dark">
         <Toaster position="top-right" closeButton richColors theme="dark" />
-        <LoginScreen onSubmit={handleLogin} loading={loading} error={loginError} />
+        <LoginScreen
+          onSubmit={handleLogin}
+          onForgotPasswordSubmit={handleForgotPassword}
+          loading={loading}
+          error={loginError}
+        />
       </DesignSystemProvider>
     );
   }
