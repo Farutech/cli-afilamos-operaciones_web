@@ -97,7 +97,7 @@ export function EditarSubtipoModal({
           ((subtipo as any).politicaEliminacionDocumentos as 'LOGICO' | 'FISICO') || 'LOGICO',
         activo: subtipo.activo ?? true,
       });
-      const folio = subtipo.folioActual ?? 1;
+      const folio = subtipo.folioActual ?? 0;
       setFolioOriginal(folio);
       setFolioActual(folio);
       setError(null);
@@ -114,7 +114,7 @@ export function EditarSubtipoModal({
     ceros = form.longitudCeros,
     sufijoStr = form.sufijo
   ) => {
-    const pad = String(Math.max(1, num)).padStart(Math.max(1, ceros), '0');
+    const pad = String(Math.max(0, num)).padStart(Math.max(1, ceros), '0');
     return `${prefijoStr || ''}${pad}${sufijoStr || ''}`;
   };
 
@@ -155,7 +155,7 @@ export function EditarSubtipoModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="📑 Maestro de Subtipo de Documento (Novasoft)"
+      title="📑 Maestro de Subtipo de Documento"
       size="xl"
     >
       <div className="space-y-4 max-h-[78vh] overflow-y-auto pr-1 text-slate-100">
@@ -301,13 +301,12 @@ export function EditarSubtipoModal({
           <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
-                <span>🔢</span> Numeración & Consecutivo Actual (Novasoft)
+                <span>🔢</span> Numeración & Consecutivo Actual
               </span>
-              <span className="text-xs text-slate-400 font-mono">
-                Ejemplo consecutivo resultante:{' '}
-                <strong className="text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-600/30">
-                  {formatearFolio(folioActual)}
-                </strong>
+              <span className="text-xs text-slate-400 font-mono flex items-center gap-2">
+                <span>Actual: <strong className="text-slate-300 font-bold">{formatearFolio(folioActual)}</strong></span>
+                <span>·</span>
+                <span>Siguiente a generar: <strong className="text-emerald-400 font-bold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-600/30">{formatearFolio(folioActual === 0 ? 1 : folioActual + 1)}</strong></span>
               </span>
             </div>
 
@@ -318,13 +317,16 @@ export function EditarSubtipoModal({
                 </label>
                 <input
                   type="number"
-                  min={1}
+                  min={0}
                   value={folioActual}
-                  onChange={(e) => setFolioActual(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    setFolioActual(isNaN(parsed) ? 0 : Math.max(0, parsed));
+                  }}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
                 />
                 <span className="text-[10px] text-slate-500 block">
-                  Edite directamente para saltar o corregir consecutivos
+                  Edite directamente para saltar o corregir consecutivos (0 indica que el siguiente será 1)
                 </span>
               </div>
 
@@ -357,7 +359,7 @@ export function EditarSubtipoModal({
 
             {folioHaCambiado && (
               <div className="p-2.5 rounded-lg bg-amber-950/30 border border-amber-600/40 text-xs text-amber-300">
-                ℹ️ El folio pasará de <strong>{folioOriginal}</strong> a <strong>{folioActual}</strong> ({formatearFolio(folioActual)}). Se registrará el motivo en la bitácora de auditoría.
+                ℹ️ El folio actual pasará de <strong>{folioOriginal}</strong> a <strong>{folioActual}</strong>. El siguiente documento a emitir será <strong>{formatearFolio(folioActual === 0 ? 1 : folioActual + 1)}</strong>.
               </div>
             )}
           </div>

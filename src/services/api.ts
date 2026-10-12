@@ -101,9 +101,12 @@ export async function apiClient<T>(
 
   if (!response.ok) {
     if (response.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('ordeon_token');
-      localStorage.removeItem('ordeon_session');
-      window.dispatchEvent(new CustomEvent('ordeon:auth_expired'));
+      // Solo invalidar y notificar expiración si la petición incluía credenciales de autenticación
+      if (authToken) {
+        localStorage.removeItem('ordeon_token');
+        localStorage.removeItem('ordeon_session');
+        window.dispatchEvent(new CustomEvent('ordeon:auth_expired'));
+      }
     }
     let errorDetail = `Error ${response.status}: ${response.statusText}`
     try {

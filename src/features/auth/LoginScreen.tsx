@@ -212,7 +212,6 @@ export function LoginScreen({
                     name="password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Ingresa tu contraseña"
-                    defaultValue="Admin.Prueba.2026"
                     required
                     autoComplete="current-password"
                     disabled={loading}

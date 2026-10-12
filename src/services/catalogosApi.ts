@@ -406,9 +406,9 @@ export const catalogosApi = {
     return api.post<UnidadPresentacion>('/catalogs/units', dto);
   },
 
-  async getTiposDocumentoIdentidad(): Promise<{ tipos: TipoDocumentoIdentidad[] }> {
+  async getTiposDocumentoIdentidad(token?: string): Promise<{ tipos: TipoDocumentoIdentidad[] }> {
     try {
-      const res = await api.get<any>('/catalogs/document-types');
+      const res = await api.get<any>('/catalogs/document-types', token);
       const raw = Array.isArray(res) ? res : (res?.documentTypes || res?.tipos || res?.items || []);
       return {
         tipos: raw.map((d: any) => ({
@@ -428,9 +428,9 @@ export const catalogosApi = {
     return api.post<TipoDocumentoIdentidad>('/catalogs/document-types', dto);
   },
 
-  async getCanalesOrigen(): Promise<{ canales: CanalOrigen[] }> {
+  async getCanalesOrigen(token?: string): Promise<{ canales: CanalOrigen[] }> {
     try {
-      const res = await api.get<any>('/catalogs/channels');
+      const res = await api.get<any>('/catalogs/channels', token);
       const raw = Array.isArray(res) ? res : (res?.channels || res?.canales || res?.items || []);
       return {
         canales: raw.map((c: any) => ({
@@ -451,9 +451,9 @@ export const catalogosApi = {
     return api.post<CanalOrigen>('/catalogs/channels', dto);
   },
 
-  async getTiposDocumento(_codigoBase?: string): Promise<{ tipos: TipoDocumentoBase[] }> {
+  async getTiposDocumento(_codigoBase?: string, token?: string): Promise<{ tipos: TipoDocumentoBase[] }> {
     try {
-      const res = await api.get<any>('/catalogs/document-types');
+      const res = await api.get<any>('/catalogs/document-types', token);
       const raw = Array.isArray(res) ? res : (res?.documentTypes || res?.tipos || res?.items || []);
       return {
         tipos: raw.map((d: any) => ({
@@ -469,7 +469,7 @@ export const catalogosApi = {
             activo: st.activo ?? st.active ?? true,
             prefijo: st.prefijo || d.code || d.codigo,
             sufijo: st.sufijo || st.suffix || '',
-            folioActual: st.folioActual ?? 1,
+            folioActual: st.folioActual ?? 0,
             longitudCeros: st.longitudCeros ?? st.numberLength ?? 4,
             formatoPlantilla: st.formatoPlantilla || 'TIRILLA',
           })),
@@ -660,7 +660,7 @@ export const catalogosApi = {
     return api.post<MedioPagoInstrumento>('/catalogs/payment-methods', dto);
   },
 
-  async getClientes(q?: string, pageSize?: number): Promise<{ clientes: Cliente[]; total: number }> {
+  async getClientes(q?: string, pageSize?: number, token?: string): Promise<{ clientes: Cliente[]; total: number }> {
     try {
       const searchParams = new URLSearchParams();
       if (q) {
@@ -671,7 +671,7 @@ export const catalogosApi = {
         searchParams.set('pageSize', String(pageSize));
       }
       const qs = searchParams.toString();
-      const res = await api.get<any>(`/customers${qs ? `?${qs}` : ''}`);
+      const res = await api.get<any>(`/customers${qs ? `?${qs}` : ''}`, token);
       const raw = Array.isArray(res) ? res : (res?.items || []);
       const clientes: Cliente[] = raw.map((c: any) => ({
         uuid: c.id,

@@ -1538,7 +1538,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
       icono: '🏛️',
     },
     tipos_subtipos: {
-      titulo: 'Tipos & Subtipos de Documento (Control Novasoft)',
+      titulo: 'Tipos & Subtipos de Documento',
       descripcion: 'Administración de prefijos, consecutivos, formatos de tirilla/carta y políticas de anulación.',
       icono: '📑',
     },

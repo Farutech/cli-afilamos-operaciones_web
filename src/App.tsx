@@ -389,10 +389,11 @@ export function App() {
 
   useEffect(() => {
     if (!session?.token) return;
+    const currentToken = session.token;
     Promise.all([
-      catalogosApi.getCanalesOrigen().catch(() => ({ canales: [] })),
-      catalogosApi.getTiposDocumentoIdentidad().catch(() => ({ tipos: [] })),
-      catalogosApi.getClientes().catch(() => ({ clientes: [], total: 0 })),
+      catalogosApi.getCanalesOrigen(currentToken).catch(() => ({ canales: [] })),
+      catalogosApi.getTiposDocumentoIdentidad(currentToken).catch(() => ({ tipos: [] })),
+      catalogosApi.getClientes(undefined, undefined, currentToken).catch(() => ({ clientes: [], total: 0 })),
     ]).then(([cRes, tdRes, clRes]) => {
       setCanales(cRes.canales || []);
       setTiposDoc(tdRes.tipos || []);
@@ -458,6 +459,13 @@ export function App() {
         publicId: user.publicId || user.id || 'usr-001',
         codigo: user.codigo || identifier,
       };
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ordeon_session', JSON.stringify(newSession));
+        if (newSession.token) {
+          localStorage.setItem('ordeon_token', newSession.token);
+        }
+      }
 
       setSession(newSession);
       toast.success('¡Bienvenido a Ordeon Operaciones!', {
