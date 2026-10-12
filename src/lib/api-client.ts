@@ -22,7 +22,14 @@ export function apiBaseUrl(): string {
 
   // Dynamic hostname fallback
   if (typeof window !== 'undefined' && window.location?.hostname) {
+    if (import.meta.env.MODE === 'test') {
+      return 'https://api-ops.dev.afilamoshermanos.com';
+    }
+
     const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
     if (host.includes('.dev.')) return 'https://api-ops.dev.afilamoshermanos.com';
     if (host.includes('.qa.')) return 'https://api-ops.qa.afilamoshermanos.com';
     if (host.includes('.staging.') || host.includes('.stg.')) return 'https://api-ops.staging.afilamoshermanos.com';

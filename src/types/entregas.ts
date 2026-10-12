@@ -22,6 +22,54 @@ export interface ItemListoEntrega {
   franjaCompromiso: string;
 }
 
+export interface RequestAdvanceBreakdownDto {
+  documentId: string;
+  documentNumber: string;
+  orderTotal: number;
+  totalAdvancePaid: number;
+  unallocatedAdvance: number;
+  deliverySubtotal: number;
+  uncoveredRemainingSubtotal: number;
+  minAdvanceToApply: number;
+  maxAdvanceToApply: number;
+  suggestedAdvanceToApply: number;
+}
+
+export interface CustomerAdvanceBreakdownDto {
+  advanceId: string;
+  receiptNumber: string;
+  availableAmount: number;
+  date: string;
+}
+
+export interface DeliveryPreviewResultDto {
+  customerId: string;
+  customerName: string;
+  availableCustomerAdvance: number;
+  customerAdvances: CustomerAdvanceBreakdownDto[];
+  requests: RequestAdvanceBreakdownDto[];
+  totalDeliverySubtotal: number;
+  totalMinAdvanceRequired: number;
+  totalMaxAdvanceApplicable: number;
+  totalSuggestedAdvance: number;
+  estimatedRemainingToCollect: number;
+}
+
+export interface DeliveryPreviewItemRequest {
+  documentItemId: string;
+  quantityToDeliver: number;
+}
+
+export interface DeliveryPreviewRequest {
+  customerId: string;
+  itemsToDeliver: DeliveryPreviewItemRequest[];
+}
+
+export interface RequestAdvanceApplicationDto {
+  documentId: string;
+  advanceToApply: number;
+}
+
 export interface DesglosePagoRequest {
   instrumentoPublicId: string;
   monto: number;

@@ -5,6 +5,9 @@ import type {
   RegistrarPagoEntregaRequest,
   DespacharRemisionRequest,
   RemisionDetalle,
+  DeliveryPreviewRequest,
+  DeliveryPreviewResultDto,
+  RequestAdvanceApplicationDto,
 } from '../types/entregas';
 
 function mapDeliveryDetails(res: any, defaultUuid?: string): RemisionDetalle {
@@ -54,6 +57,8 @@ function mapDeliveryDetails(res: any, defaultUuid?: string): RemisionDetalle {
 export interface GenerarEntregaConsolidadaData {
   clienteUuid: string;
   items: { itemPublicId: string; cantidad: number }[];
+  requestAdvanceApplications?: RequestAdvanceApplicationDto[];
+  customerAdvanceToApply?: number;
   pagoLiquidacion?: {
     instrumentoPublicId: string;
     monto: number;
@@ -65,6 +70,10 @@ export interface GenerarEntregaConsolidadaData {
 }
 
 export const entregasApi = {
+  async previewEntregaConsolidada(req: DeliveryPreviewRequest, token?: string): Promise<DeliveryPreviewResultDto> {
+    return api.post<DeliveryPreviewResultDto>('/deliveries/preview', req, token);
+  },
+
   async generarEntregaConsolidada(data: GenerarEntregaConsolidadaData, token?: string): Promise<RemisionDetalle> {
     const res = await api.post<any>(
       '/deliveries',
@@ -74,6 +83,8 @@ export const entregasApi = {
           documentItemId: i.itemPublicId,
           quantityToDeliver: i.cantidad,
         })),
+        requestAdvanceApplications: data.requestAdvanceApplications || [],
+        customerAdvanceToApply: data.customerAdvanceToApply ?? 0,
         settlementPayments:
           data.pagoLiquidacion && data.pagoLiquidacion.monto > 0
             ? [

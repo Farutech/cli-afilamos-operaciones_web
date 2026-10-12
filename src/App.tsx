@@ -427,25 +427,9 @@ export function App() {
         description: `Sesión iniciada como ${newSession.name}.`,
       });
     } catch (error) {
-      // Fallback para modo offline / desarrollo
-      if (identifier.toLowerCase() === 'admin' || identifier.includes('afilamos') || identifier.includes('@')) {
-        const demoSession: UserSession = {
-          name: identifier === 'admin' ? 'Javier Ramírez' : identifier.split('@')[0],
-          token: 'demo-local-token',
-          canAccessCash: true,
-          role: 'Administrador del sistema',
-          publicId: 'usr-admin-01',
-          codigo: identifier,
-        };
-        setSession(demoSession);
-        toast.info('Sesión iniciada en modo local', {
-          description: 'Conectado al entorno local con permisos administrativos.',
-        });
-      } else {
-        const message = error instanceof Error ? error.message : 'Error al conectar con la API de autenticación.';
-        setLoginError(message);
-        toast.error('No se pudo iniciar sesión', { description: message });
-      }
+      const message = error instanceof Error ? error.message : 'Error al conectar con la API de autenticación.';
+      setLoginError(message);
+      toast.error('No se pudo iniciar sesión', { description: message });
     } finally {
       setLoading(false);
     }

@@ -7,6 +7,7 @@ import type {
   RemisionDetalle,
   RegistrarPagoEntregaRequest,
   DespacharRemisionRequest,
+  DeliveryPreviewResultDto,
 } from '../../types/entregas';
 import type { MedioPagoInstrumento } from '../../types/catalogos';
 
@@ -250,7 +251,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     return clienteActivo.items.filter((i) => itemsSeleccionadosIds.includes(i.itemPublicId));
   }, [clienteActivo, itemsSeleccionadosIds]);
 
-  // Totales de la selección actual
+  // Totales estáticos de la selección actual
   const totalesSeleccion = useMemo(() => {
     const totalNeto = itemsClienteMarcados.reduce((acc, i) => acc + i.subtotal, 0);
     const totalAnticipos = itemsClienteMarcados.reduce((acc, i) => acc + i.anticipoDirectoImputado, 0);
@@ -258,14 +259,100 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     return { totalNeto, totalAnticipos, saldoPendiente };
   }, [itemsClienteMarcados]);
 
-  // Al cambiar la selección de ítems, sincronizar el monto prellenado
+  // Estado del algoritmo de entregas parciales (Doc 13 / RA-01 a RA-12, CF-10 a CF-13)
+  const [previewData, setPreviewData] = useState<DeliveryPreviewResultDto | null>(null);
+  const [ordenesAvanceAplicado, setOrdenesAvanceAplicado] = useState<Record<string, number>>({});
+  const [anticipoClienteAplicado, setAnticipoClienteAplicado] = useState<number>(0);
+  const [loadingPreview, setLoadingPreview] = useState<boolean>(false);
+
+  // Consulta de previsualización con límites matemáticos [m, M] del backend
   useEffect(() => {
-    if (totalesSeleccion.saldoPendiente > 0) {
-      setMontoPagoConsolidado(totalesSeleccion.saldoPendiente);
-    } else {
-      setMontoPagoConsolidado(0);
+    let cancelado = false;
+    if (!clienteActivo || itemsClienteMarcados.length === 0) {
+      setPreviewData(null);
+      setOrdenesAvanceAplicado({});
+      setAnticipoClienteAplicado(0);
+      return;
     }
-  }, [totalesSeleccion.saldoPendiente]);
+
+    const consultarPreview = async () => {
+      setLoadingPreview(true);
+      try {
+        const preview = await entregasApi.previewEntregaConsolidada(
+          {
+            customerId: clienteActivo.clienteId,
+            itemsToDeliver: itemsClienteMarcados.map((i) => ({
+              documentItemId: i.itemPublicId,
+              quantityToDeliver: i.cantidad,
+            })),
+          },
+          token
+        );
+        if (!cancelado && preview) {
+          setPreviewData(preview);
+          const initialAlloc: Record<string, number> = {};
+          if (Array.isArray(preview.requests)) {
+            for (const req of preview.requests) {
+              initialAlloc[req.documentId] = req.suggestedAdvanceToApply;
+            }
+          }
+          setOrdenesAvanceAplicado(initialAlloc);
+
+          const sumaOrdenes = Object.values(initialAlloc).reduce((a, b) => a + b, 0);
+          const saldoTrasOrdenes = Math.max(0, preview.totalDeliverySubtotal - sumaOrdenes);
+          const saldoClienteUsar = Math.min(preview.availableCustomerAdvance || 0, saldoTrasOrdenes);
+          setAnticipoClienteAplicado(saldoClienteUsar);
+          const aPagar = Math.max(0, saldoTrasOrdenes - saldoClienteUsar);
+          setMontoPagoConsolidado(aPagar);
+        }
+      } catch {
+        if (!cancelado) {
+          setPreviewData(null);
+          setOrdenesAvanceAplicado({});
+          setAnticipoClienteAplicado(0);
+          setMontoPagoConsolidado(totalesSeleccion.saldoPendiente);
+        }
+      } finally {
+        if (!cancelado) setLoadingPreview(false);
+      }
+    };
+
+    consultarPreview();
+    return () => {
+      cancelado = true;
+    };
+  }, [clienteActivo, itemsClienteMarcados, token]);
+
+  // Resumen financiero consolidado en tiempo real
+  const resumenFinanciero = useMemo(() => {
+    const totalEntregar = previewData ? previewData.totalDeliverySubtotal : totalesSeleccion.totalNeto;
+    const anticiposOrdenes = Object.values(ordenesAvanceAplicado).reduce((acc, val) => acc + (val || 0), 0);
+    const anticipoCliente = anticipoClienteAplicado || 0;
+    const totalAnticipos = previewData ? (anticiposOrdenes + anticipoCliente) : totalesSeleccion.totalAnticipos;
+    const saldoPendiente = Math.max(0, totalEntregar - (previewData ? (anticiposOrdenes + anticipoCliente) : totalesSeleccion.totalAnticipos));
+    return {
+      totalEntregar,
+      anticiposOrdenes,
+      anticipoCliente,
+      totalAnticipos,
+      saldoPendiente,
+    };
+  }, [previewData, ordenesAvanceAplicado, anticipoClienteAplicado, totalesSeleccion]);
+
+  // Cambio de anticipo aplicado en una orden respetando límites matemáticos [m, M]
+  const handleCambiarAnticipoOrden = (documentId: string, nuevoMonto: number, min: number, max: number) => {
+    const valorClamp = Math.max(min, Math.min(max, isNaN(nuevoMonto) ? min : nuevoMonto));
+    setOrdenesAvanceAplicado((prev) => {
+      const next = { ...prev, [documentId]: valorClamp };
+      const suma = Object.values(next).reduce((a, b) => a + b, 0);
+      const subtotal = previewData?.totalDeliverySubtotal ?? totalesSeleccion.totalNeto;
+      const saldoTrasOrdenes = Math.max(0, subtotal - suma);
+      const clienteUsar = Math.min(anticipoClienteAplicado, saldoTrasOrdenes);
+      setAnticipoClienteAplicado(clienteUsar);
+      setMontoPagoConsolidado(Math.max(0, saldoTrasOrdenes - clienteUsar));
+      return next;
+    });
+  };
 
   const toggleSeleccionItem = (itemPublicId: string) => {
     setItemsSeleccionadosIds((prev) =>
@@ -297,7 +384,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       return;
     }
 
-    const saldoPendiente = totalesSeleccion.saldoPendiente;
+    const saldoPendiente = resumenFinanciero.saldoPendiente;
     const montoAPagar = incluirPagoConsolidado ? montoPagoConsolidado : 0;
 
     // Validación financiera: si hay saldo pendiente y no se cubre
@@ -313,6 +400,11 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     setSuccessMsg(null);
 
     try {
+      const requestAdvanceApplications = Object.entries(ordenesAvanceAplicado).map(([docId, adv]) => ({
+        documentId: docId,
+        advanceToApply: adv,
+      }));
+
       const rem = await entregasApi.generarEntregaConsolidada(
         {
           clienteUuid: clienteActivo.clienteId,
@@ -320,6 +412,8 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
             itemPublicId: i.itemPublicId,
             cantidad: i.cantidad,
           })),
+          requestAdvanceApplications,
+          customerAdvanceToApply: anticipoClienteAplicado,
           pagoLiquidacion:
             montoAPagar > 0
               ? {
@@ -740,7 +834,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                       </Button>
                     </div>
 
-                    {/* Bento Grid: Métricas de la selección */}
+                    {/* Bento Grid: Métricas de la selección usando algoritmo de liquidación */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
                         <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Ítems a Entregar</span>
@@ -752,21 +846,21 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                       <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
                         <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Ítems</span>
                         <div className="text-xl font-bold font-mono text-white">
-                          COP ${totalesSeleccion.totalNeto.toLocaleString('es-CO')}
+                          COP ${resumenFinanciero.totalEntregar.toLocaleString('es-CO')}
                         </div>
                       </div>
 
                       <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
                         <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Anticipos Imputados</span>
                         <div className="text-xl font-bold font-mono text-emerald-400">
-                          -COP ${totalesSeleccion.totalAnticipos.toLocaleString('es-CO')}
+                          -COP ${resumenFinanciero.totalAnticipos.toLocaleString('es-CO')}
                         </div>
                       </div>
 
                       <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
                         <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Saldo Pendiente</span>
-                        <div className={`text-xl font-black font-mono ${totalesSeleccion.saldoPendiente > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          COP ${totalesSeleccion.saldoPendiente.toLocaleString('es-CO')}
+                        <div className={`text-xl font-black font-mono ${resumenFinanciero.saldoPendiente > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          COP ${resumenFinanciero.saldoPendiente.toLocaleString('es-CO')}
                         </div>
                       </div>
                     </div>
@@ -844,8 +938,153 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                     </div>
                   </div>
 
+                  {/* LIQUIDACIÓN DE ANTICIPOS PARCIALES POR SOLICITUD (Doc 13 / RA-01 a RA-12, CF-10 a CF-13) */}
+                  {previewData && previewData.requests && previewData.requests.length > 0 && (
+                    <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-indigo-500/30 shadow-2xl space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">⚖️</span>
+                          <div>
+                            <h3 className="text-base font-bold text-white">
+                              Distribución de Anticipos y Límites Matemáticos [m, M]
+                            </h3>
+                            <p className="text-xs text-slate-400">
+                              Límites calculados para evitar desfinanciar ítems pendientes de cada solicitud (Doc 13).
+                            </p>
+                          </div>
+                        </div>
+                        {loadingPreview && (
+                          <span className="text-xs text-indigo-400 animate-pulse font-mono">Calculando cotas...</span>
+                        )}
+                      </div>
+
+                      <div className="space-y-4 pt-1">
+                        {previewData.requests.map((req) => {
+                          const aplicado = ordenesAvanceAplicado[req.documentId] ?? req.suggestedAdvanceToApply;
+                          const min = req.minAdvanceToApply;
+                          const max = req.maxAdvanceToApply;
+
+                          return (
+                            <div
+                              key={req.documentId}
+                              className="p-4 rounded-2xl bg-slate-950/70 border border-white/10 space-y-3"
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/40">
+                                    {req.documentNumber}
+                                  </span>
+                                  <span className="text-xs text-slate-400">
+                                    Subtotal Entregar: <strong className="text-white font-mono">${req.deliverySubtotal.toLocaleString('es-CO')}</strong>
+                                  </span>
+                                  <span className="text-xs text-slate-400">
+                                    · Restante en Taller: <strong className="text-slate-300 font-mono">${req.uncoveredRemainingSubtotal.toLocaleString('es-CO')}</strong>
+                                  </span>
+                                </div>
+                                <div className="text-xs font-mono font-bold text-emerald-400">
+                                  Anticipo Total Pagado: ${req.totalAdvancePaid.toLocaleString('es-CO')}
+                                </div>
+                              </div>
+
+                              {/* Barra de control y límites [m, M] */}
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center pt-1">
+                                <div className="text-xs text-slate-300">
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-slate-400">Rango legal permitido:</span>
+                                    <span className="font-mono text-[11px] font-bold text-indigo-300 bg-indigo-950/50 px-2 py-0.5 rounded">
+                                      [{min.toLocaleString('es-CO')} - {max.toLocaleString('es-CO')}]
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-400">
+                                    {min > 0
+                                      ? `Obligatorio absorber al menos $${min.toLocaleString('es-CO')} para no desfinanciar el remanente.`
+                                      : 'Puede absorber desde $0 hasta el subtotal entregado.'}
+                                  </div>
+                                </div>
+
+                                <div className="md:col-span-2 flex items-center gap-3">
+                                  <input
+                                    type="range"
+                                    min={min}
+                                    max={max}
+                                    step={100}
+                                    value={aplicado}
+                                    disabled={min === max}
+                                    onChange={(e) =>
+                                      handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
+                                    }
+                                    className="flex-1 accent-indigo-500 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                                  />
+                                  <div className="w-36">
+                                    <Input
+                                      type="number"
+                                      min={min}
+                                      max={max}
+                                      value={aplicado}
+                                      onChange={(e) =>
+                                        handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
+                                      }
+                                      fullWidth
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Anticipo Global del Cliente si tiene saldo a favor */}
+                        {previewData.availableCustomerAdvance > 0 && (
+                          <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                              <div className="font-bold text-sm text-indigo-200">
+                                🌟 Saldo a Favor del Cliente Disponible en Cuenta
+                              </div>
+                              <div className="text-xs text-indigo-300/80">
+                                El cliente posee <strong className="font-mono">${previewData.availableCustomerAdvance.toLocaleString('es-CO')}</strong> en abonos previos globales sin asignar.
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs text-slate-300 font-semibold">Aplicar:</label>
+                              <div className="w-32">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={previewData.availableCustomerAdvance}
+                                  value={anticipoClienteAplicado}
+                                  onChange={(e) =>
+                                    setAnticipoClienteAplicado(
+                                      Math.min(
+                                        previewData.availableCustomerAdvance,
+                                        Math.max(0, Number(e.target.value))
+                                      )
+                                    )
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* SECCIÓN INTEGRADA DE PAGO Y LIQUIDACIÓN EN LA ENTREGA */}
-                  {totalesSeleccion.saldoPendiente > 0 && (
+                  {resumenFinanciero.saldoPendiente === 0 ? (
+                    <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-emerald-500/40 shadow-2xl space-y-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">✨</span>
+                        <div>
+                          <h3 className="text-base font-bold text-white">
+                            100% Cubierto con Anticipos Previos ($0 Saldo en Mostrador)
+                          </h3>
+                          <p className="text-xs text-emerald-400">
+                            Los ítems seleccionados quedan totalmente saldados mediante los anticipos de orden y/o saldo a favor. Despacho directo habilitado.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
                     <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-amber-500/30 shadow-2xl space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
                         <div className="flex items-center gap-2">
@@ -855,7 +1094,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                               Liquidación de Saldo Pendiente en la Entrega
                             </h3>
                             <p className="text-xs text-slate-400">
-                              Registre el pago para saldar los ${totalesSeleccion.saldoPendiente.toLocaleString('es-CO')} y autorizar el despacho inmediato.
+                              Registre el pago para saldar los ${resumenFinanciero.saldoPendiente.toLocaleString('es-CO')} y autorizar el despacho inmediato.
                             </p>
                           </div>
                         </div>
@@ -901,7 +1140,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                               </label>
                               <button
                                 type="button"
-                                onClick={() => setMontoPagoConsolidado(totalesSeleccion.saldoPendiente)}
+                                onClick={() => setMontoPagoConsolidado(resumenFinanciero.saldoPendiente)}
                                 className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline"
                               >
                                 Pagar Total
@@ -930,11 +1169,11 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
 
                           {/* Feedback de saldo restante */}
                           <div className="md:col-span-3 pt-1">
-                            {montoPagoConsolidado >= totalesSeleccion.saldoPendiente ? (
+                            {montoPagoConsolidado >= resumenFinanciero.saldoPendiente ? (
                               <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
                                 <span>✓</span>
                                 <span>
-                                  El saldo pendiente quedará 100% liquidado ($0). Los pedidos quedarán saldados en el sistema.
+                                  El saldo restante quedará 100% liquidado ($0). Despacho autorizado.
                                 </span>
                               </div>
                             ) : (
@@ -943,7 +1182,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                                 <span>
                                   Abono parcial: quedará un saldo restante de{' '}
                                   <strong className="font-mono">
-                                    ${(totalesSeleccion.saldoPendiente - montoPagoConsolidado).toLocaleString('es-CO')}
+                                    ${(resumenFinanciero.saldoPendiente - montoPagoConsolidado).toLocaleString('es-CO')}
                                   </strong>{' '}
                                   (se requiere cupo de crédito para completar el despacho).
                                 </span>

@@ -275,22 +275,51 @@ export async function obtenerDetalleSupervisor(turnoId: number, token?: string):
   }
 }
 
+export async function aprobarTurnoCaja(
+  turnoId: number | string,
+  req: { supervisorPin: string; reason?: string },
+  token?: string,
+): Promise<any> {
+  return apiClient<any>(
+    `/cash/shifts/${turnoId}/approve`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        supervisorPin: req.supervisorPin,
+        reason: req.reason || 'Aprobación de arqueo ciego y cierre de turno por supervisor',
+      }),
+    },
+    token ?? getToken(),
+  );
+}
+
 export async function procesarVoBo(turnoId: number, req: ProcesarVoBoRequest, token?: string): Promise<TurnoDto> {
   try {
-    await apiClient<any>(
-      `/cash/shifts/${turnoId}/close`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          closeReason: req.observacion,
+    if (req.decision === 'APROBADO') {
+      await aprobarTurnoCaja(
+        turnoId,
+        {
           supervisorPin: req.pin,
-          discrepancyReason: req.observacion,
-        }),
-      },
-      token ?? getToken(),
-    );
+          reason: req.observacion || 'Aprobado por supervisor',
+        },
+        token,
+      );
+    } else {
+      await apiClient<any>(
+        `/cash/shifts/${turnoId}/close`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            closeReason: req.observacion || 'Cierre rechazado por supervisor',
+            supervisorPin: req.pin,
+            discrepancyReason: req.observacion,
+          }),
+        },
+        token ?? getToken(),
+      );
+    }
   } catch {
-    // Continuar localmente
+    // Continuar localmente en caso de fallback
   }
 
   const turnoCerrado: TurnoDto = {

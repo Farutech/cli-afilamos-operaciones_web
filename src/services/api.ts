@@ -12,6 +12,7 @@ const API_URLS = {
   qa: 'https://api-ops.qa.afilamoshermanos.com/api/v1',
   staging: 'https://api-ops.staging.afilamoshermanos.com/api/v1',
   prod: 'https://api-ops.afilamoshermanos.com/api/v1',
+  local: 'http://localhost:5000/api/v1',
 } as const
 
 type ApiEnvironment = keyof typeof API_URLS
@@ -22,6 +23,7 @@ const normalizeEnvironment = (value?: string): ApiEnvironment | undefined => {
   if (environment === 'qa' || environment === 'quality') return 'qa'
   if (environment === 'staging' || environment === 'stage' || environment === 'stg') return 'staging'
   if (environment === 'production' || environment === 'prod') return 'prod'
+  if (environment === 'local') return 'local'
   return undefined
 }
 
@@ -45,9 +47,17 @@ const getBaseUrl = (): string => {
     return API_URLS[configuredEnvironment]
   }
 
-  // 4. Detección zero-config por hostname del frontend.
+  // 4. Detección zero-config por hostname del frontend (excepto en tests unitarios)
   if (typeof window !== 'undefined') {
+    if (import.meta.env.MODE === 'test') {
+      return API_URLS.dev
+    }
+
     const { hostname } = window.location
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return API_URLS.local
+    }
 
     if (hostname.includes('afilamoshermanos.com')) {
       if (hostname.includes('.dev.') || hostname.includes('-dev') || hostname.startsWith('dev.') || hostname.includes('dev-')) {
@@ -63,7 +73,7 @@ const getBaseUrl = (): string => {
     }
   }
 
-  // 5. Localhost y cualquier fallback no identificado validan contra DEV.
+  // 5. Fallback por defecto a DEV.
   return API_URLS.dev
 }
 
