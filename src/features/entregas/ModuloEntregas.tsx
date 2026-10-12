@@ -33,8 +33,17 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Pestaña activa: 'cliente' (Entrega Consolidada por Cliente) | 'solicitudes' (Por Solicitud)
-  const [vistaActiva, setVistaActiva] = useState<'cliente' | 'solicitudes'>('cliente');
+  // Pestaña activa: 'solicitudes' (Por Solicitud) | 'cliente' (Entrega Consolidada por Cliente)
+  const [vistaActiva, setVistaActiva] = useState<'solicitudes' | 'cliente'>('solicitudes');
+
+  // Paginación para vista Por Solicitud
+  const [paginaSolicitudes, setPaginaSolicitudes] = useState(1);
+  const [itemsPorPaginaSolicitudes, setItemsPorPaginaSolicitudes] = useState(10);
+  const [busquedaSolicitudes, setBusquedaSolicitudes] = useState('');
+
+  // Paginación para vista Por Cliente
+  const [paginaClientes, setPaginaClientes] = useState(1);
+  const [itemsPorPaginaClientes, setItemsPorPaginaClientes] = useState(8);
 
   // Medios de pago cargados
   const [mediosPago, setMediosPago] = useState<MedioPagoInstrumento[]>(instrumentosProps);
@@ -59,10 +68,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   // Remisión Activa en edición / despacho (flujo individual o resultado)
   const [remisionActiva, setRemisionActiva] = useState<RemisionDetalle | null>(null);
 
-  // Modal de Selección para Nueva Entrega (por solicitud)
-  const [mostrarModalNuevaEntrega, setMostrarModalNuevaEntrega] = useState(false);
-
-  // Modal de Pago para remisión activa
+  // Modal de Pago para remisión activa individual
   const [isPagoModalOpen, setIsPagoModalOpen] = useState(false);
   const [montoPago, setMontoPago] = useState<number>(0);
   const [instrumentoSeleccionado, setInstrumentoSeleccionado] = useState<string>('');
@@ -88,12 +94,11 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           }
         }
       } catch {
-        // Fallback estándar
         const fallback: MedioPagoInstrumento[] = [
           { uuid: 'ins-01', codigo: 'EFECTIVO', nombre: 'Efectivo Mostrador', categoria: 'EFECTIVO', esHoja: true, requiereReferencia: false, activo: true },
           { uuid: 'ins-02', codigo: 'TRANSFERENCIA', nombre: 'Transferencia Bancaria', categoria: 'TRANSFERENCIA', esHoja: true, requiereReferencia: true, activo: true },
           { uuid: 'ins-03', codigo: 'NEQUI', nombre: 'Nequi / Daviplata', categoria: 'TRANSFERENCIA', esHoja: true, requiereReferencia: true, activo: true },
-          { uuid: 'ins-04', codigo: 'DATAFONO_TD', nombre: 'Tarjeta Débito / Datafono', categoria: 'DATAFONO', esHoja: true, requiereReferencia: true, activo: true },
+          { uuid: 'ins-04', codigo: 'DATAFONO_TD', nombre: 'Tarjeta Débito / Datáfono', categoria: 'DATAFONO', esHoja: true, requiereReferencia: true, activo: true },
         ];
         if (activo) {
           setMediosPago(fallback);
@@ -130,12 +135,10 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       }
     };
     init();
-    return () => {
-      activo = false;
-    };
+    return () => { activo = false; };
   }, [token]);
 
-  // Agrupación por Cliente (Regla de Negocio: una entrega NO puede tener varios clientes, pero puede abarcar varias solicitudes de un mismo cliente)
+  // Agrupación por Cliente (Entrega Consolidada)
   const clientesAgrupados = useMemo(() => {
     const map = new Map<string, {
       clienteId: string;
@@ -172,10 +175,20 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       entry.saldoPendiente += item.saldoPendienteItem;
     }
 
-    return Array.from(map.values());
-  }, [itemsListos]);
+    let arr = Array.from(map.values());
+    if (busqueda.trim()) {
+      const q = busqueda.trim().toLowerCase();
+      arr = arr.filter(
+        (c) =>
+          c.clienteNombre.toLowerCase().includes(q) ||
+          c.clienteDocumento.toLowerCase().includes(q) ||
+          Array.from(c.solicitudesNumeros).some((num) => num.toLowerCase().includes(q))
+      );
+    }
+    return arr;
+  }, [itemsListos, busqueda]);
 
-  // Agrupar ítems por Solicitud (compatibilidad con flujo individual y tests)
+  // Agrupar ítems por Solicitud
   const solicitudesAgrupadas = useMemo(() => {
     const map = new Map<string, {
       solicitudNumero: string;
@@ -207,18 +220,44 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       entry.saldoPendiente += item.saldoPendienteItem;
     }
 
-    return Array.from(map.entries()).map(([solicitudPublicId, data]) => ({
+    let arr = Array.from(map.entries()).map(([solicitudPublicId, data]) => ({
       solicitudPublicId,
       ...data,
     }));
-  }, [itemsListos]);
+
+    if (busquedaSolicitudes.trim()) {
+      const q = busquedaSolicitudes.trim().toLowerCase();
+      arr = arr.filter(
+        (sol) =>
+          sol.solicitudNumero.toLowerCase().includes(q) ||
+          sol.clienteNombre.toLowerCase().includes(q) ||
+          sol.clienteDocumento.toLowerCase().includes(q)
+      );
+    }
+
+    return arr;
+  }, [itemsListos, busquedaSolicitudes]);
+
+  // Paginación de solicitudes
+  const totalPaginasSolicitudes = Math.max(1, Math.ceil(solicitudesAgrupadas.length / itemsPorPaginaSolicitudes));
+  const solicitudesPaginadas = useMemo(() => {
+    const inicio = (paginaSolicitudes - 1) * itemsPorPaginaSolicitudes;
+    return solicitudesAgrupadas.slice(inicio, inicio + itemsPorPaginaSolicitudes);
+  }, [solicitudesAgrupadas, paginaSolicitudes, itemsPorPaginaSolicitudes]);
+
+  // Paginación de clientes
+  const totalPaginasClientes = Math.max(1, Math.ceil(clientesAgrupados.length / itemsPorPaginaClientes));
+  const clientesPaginados = useMemo(() => {
+    const inicio = (paginaClientes - 1) * itemsPorPaginaClientes;
+    return clientesAgrupados.slice(inicio, inicio + itemsPorPaginaClientes);
+  }, [clientesAgrupados, paginaClientes, itemsPorPaginaClientes]);
 
   // Cliente activo para la entrega consolidada
   const clienteActivo = useMemo(() => {
     return clientesAgrupados.find((c) => c.clienteId === clienteSeleccionadoId) || null;
   }, [clientesAgrupados, clienteSeleccionadoId]);
 
-  // Auto-seleccionar primer cliente si ninguno está seleccionado y hay clientes
+  // Auto-seleccionar primer cliente si ninguno está seleccionado
   useEffect(() => {
     if (!clienteSeleccionadoId && clientesAgrupados.length > 0) {
       const primer = clientesAgrupados[0];
@@ -230,7 +269,6 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     }
   }, [clientesAgrupados, clienteSeleccionadoId]);
 
-  // Al cambiar de cliente manualmente
   const handleSeleccionarCliente = (cId: string) => {
     setClienteSeleccionadoId(cId);
     const c = clientesAgrupados.find((cl) => cl.clienteId === cId);
@@ -245,13 +283,11 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     }
   };
 
-  // Ítems marcados actualmente del cliente
   const itemsClienteMarcados = useMemo(() => {
     if (!clienteActivo) return [];
     return clienteActivo.items.filter((i) => itemsSeleccionadosIds.includes(i.itemPublicId));
   }, [clienteActivo, itemsSeleccionadosIds]);
 
-  // Totales estáticos de la selección actual
   const totalesSeleccion = useMemo(() => {
     const totalNeto = itemsClienteMarcados.reduce((acc, i) => acc + i.subtotal, 0);
     const totalAnticipos = itemsClienteMarcados.reduce((acc, i) => acc + i.anticipoDirectoImputado, 0);
@@ -259,13 +295,12 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     return { totalNeto, totalAnticipos, saldoPendiente };
   }, [itemsClienteMarcados]);
 
-  // Estado del algoritmo de entregas parciales (Doc 13 / RA-01 a RA-12, CF-10 a CF-13)
+  // Límites matemáticos [m, M] (Doc 13 / RA-01 a RA-12, CF-10 a CF-13)
   const [previewData, setPreviewData] = useState<DeliveryPreviewResultDto | null>(null);
   const [ordenesAvanceAplicado, setOrdenesAvanceAplicado] = useState<Record<string, number>>({});
   const [anticipoClienteAplicado, setAnticipoClienteAplicado] = useState<number>(0);
   const [loadingPreview, setLoadingPreview] = useState<boolean>(false);
 
-  // Consulta de previsualización con límites matemáticos [m, M] del backend
   useEffect(() => {
     let cancelado = false;
     if (!clienteActivo || itemsClienteMarcados.length === 0) {
@@ -318,12 +353,9 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     };
 
     consultarPreview();
-    return () => {
-      cancelado = true;
-    };
-  }, [clienteActivo, itemsClienteMarcados, token]);
+    return () => { cancelado = true; };
+  }, [clienteActivo, itemsClienteMarcados, token, totalesSeleccion.saldoPendiente]);
 
-  // Resumen financiero consolidado en tiempo real
   const resumenFinanciero = useMemo(() => {
     const totalEntregar = previewData ? previewData.totalDeliverySubtotal : totalesSeleccion.totalNeto;
     const anticiposOrdenes = Object.values(ordenesAvanceAplicado).reduce((acc, val) => acc + (val || 0), 0);
@@ -339,7 +371,6 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     };
   }, [previewData, ordenesAvanceAplicado, anticipoClienteAplicado, totalesSeleccion]);
 
-  // Cambio de anticipo aplicado en una orden respetando límites matemáticos [m, M]
   const handleCambiarAnticipoOrden = (documentId: string, nuevoMonto: number, min: number, max: number) => {
     const valorClamp = Math.max(min, Math.min(max, isNaN(nuevoMonto) ? min : nuevoMonto));
     setOrdenesAvanceAplicado((prev) => {
@@ -369,7 +400,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     }
   };
 
-  // Crear y Despachar Entrega Consolidada por Cliente
+  // Crear y Despachar Entrega Consolidada
   const handleCrearEntregaConsolidada = async () => {
     if (!clienteActivo) {
       setErrorMsg('Seleccione un cliente para realizar la entrega.');
@@ -387,7 +418,6 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     const saldoPendiente = resumenFinanciero.saldoPendiente;
     const montoAPagar = incluirPagoConsolidado ? montoPagoConsolidado : 0;
 
-    // Validación financiera: si hay saldo pendiente y no se cubre
     if (saldoPendiente > 0 && montoAPagar < saldoPendiente) {
       setErrorMsg(
         `Existe un saldo pendiente de $${saldoPendiente.toLocaleString('es-CO')}. Ingrese el pago correspondiente para saldar el total y habilitar el despacho.`
@@ -429,7 +459,6 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         token
       );
 
-      // Despachar inmediatamente si quedó liquidada
       if (rem.saldoPendiente === 0 && rem.estado !== 'DESPACHADO' && rem.estado !== 'ASENTADO') {
         try {
           const desp = await entregasApi.despacharRemision(
@@ -460,7 +489,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     }
   };
 
-  // Generar Remisión Borrador individual (T040, usado en tests y flujo simple)
+  // Generar Remisión individual
   const handleGenerarRemision = async (solicitudPublicId: string) => {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -484,7 +513,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     }
   };
 
-  // Modal pago remisión activa individual
+  // Modal pago remisión individual activa
   const handleAbrirPago = () => {
     if (!remisionActiva) return;
     setMontoPago(remisionActiva.saldoPendiente);
@@ -556,14 +585,14 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/70 px-2.5 py-0.5 rounded-full border border-indigo-500/20">
-              Operación · Despachos y Recaudo
+              Operación · Despachos y Liquidación
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
             Módulo de Entregas y Despacho
           </h1>
           <p className="text-xs md:text-sm text-slate-400">
-            Filtre por cliente para consolidar múltiples solicitudes en una sola entrega, liquide saldos pendientes y despache formalmente.
+            Consulte órdenes listas de taller paginadas, liquide saldos con formato sobrio libre de scroll y despache formalmente.
           </p>
         </div>
 
@@ -572,27 +601,29 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
             {loading ? 'Sincronizando...' : '🔄 Actualizar'}
           </Button>
 
-          {/* Toggle de Vistas */}
-          <div className="bg-slate-950/90 p-1 rounded-xl border border-white/10 flex items-center gap-1 shadow-inner">
-            <button
-              onClick={() => setVistaActiva('cliente')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                vistaActiva === 'cliente'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              👥 Por Cliente (Consolidada)
-            </button>
+          {/* Selector de Pestañas Sobrio */}
+          <div className="bg-slate-950/90 p-1 rounded-2xl border border-white/10 flex items-center gap-1 shadow-inner">
             <button
               onClick={() => setVistaActiva('solicitudes')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 vistaActiva === 'solicitudes'
-                  ? 'bg-indigo-600 text-white shadow-md'
+                  ? 'bg-indigo-600 text-white shadow-lg'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              📋 Por Solicitud
+              <span>📋</span>
+              <span>Por Solicitud</span>
+            </button>
+            <button
+              onClick={() => setVistaActiva('cliente')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                vistaActiva === 'cliente'
+                  ? 'bg-indigo-600 text-white shadow-lg'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>👥</span>
+              <span>Por Cliente (Consolidada)</span>
             </button>
           </div>
         </div>
@@ -618,7 +649,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         </div>
       )}
 
-      {/* DETALLE DE REMISIÓN ACTIVA / RESULTADO */}
+      {/* DETALLE DE REMISIÓN ACTIVA / RESULTADO (FORMATO SOBRIO ESTILO SOLICITUD) */}
       {remisionActiva && (
         <Card className="p-6 border border-indigo-500/40 bg-slate-900/90 backdrop-blur-2xl rounded-3xl space-y-6 shadow-2xl ring-1 ring-indigo-500/20">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
@@ -640,8 +671,8 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
             </Button>
           </div>
 
-          {/* Bento Grid Financiero de la Remisión */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-950/60 rounded-2xl border border-white/5">
+          {/* Resumen de Totales Compacto */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-950/70 rounded-2xl border border-white/5">
             <div>
               <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Facturado</span>
               <div className="text-lg font-bold text-white font-mono">${remisionActiva.totalNeto.toLocaleString('es-CO')}</div>
@@ -732,12 +763,160 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         </Card>
       )}
 
-      {/* VISTA 1: ENTREGA CONSOLIDADA POR CLIENTE */}
+      {/* VISTA 1: POR SOLICITUD (PAGINADA Y SOBRIA) */}
+      {vistaActiva === 'solicitudes' && (
+        <Card className="overflow-hidden bg-slate-900/80 border border-white/10 rounded-3xl shadow-xl">
+          <div className="p-5 border-b border-white/10 bg-slate-950/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>📋</span> Órdenes Listas para Entrega (Por Solicitud)
+              </h2>
+              <p className="text-xs text-slate-400">
+                Trabajos de taller finalizados pendientes de entrega y liquidación individual en mostrador.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="w-64">
+                <Input
+                  value={busquedaSolicitudes}
+                  onChange={(e) => setBusquedaSolicitudes(e.target.value)}
+                  placeholder="Buscar SOL-..., cliente..."
+                />
+              </div>
+              <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-full bg-slate-800 text-slate-300 border border-white/10">
+                {solicitudesAgrupadas.length} órdenes listas
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-white/10 text-sm">
+              <thead className="bg-white/[0.02]">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Solicitud</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Cliente</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Ítems Listos</th>
+                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Total</th>
+                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Anticipos</th>
+                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Saldo a Cobrar</th>
+                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {solicitudesPaginadas.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-slate-400 italic">
+                      {loading ? 'Cargando órdenes listas...' : 'No hay órdenes listas para entrega pendientes.'}
+                    </td>
+                  </tr>
+                ) : (
+                  solicitudesPaginadas.map((sol) => (
+                    <tr key={sol.solicitudPublicId} className="hover:bg-white/[0.03] transition-colors">
+                      <td className="px-4 py-3 font-bold font-mono text-white">
+                        <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30">
+                          {sol.solicitudNumero}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-white">{sol.clienteNombre}</div>
+                        <div className="text-xs text-slate-400 font-mono">{sol.clienteDocumento}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-1">
+                          {sol.items.map((it) => (
+                            <div key={it.itemPublicId} className="text-xs text-slate-300 flex items-center gap-2">
+                              <span>• {it.descripcion} (Cant: {it.cantidad})</span>
+                              <Badge variant="success">{it.etapaActualNombre}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-white font-semibold">
+                        ${sol.totalNeto.toLocaleString('es-CO')}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-emerald-400">
+                        ${sol.totalAnticipos.toLocaleString('es-CO')}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-rose-400">
+                        ${sol.saldoPendiente.toLocaleString('es-CO')}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => handleGenerarRemision(sol.solicitudPublicId)}
+                          disabled={loading}
+                        >
+                          📄 Generar Remisión
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Barra de Paginación */}
+          <div className="p-4 border-t border-white/10 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+            <div className="flex items-center gap-3">
+              <span>
+                Mostrando{' '}
+                <strong className="text-white">
+                  {solicitudesAgrupadas.length > 0 ? (paginaSolicitudes - 1) * itemsPorPaginaSolicitudes + 1 : 0}
+                </strong>{' '}
+                a{' '}
+                <strong className="text-white">
+                  {Math.min(paginaSolicitudes * itemsPorPaginaSolicitudes, solicitudesAgrupadas.length)}
+                </strong>{' '}
+                de <strong className="text-white">{solicitudesAgrupadas.length}</strong> órdenes
+              </span>
+
+              <div className="flex items-center gap-1.5 border-l pl-3 border-white/10">
+                <span>Por página:</span>
+                <select
+                  value={itemsPorPaginaSolicitudes}
+                  onChange={(e) => setItemsPorPaginaSolicitudes(Number(e.target.value))}
+                  className="bg-slate-900 border border-white/10 rounded px-2 py-0.5 text-white"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={paginaSolicitudes <= 1}
+                onClick={() => setPaginaSolicitudes((p) => Math.max(1, p - 1))}
+              >
+                ← Anterior
+              </Button>
+              <span className="font-mono px-2 py-1 bg-slate-900 rounded border border-white/5 text-white font-bold">
+                {paginaSolicitudes} / {totalPaginasSolicitudes}
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={paginaSolicitudes >= totalPaginasSolicitudes}
+                onClick={() => setPaginaSolicitudes((p) => Math.min(totalPaginasSolicitudes, p + 1))}
+              >
+                Siguiente →
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* VISTA 2: ENTREGA CONSOLIDADA POR CLIENTE */}
       {vistaActiva === 'cliente' && (
         <div className="space-y-6">
-          {/* Bento Grid: Selección Estricta de Cliente */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Columna Izquierda: Filtro / Lista de Clientes con Trabajos Listos */}
+            {/* Columna Izquierda: Filtro / Lista de Clientes Paginada */}
             <div className="lg:col-span-4 space-y-4">
               <div className="p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-xl space-y-3">
                 <div className="flex items-center justify-between">
@@ -749,7 +928,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Seleccione primero el cliente. Una entrega consolida todos los ítems listos del mismo cliente.
+                  Seleccione el cliente para consolidar todas sus solicitudes en un solo despacho.
                 </p>
 
                 {/* Buscador reactivo */}
@@ -762,12 +941,12 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 </div>
 
                 <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
-                  {clientesAgrupados.length === 0 ? (
+                  {clientesPaginados.length === 0 ? (
                     <div className="p-8 text-center text-xs text-slate-500 italic border border-dashed border-white/10 rounded-2xl">
                       No hay clientes con ítems listos pendientes.
                     </div>
                   ) : (
-                    clientesAgrupados.map((c) => {
+                    clientesPaginados.map((c) => {
                       const isSelected = c.clienteId === clienteSeleccionadoId;
                       return (
                         <div
@@ -802,6 +981,44 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                     })
                   )}
                 </div>
+
+                {/* Paginación de Clientes */}
+                <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center gap-1.5">
+                    <span>Ver:</span>
+                    <select
+                      value={itemsPorPaginaClientes}
+                      onChange={(e) => setItemsPorPaginaClientes(Number(e.target.value))}
+                      className="bg-slate-900 border border-white/10 rounded px-1.5 py-0.5 text-white text-[10px]"
+                    >
+                      <option value={6}>6</option>
+                      <option value={8}>8</option>
+                      <option value={15}>15</option>
+                    </select>
+                  </div>
+
+                  {totalPaginasClientes > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        disabled={paginaClientes <= 1}
+                        onClick={() => setPaginaClientes((p) => Math.max(1, p - 1))}
+                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white"
+                      >
+                        ←
+                      </button>
+                      <span>
+                        {paginaClientes} / {totalPaginasClientes}
+                      </span>
+                      <button
+                        disabled={paginaClientes >= totalPaginasClientes}
+                        onClick={() => setPaginaClientes((p) => Math.min(totalPaginasClientes, p + 1))}
+                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white"
+                      >
+                        →
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -834,7 +1051,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                       </Button>
                     </div>
 
-                    {/* Bento Grid: Métricas de la selección usando algoritmo de liquidación */}
+                    {/* Bento Grid: Métricas de la selección */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
                         <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Ítems a Entregar</span>
@@ -938,18 +1155,18 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                     </div>
                   </div>
 
-                  {/* LIQUIDACIÓN DE ANTICIPOS PARCIALES POR SOLICITUD (Doc 13 / RA-01 a RA-12, CF-10 a CF-13) */}
+                  {/* LÍMITES MATEMÁTICOS DE ANTICIPO [m, M] (Doc 13) */}
                   {previewData && previewData.requests && previewData.requests.length > 0 && (
-                    <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-indigo-500/30 shadow-2xl space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                    <div className="p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-indigo-500/30 shadow-xl space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-xl">⚖️</span>
+                          <span className="text-lg">⚖️</span>
                           <div>
-                            <h3 className="text-base font-bold text-white">
+                            <h3 className="text-sm font-bold text-white">
                               Distribución de Anticipos y Límites Matemáticos [m, M]
                             </h3>
                             <p className="text-xs text-slate-400">
-                              Límites calculados para evitar desfinanciar ítems pendientes de cada solicitud (Doc 13).
+                              Límites legales calculados para proteger ítems pendientes en taller (Doc 13).
                             </p>
                           </div>
                         </div>
@@ -958,7 +1175,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                         )}
                       </div>
 
-                      <div className="space-y-4 pt-1">
+                      <div className="space-y-3 pt-1">
                         {previewData.requests.map((req) => {
                           const aplicado = ordenesAvanceAplicado[req.documentId] ?? req.suggestedAdvanceToApply;
                           const min = req.minAdvanceToApply;
@@ -967,7 +1184,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                           return (
                             <div
                               key={req.documentId}
-                              className="p-4 rounded-2xl bg-slate-950/70 border border-white/10 space-y-3"
+                              className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/10 space-y-2"
                             >
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
@@ -977,76 +1194,50 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                                   <span className="text-xs text-slate-400">
                                     Subtotal Entregar: <strong className="text-white font-mono">${req.deliverySubtotal.toLocaleString('es-CO')}</strong>
                                   </span>
-                                  <span className="text-xs text-slate-400">
-                                    · Restante en Taller: <strong className="text-slate-300 font-mono">${req.uncoveredRemainingSubtotal.toLocaleString('es-CO')}</strong>
-                                  </span>
                                 </div>
                                 <div className="text-xs font-mono font-bold text-emerald-400">
-                                  Anticipo Total Pagado: ${req.totalAdvancePaid.toLocaleString('es-CO')}
+                                  Rango [m={min.toLocaleString('es-CO')}, M={max.toLocaleString('es-CO')}]
                                 </div>
                               </div>
 
-                              {/* Barra de control y límites [m, M] */}
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center pt-1">
-                                <div className="text-xs text-slate-300">
-                                  <div className="flex justify-between items-center mb-1">
-                                    <span className="text-slate-400">Rango legal permitido:</span>
-                                    <span className="font-mono text-[11px] font-bold text-indigo-300 bg-indigo-950/50 px-2 py-0.5 rounded">
-                                      [{min.toLocaleString('es-CO')} - {max.toLocaleString('es-CO')}]
-                                    </span>
-                                  </div>
-                                  <div className="text-[11px] text-slate-400">
-                                    {min > 0
-                                      ? `Obligatorio absorber al menos $${min.toLocaleString('es-CO')} para no desfinanciar el remanente.`
-                                      : 'Puede absorber desde $0 hasta el subtotal entregado.'}
-                                  </div>
-                                </div>
-
-                                <div className="md:col-span-2 flex items-center gap-3">
-                                  <input
-                                    type="range"
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="range"
+                                  min={min}
+                                  max={max}
+                                  step={100}
+                                  value={aplicado}
+                                  disabled={min === max}
+                                  onChange={(e) =>
+                                    handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
+                                  }
+                                  className="flex-1 accent-indigo-500 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                                />
+                                <div className="w-36">
+                                  <Input
+                                    type="number"
                                     min={min}
                                     max={max}
-                                    step={100}
                                     value={aplicado}
-                                    disabled={min === max}
                                     onChange={(e) =>
                                       handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
                                     }
-                                    className="flex-1 accent-indigo-500 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                                    fullWidth
                                   />
-                                  <div className="w-36">
-                                    <Input
-                                      type="number"
-                                      min={min}
-                                      max={max}
-                                      value={aplicado}
-                                      onChange={(e) =>
-                                        handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
-                                      }
-                                      fullWidth
-                                    />
-                                  </div>
                                 </div>
                               </div>
                             </div>
                           );
                         })}
 
-                        {/* Anticipo Global del Cliente si tiene saldo a favor */}
                         {previewData.availableCustomerAdvance > 0 && (
-                          <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div>
-                              <div className="font-bold text-sm text-indigo-200">
-                                🌟 Saldo a Favor del Cliente Disponible en Cuenta
-                              </div>
-                              <div className="text-xs text-indigo-300/80">
-                                El cliente posee <strong className="font-mono">${previewData.availableCustomerAdvance.toLocaleString('es-CO')}</strong> en abonos previos globales sin asignar.
-                              </div>
-                            </div>
+                          <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                            <span className="text-indigo-200">
+                              🌟 Saldo a favor global: <strong>${previewData.availableCustomerAdvance.toLocaleString('es-CO')}</strong>
+                            </span>
                             <div className="flex items-center gap-2">
-                              <label className="text-xs text-slate-300 font-semibold">Aplicar:</label>
-                              <div className="w-32">
+                              <span>Aplicar:</span>
+                              <div className="w-28">
                                 <Input
                                   type="number"
                                   min={0}
@@ -1069,50 +1260,38 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                     </div>
                   )}
 
-                  {/* SECCIÓN INTEGRADA DE PAGO Y LIQUIDACIÓN EN LA ENTREGA */}
-                  {resumenFinanciero.saldoPendiente === 0 ? (
-                    <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-emerald-500/40 shadow-2xl space-y-2">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">✨</span>
-                        <div>
-                          <h3 className="text-base font-bold text-white">
-                            100% Cubierto con Anticipos Previos ($0 Saldo en Mostrador)
-                          </h3>
-                          <p className="text-xs text-emerald-400">
-                            Los ítems seleccionados quedan totalmente saldados mediante los anticipos de orden y/o saldo a favor. Despacho directo habilitado.
-                          </p>
-                        </div>
+                  {/* FORMATO SOBRIO DE PAGO Y DESPACHO (ESTILO SOLICITUD DE 2 COLUMNAS) */}
+                  <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-4">
+                    <div className="border-b border-white/10 pb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">💵</span>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                          Liquidación de Pago y Datos de Despacho
+                        </h3>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-amber-500/30 shadow-2xl space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">💳</span>
-                          <div>
-                            <h3 className="text-base font-bold text-white">
-                              Liquidación de Saldo Pendiente en la Entrega
-                            </h3>
-                            <p className="text-xs text-slate-400">
-                              Registre el pago para saldar los ${resumenFinanciero.saldoPendiente.toLocaleString('es-CO')} y autorizar el despacho inmediato.
-                            </p>
-                          </div>
-                        </div>
-
-                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-300">
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={incluirPagoConsolidado}
                             onChange={(e) => setIncluirPagoConsolidado(e.target.checked)}
                             className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
                           />
-                          <span>Registrar recaudo ahora</span>
+                          <span>Registrar cobro en entrega</span>
                         </label>
+                        <Badge variant={resumenFinanciero.saldoPendiente > 0 ? 'warning' : 'success'}>
+                          {resumenFinanciero.saldoPendiente > 0 ? 'Con Saldo en Mostrador' : '100% Cubierto'}
+                        </Badge>
                       </div>
+                    </div>
 
-                      {incluirPagoConsolidado ? (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                          <div>
+                    {/* Estructura Sobria 2 Columnas Estilo SolicitudCapturaMixta */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      {/* Columna Izquierda (~65%): Formulario Compacto de Cobro y Receptor */}
+                      <div className="lg:col-span-7 space-y-4">
+                        {/* Fila 1: Instrumento (~60%) y Monto (~40%) en la MISMA línea */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                          <div className="md:col-span-7">
                             <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
                               Medio de Pago *
                             </label>
@@ -1121,135 +1300,135 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                               onChange={(e) => setMetodoPagoConsolidado(e.target.value)}
                               className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
-                              {mediosPago.length === 0 ? (
-                                <option value="">Efectivo Mostrador</option>
-                              ) : (
-                                mediosPago.map((m) => (
-                                  <option key={m.uuid} value={m.uuid}>
-                                    {m.nombre} ({m.codigo})
-                                  </option>
-                                ))
-                              )}
+                              {mediosPago.map((m) => (
+                                <option key={m.uuid} value={m.uuid}>
+                                  {m.codigo} - {m.nombre}
+                                </option>
+                              ))}
                             </select>
                           </div>
 
-                          <div>
+                          <div className="md:col-span-5">
                             <div className="flex items-center justify-between mb-1">
                               <label className="block text-xs font-semibold text-slate-300 uppercase">
-                                Monto a Pagar *
+                                Monto a Cobrar *
                               </label>
-                              <button
-                                type="button"
-                                onClick={() => setMontoPagoConsolidado(resumenFinanciero.saldoPendiente)}
-                                className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline"
-                              >
-                                Pagar Total
-                              </button>
+                              {resumenFinanciero.saldoPendiente > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setMontoPagoConsolidado(resumenFinanciero.saldoPendiente)}
+                                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline"
+                                >
+                                  Pagar Total
+                                </button>
+                              )}
                             </div>
                             <Input
                               type="number"
                               value={montoPagoConsolidado}
                               onChange={(e) => setMontoPagoConsolidado(Number(e.target.value))}
-                              min={1}
+                              min={0}
                               fullWidth
                             />
                           </div>
-
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                              Referencia / N° Transacción
-                            </label>
-                            <Input
-                              value={referenciaPagoConsolidado}
-                              onChange={(e) => setReferenciaPagoConsolidado(e.target.value)}
-                              placeholder="Ej: Aprobación #83921"
-                              fullWidth
-                            />
-                          </div>
-
-                          {/* Feedback de saldo restante */}
-                          <div className="md:col-span-3 pt-1">
-                            {montoPagoConsolidado >= resumenFinanciero.saldoPendiente ? (
-                              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
-                                <span>✓</span>
-                                <span>
-                                  El saldo restante quedará 100% liquidado ($0). Despacho autorizado.
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
-                                <span>⚠️</span>
-                                <span>
-                                  Abono parcial: quedará un saldo restante de{' '}
-                                  <strong className="font-mono">
-                                    ${(resumenFinanciero.saldoPendiente - montoPagoConsolidado).toLocaleString('es-CO')}
-                                  </strong>{' '}
-                                  (se requiere cupo de crédito para completar el despacho).
-                                </span>
-                              </div>
-                            )}
-                          </div>
                         </div>
-                      ) : (
-                        <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-500/20 text-rose-300 text-xs">
-                          ⚠️ Se intentará despachar sin pago. Solo procederá si el cliente cuenta con cupo de crédito activo suficiente.
+
+                        {/* Fila 2: Referencia / Comprobante */}
+                        <div>
+                          <Input
+                            label="Referencia / N° Transacción / Comprobante"
+                            value={referenciaPagoConsolidado}
+                            onChange={(e) => setReferenciaPagoConsolidado(e.target.value)}
+                            placeholder="Ej: Aprobación datáfono #123456"
+                            fullWidth
+                          />
                         </div>
-                      )}
-                    </div>
-                  )}
 
-                  {/* DATOS DE DESPACHO Y RECEPCIÓN */}
-                  <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-4">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                      <span>📦</span> Datos de Despacho y Entrega
-                    </h3>
+                        {/* Fila 3: Receptor (Nombre y Documento juntos) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <Input
+                            label="Recibido por (Nombre) *"
+                            value={receptorNombre}
+                            onChange={(e) => setReceptorNombre(e.target.value)}
+                            placeholder="Nombre de quien retira"
+                            required
+                            fullWidth
+                          />
+                          <Input
+                            label="Documento Identidad *"
+                            value={receptorDocumento}
+                            onChange={(e) => setReceptorDocumento(e.target.value)}
+                            placeholder="Cédula o NIT"
+                            required
+                            fullWidth
+                          />
+                        </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Input
-                          label="Nombre de quien recibe *"
-                          value={receptorNombre}
-                          onChange={(e) => setReceptorNombre(e.target.value)}
-                          placeholder="Nombre completo"
-                          required
-                          fullWidth
-                        />
+                        {/* Fila 4: Observaciones */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                            Observaciones de Entrega
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={observacionEntrega}
+                            onChange={(e) => setObservacionEntrega(e.target.value)}
+                            placeholder="Notas adicionales sobre la entrega, embalaje..."
+                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <Input
-                          label="Documento de quien recibe *"
-                          value={receptorDocumento}
-                          onChange={(e) => setReceptorDocumento(e.target.value)}
-                          placeholder="Cédula o NIT"
-                          required
-                          fullWidth
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <Input
-                          label="Observaciones de entrega"
-                          value={observacionEntrega}
-                          onChange={(e) => setObservacionEntrega(e.target.value)}
-                          placeholder="Notas adicionales sobre la entrega, embalaje, etc."
-                          fullWidth
-                        />
-                      </div>
-                    </div>
 
-                    <div className="flex justify-end pt-4 border-t border-white/10">
-                      <Button
-                        variant="primary"
-                        size="lg"
-                        loading={loading}
-                        disabled={
-                          itemsClienteMarcados.length === 0 ||
-                          !receptorNombre.trim() ||
-                          !receptorDocumento.trim()
-                        }
-                        onClick={handleCrearEntregaConsolidada}
-                      >
-                        🚀 Generar y Despachar Entrega ({itemsClienteMarcados.length} ítems)
-                      </Button>
+                      {/* Columna Derecha (~35%): Panel Sobrio de Totales y Acción */}
+                      <div className="lg:col-span-5 p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 text-xs">
+                        <div className="flex justify-between items-center text-slate-300">
+                          <span className="font-medium">Total Ítems:</span>
+                          <span className="font-mono text-white text-sm font-bold">
+                            ${resumenFinanciero.totalEntregar.toLocaleString('es-CO')}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-center text-slate-300">
+                          <span className="font-medium">Anticipos Imputados:</span>
+                          <span className="font-mono text-emerald-400 font-bold">
+                            -${resumenFinanciero.totalAnticipos.toLocaleString('es-CO')}
+                          </span>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-rose-300 font-bold">
+                          <span>Saldo en Mostrador:</span>
+                          <span className="font-mono text-rose-400 text-base font-black">
+                            ${resumenFinanciero.saldoPendiente.toLocaleString('es-CO')}
+                          </span>
+                        </div>
+
+                        {/* Indicador de Despacho */}
+                        {montoPagoConsolidado >= resumenFinanciero.saldoPendiente ? (
+                          <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold flex items-center gap-1.5">
+                            <span>✓</span> Saldo 100% cubierto. Despacho directo habilitado.
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1.5">
+                            <span>⚠️</span> Saldo restante de ${(resumenFinanciero.saldoPendiente - montoPagoConsolidado).toLocaleString('es-CO')}.
+                          </div>
+                        )}
+
+                        <Button
+                          variant="primary"
+                          size="lg"
+                          fullWidth
+                          loading={loading}
+                          disabled={
+                            itemsClienteMarcados.length === 0 ||
+                            !receptorNombre.trim() ||
+                            !receptorDocumento.trim()
+                          }
+                          onClick={handleCrearEntregaConsolidada}
+                          className="mt-2"
+                        >
+                          🚀 Despachar ({itemsClienteMarcados.length} ítems)
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1263,141 +1442,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         </div>
       )}
 
-      {/* LISTADO DE ÓRDENES LISTAS PARA ENTREGA */}
-      <Card className="overflow-hidden bg-slate-900/80 border border-white/10 rounded-3xl shadow-xl">
-          <div className="p-5 border-b border-white/10 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold text-white">Órdenes Listas para Entrega (1 Solicitud por Remisión)</h2>
-              <p className="text-xs text-slate-400">
-                Trabajos de taller terminados pendientes de entrega y liquidación en mostrador.
-              </p>
-            </div>
-            <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-white/10">
-              {solicitudesAgrupadas.length} pendientes
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/[0.02]">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Solicitud</th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Cliente</th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Ítems Listos</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Total</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Anticipos</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Saldo a Cobrar</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {solicitudesAgrupadas.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                      {loading ? 'Cargando órdenes listas...' : 'No hay órdenes listas para entrega pendientes.'}
-                    </td>
-                  </tr>
-                ) : (
-                  solicitudesAgrupadas.map((sol) => (
-                    <tr key={sol.solicitudPublicId} className="hover:bg-white/[0.03] transition-colors">
-                      <td className="px-4 py-3 font-bold font-mono text-white">{sol.solicitudNumero}</td>
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-white">{sol.clienteNombre}</div>
-                        <div className="text-xs text-slate-400 font-mono">{sol.clienteDocumento}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          {sol.items.map((it) => (
-                            <div key={it.itemPublicId} className="text-xs text-slate-300 flex items-center gap-2">
-                              <span>• {it.descripcion} (Cant: {it.cantidad})</span>
-                              <Badge variant="success">{it.etapaActualNombre}</Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-white font-semibold">${sol.totalNeto.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-3 text-right font-mono text-emerald-400">${sol.totalAnticipos.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-rose-400">${sol.saldoPendiente.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => handleGenerarRemision(sol.solicitudPublicId)}
-                          disabled={loading}
-                        >
-                          📄 Generar Remisión
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-      {/* MODAL NUEVA ENTREGA / SELECCIONAR SOLICITUD (Compatibilidad) */}
-      <Modal
-        isOpen={mostrarModalNuevaEntrega}
-        onClose={() => setMostrarModalNuevaEntrega(false)}
-        title="Registrar Nueva Entrega / Despacho"
-        size="lg"
-      >
-        <div className="p-4 space-y-4">
-          <p className="text-xs text-slate-400">
-            Seleccione la solicitud u orden de servicio finalizada en taller para liquidar saldos y generar remisión formal de despacho.
-          </p>
-
-          {solicitudesAgrupadas.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 border border-dashed border-white/10 rounded-xl">
-              No hay órdenes listas para entrega pendientes en cola de taller.
-            </div>
-          ) : (
-            <div className="divide-y divide-white/5 border border-white/10 rounded-xl overflow-hidden bg-slate-950/60">
-              {solicitudesAgrupadas.map((sol) => (
-                <div key={sol.solicitudPublicId} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white/[0.02]">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white font-mono">{sol.solicitudNumero}</span>
-                      <span className="text-xs px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 font-medium">
-                        {sol.items.length} {sol.items.length === 1 ? 'ítem listo' : 'ítems listos'}
-                      </span>
-                    </div>
-                    <div className="text-sm font-semibold text-slate-200 mt-1">{sol.clienteNombre}</div>
-                    <div className="text-xs text-slate-400 font-mono">Doc: {sol.clienteDocumento}</div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="text-xs text-slate-400">Saldo a Cobrar</div>
-                      <div className={`text-base font-black font-mono ${sol.saldoPendiente > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                        ${sol.saldoPendiente.toLocaleString('es-CO')}
-                      </div>
-                    </div>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => {
-                        setMostrarModalNuevaEntrega(false);
-                        handleGenerarRemision(sol.solicitudPublicId);
-                      }}
-                    >
-                      📦 Iniciar Entrega
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex justify-end pt-3 border-t border-white/10">
-            <Button variant="secondary" onClick={() => setMostrarModalNuevaEntrega(false)}>
-              Cerrar
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL COBRAR SALDO PENDIENTE */}
+      {/* MODAL COBRAR SALDO PENDIENTE (REMISIÓN INDIVIDUAL) */}
       <Modal
         isOpen={isPagoModalOpen && !!remisionActiva}
         onClose={() => setIsPagoModalOpen(false)}
@@ -1413,35 +1458,33 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
             </div>
 
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Monto a Cobrar (COP) *</label>
-                <Input
-                  type="number"
-                  value={montoPago}
-                  onChange={(e) => setMontoPago(Number(e.target.value))}
-                  max={remisionActiva.saldoPendiente}
-                  min={1}
-                  fullWidth
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Medio de Pago *</label>
-                <select
-                  value={instrumentoSeleccionado}
-                  onChange={(e) => setInstrumentoSeleccionado(e.target.value)}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {mediosPago.length === 0 ? (
-                    <option value="">Efectivo Mostrador (Predeterminado)</option>
-                  ) : (
-                    mediosPago.map((inst) => (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div className="md:col-span-7">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Medio de Pago *</label>
+                  <select
+                    value={instrumentoSeleccionado}
+                    onChange={(e) => setInstrumentoSeleccionado(e.target.value)}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {mediosPago.map((inst) => (
                       <option key={inst.uuid} value={inst.uuid}>
                         {inst.nombre} ({inst.codigo})
                       </option>
-                    ))
-                  )}
-                </select>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-5">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Monto a Cobrar *</label>
+                  <Input
+                    type="number"
+                    value={montoPago}
+                    onChange={(e) => setMontoPago(Number(e.target.value))}
+                    max={remisionActiva.saldoPendiente}
+                    min={1}
+                    fullWidth
+                  />
+                </div>
               </div>
 
               <div>

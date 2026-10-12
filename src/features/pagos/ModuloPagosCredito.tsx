@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Button, Input, Badge } from '@farutech/design-system';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Card, Button, Input, Badge, Modal } from '@farutech/design-system';
 import { api } from '../../services/api';
 import { catalogosApi } from '../../services/catalogosApi';
 import { ModuloCaja } from '../caja/ModuloCaja';
@@ -15,6 +15,7 @@ interface SolicitudSaldo {
   number: string;
   customerId: string;
   customerName: string;
+  customerDocument?: string;
   total: number;
   paidAmount: number;
   balanceDue: number;
@@ -45,20 +46,30 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
 
   // Estados para Registro de Abono
   const [criterioBusqueda, setCriterioBusqueda] = useState('');
+  const [soloConSaldo, setSoloConSaldo] = useState(true);
   const [buscandoSolicitudes, setBuscandoSolicitudes] = useState(false);
-  const [solicitudesEncontradas, setSolicitudesEncontradas] = useState<SolicitudSaldo[]>([]);
-  const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<SolicitudSaldo | null>(null);
+  const [solicitudes, setSolicitudes] = useState<SolicitudSaldo[]>([]);
 
-  // Formulario de Abono
+  // Paginación de Solicitudes
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [itemsPorPagina, setItemsPorPagina] = useState(10);
+
+  // Modal de Abono
+  const [isModalAbonoOpen, setIsModalAbonoOpen] = useState(false);
+  const [solicitudAbono, setSolicitudAbono] = useState<SolicitudSaldo | null>(null);
   const [montoAbono, setMontoAbono] = useState<number>(0);
   const [metodoPagoId, setMetodoPagoId] = useState<string>('');
   const [referenciaPago, setReferenciaPago] = useState<string>('');
+  const [observacionesPago, setObservacionesPago] = useState<string>('');
   const [mediosPago, setMediosPago] = useState<MedioPagoInstrumento[]>([]);
   const [procesandoAbono, setProcesandoAbono] = useState(false);
 
-  // Estados para Historial de Pagos
+  // Estados para Historial de Pagos y Paginación
   const [historialPagos, setHistorialPagos] = useState<PagoHistorial[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [busquedaHistorial, setBusquedaHistorial] = useState('');
+  const [paginaHistorial, setPaginaHistorial] = useState(1);
+  const [itemsHistorialPorPagina, setItemsHistorialPorPagina] = useState(10);
 
   // Mensajes globales
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -82,7 +93,7 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
           { uuid: 'ins-01', codigo: 'EFECTIVO', nombre: 'Efectivo Mostrador', categoria: 'EFECTIVO', esHoja: true, requiereReferencia: false, activo: true },
           { uuid: 'ins-02', codigo: 'TRANSFERENCIA', nombre: 'Transferencia Bancaria', categoria: 'TRANSFERENCIA', esHoja: true, requiereReferencia: true, activo: true },
           { uuid: 'ins-03', codigo: 'NEQUI', nombre: 'Nequi / Daviplata', categoria: 'TRANSFERENCIA', esHoja: true, requiereReferencia: true, activo: true },
-          { uuid: 'ins-04', codigo: 'DATAFONO_TD', nombre: 'Tarjeta Débito', categoria: 'DATAFONO', esHoja: true, requiereReferencia: true, activo: true },
+          { uuid: 'ins-04', codigo: 'DATAFONO_TD', nombre: 'Tarjeta Débito / Datáfono', categoria: 'DATAFONO', esHoja: true, requiereReferencia: true, activo: true },
         ];
         if (activo) {
           setMediosPago(fallback);
@@ -94,12 +105,12 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
     return () => { activo = false; };
   }, []);
 
-  // Buscar Solicitudes con Saldo
-  const buscarSolicitudes = useCallback(async (termino?: string) => {
+  // Cargar Solicitudes
+  const cargarSolicitudes = useCallback(async () => {
     setBuscandoSolicitudes(true);
     setErrorMsg(null);
     try {
-      const res = await api.get<any>('/requests?page=1&pageSize=50', token);
+      const res = await api.get<any>('/requests?page=1&pageSize=300', token);
       const items = Array.isArray(res) ? res : (res?.items || []);
 
       const mapped: SolicitudSaldo[] = items.map((s: any) => {
@@ -107,57 +118,79 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
         const paid = Number(s.paidAmount || 0);
         const balance = Math.max(0, total - paid);
         return {
-          id: s.id,
-          number: s.number || 'SOL-0000',
-          customerId: s.customerId || '',
-          customerName: s.customerName || 'Cliente',
+          id: s.id || s.requestId,
+          number: s.number || s.numeroDocumento || 'SOL-0000',
+          customerId: s.customerId || s.clienteId || '',
+          customerName: s.customerName || s.clienteNombre || 'Cliente',
+          customerDocument: s.customerDocument || s.clienteDocumento || '',
           total,
           paidAmount: paid,
           balanceDue: balance,
-          status: s.status || 'CONFIRMED',
-          createdAt: s.createdAt || new Date().toISOString(),
+          status: s.status || s.estado || 'CONFIRMED',
+          createdAt: s.createdAt || s.fechaCreacion || new Date().toISOString(),
         };
       });
 
-      const q = (termino ?? criterioBusqueda).trim().toLowerCase();
-      const filtradas = q
-        ? mapped.filter(
-            (s) =>
-              s.number.toLowerCase().includes(q) ||
-              s.customerName.toLowerCase().includes(q)
-          )
-        : mapped;
-
-      setSolicitudesEncontradas(filtradas);
-
-      // Si encuentra exactamente 1, seleccionarla automáticamente
-      if (filtradas.length === 1 && !solicitudSeleccionada) {
-        seleccionarSolicitud(filtradas[0]);
-      }
+      setSolicitudes(mapped);
     } catch (err: unknown) {
-      setErrorMsg((err as { message?: string }).message || 'Error buscando solicitudes');
+      setErrorMsg((err as { message?: string }).message || 'Error cargando solicitudes');
     } finally {
       setBuscandoSolicitudes(false);
     }
-  }, [criterioBusqueda, token, solicitudSeleccionada]);
+  }, [token]);
 
-  // Cargar solicitudes iniciales al montar la pestaña de abono
   useEffect(() => {
     if (tabActiva === 'abono') {
-      buscarSolicitudes();
+      cargarSolicitudes();
     }
-  }, [tabActiva, buscarSolicitudes]);
+  }, [tabActiva, cargarSolicitudes]);
 
-  const seleccionarSolicitud = (s: SolicitudSaldo) => {
-    setSolicitudSeleccionada(s);
-    setMontoAbono(s.balanceDue > 0 ? s.balanceDue : 0);
+  // Filtrado de Solicitudes
+  const solicitudesFiltradas = useMemo(() => {
+    let result = solicitudes;
+    if (soloConSaldo) {
+      result = result.filter((s) => s.balanceDue > 0);
+    }
+    const q = criterioBusqueda.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        (s) =>
+          s.number.toLowerCase().includes(q) ||
+          s.customerName.toLowerCase().includes(q) ||
+          (s.customerDocument && s.customerDocument.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [solicitudes, soloConSaldo, criterioBusqueda]);
+
+  // Paginación de solicitudes
+  const totalPaginas = Math.max(1, Math.ceil(solicitudesFiltradas.length / itemsPorPagina));
+  const solicitudesPaginadas = useMemo(() => {
+    const inicio = (paginaActual - 1) * itemsPorPagina;
+    return solicitudesFiltradas.slice(inicio, inicio + itemsPorPagina);
+  }, [solicitudesFiltradas, paginaActual, itemsPorPagina]);
+
+  // Reset de página al cambiar filtros
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [criterioBusqueda, soloConSaldo, itemsPorPagina]);
+
+  // Abrir Modal para Registrar Abono
+  const handleAbrirModalAbono = (sol: SolicitudSaldo) => {
+    setSolicitudAbono(sol);
+    setMontoAbono(sol.balanceDue > 0 ? sol.balanceDue : 0);
     setReferenciaPago('');
+    setObservacionesPago('');
+    if (!metodoPagoId && mediosPago.length > 0) {
+      setMetodoPagoId(mediosPago[0].uuid);
+    }
+    setIsModalAbonoOpen(true);
   };
 
-  // Registrar el Abono
+  // Registrar el Abono desde el Modal
   const handleRegistrarAbono = async () => {
-    if (!solicitudSeleccionada) {
-      setErrorMsg('Seleccione una solicitud para registrar el abono.');
+    if (!solicitudAbono) {
+      setErrorMsg('No hay solicitud seleccionada para el abono.');
       return;
     }
     if (montoAbono <= 0) {
@@ -173,33 +206,28 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
       await api.post<any>(
         '/payments',
         {
-          customerId: solicitudSeleccionada.customerId,
-          documentId: solicitudSeleccionada.id,
-          requestId: solicitudSeleccionada.id,
+          customerId: solicitudAbono.customerId,
+          documentId: solicitudAbono.id,
+          requestId: solicitudAbono.id,
           paymentMethodId: metodoPagoId || mediosPago[0]?.uuid,
           amount: montoAbono,
           reference: referenciaPago.trim() || undefined,
           referenciaTransaccion: referenciaPago.trim() || undefined,
+          notes: observacionesPago.trim() || undefined,
         },
         token
       );
 
-      const nuevoPagado = solicitudSeleccionada.paidAmount + montoAbono;
-      const nuevoSaldo = Math.max(0, solicitudSeleccionada.total - nuevoPagado);
+      const nuevoPagado = solicitudAbono.paidAmount + montoAbono;
+      const nuevoSaldo = Math.max(0, solicitudAbono.total - nuevoPagado);
 
       setSuccessMsg(
-        `¡Abono de $${montoAbono.toLocaleString('es-CO')} registrado con éxito a la solicitud ${solicitudSeleccionada.number}! Nuevo saldo pendiente: $${nuevoSaldo.toLocaleString('es-CO')}.`
+        `¡Abono de $${montoAbono.toLocaleString('es-CO')} registrado con éxito a ${solicitudAbono.number}! Nuevo saldo pendiente: $${nuevoSaldo.toLocaleString('es-CO')}.`
       );
 
-      // Actualizar la solicitud activa
-      setSolicitudSeleccionada({
-        ...solicitudSeleccionada,
-        paidAmount: nuevoPagado,
-        balanceDue: nuevoSaldo,
-      });
-
-      // Refrescar lista
-      buscarSolicitudes();
+      setIsModalAbonoOpen(false);
+      setSolicitudAbono(null);
+      await cargarSolicitudes();
     } catch (err: unknown) {
       setErrorMsg((err as { message?: string }).message || 'Error al procesar el recaudo');
     } finally {
@@ -212,7 +240,7 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
     setCargandoHistorial(true);
     setErrorMsg(null);
     try {
-      const res = await api.get<any>('/payments?page=1&pageSize=50', token);
+      const res = await api.get<any>('/payments?page=1&pageSize=300', token);
       const items = Array.isArray(res) ? res : (res?.items || []);
       setHistorialPagos(
         items.map((p: any) => ({
@@ -243,6 +271,39 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
     }
   }, [tabActiva, cargarHistorial]);
 
+  // Filtrado y Paginación de Historial
+  const historialFiltrado = useMemo(() => {
+    const q = busquedaHistorial.trim().toLowerCase();
+    if (!q) return historialPagos;
+    return historialPagos.filter(
+      (p) =>
+        p.customerName.toLowerCase().includes(q) ||
+        (p.documentNumber && p.documentNumber.toLowerCase().includes(q)) ||
+        p.paymentMethodName.toLowerCase().includes(q) ||
+        (p.reference && p.reference.toLowerCase().includes(q))
+    );
+  }, [historialPagos, busquedaHistorial]);
+
+  const totalPaginasHistorial = Math.max(1, Math.ceil(historialFiltrado.length / itemsHistorialPorPagina));
+  const historialPaginado = useMemo(() => {
+    const inicio = (paginaHistorial - 1) * itemsHistorialPorPagina;
+    return historialFiltrado.slice(inicio, inicio + itemsHistorialPorPagina);
+  }, [historialFiltrado, paginaHistorial, itemsHistorialPorPagina]);
+
+  // Métricas financieras rápidas
+  const metricas = useMemo(() => {
+    const conSaldo = solicitudes.filter((s) => s.balanceDue > 0);
+    const saldoTotal = conSaldo.reduce((acc, s) => acc + s.balanceDue, 0);
+    const totalFacturado = solicitudes.reduce((acc, s) => acc + s.total, 0);
+    const totalRecaudado = solicitudes.reduce((acc, s) => acc + s.paidAmount, 0);
+    return {
+      cantidadConSaldo: conSaldo.length,
+      saldoTotal,
+      totalFacturado,
+      totalRecaudado,
+    };
+  }, [solicitudes]);
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header Glassmorphic estilo Linear / Apple */}
@@ -257,7 +318,7 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
             Pagos, Abonos y Crédito
           </h1>
           <p className="text-xs md:text-sm text-slate-400">
-            Reciba abonos de clientes para solicitudes en curso, consulte el historial de comprobantes o administre la caja operativa.
+            Registre abonos mediante modal ágil sin scroll, consulte solicitudes con paginación optimizada o administre la caja operativa.
           </p>
         </div>
 
@@ -319,226 +380,221 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
         </div>
       )}
 
-      {/* PESTAÑA 1: REGISTRAR ABONO A SOLICITUD */}
+      {/* PESTAÑA 1: REGISTRAR ABONO A SOLICITUD (VISTA COMPLETA PAGINADA CON MODAL) */}
       {tabActiva === 'abono' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Columna Izquierda: Buscador de Solicitud / Cliente */}
-          <div className="lg:col-span-5 space-y-4">
-            <div className="p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-xl space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                  <span>🔍</span> Buscar Solicitud o Cliente
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Ingrese el número de la solicitud (ej: <span className="font-mono text-indigo-400">SOL-...</span>) o el nombre del cliente que viene a abonar.
-                </p>
+        <div className="space-y-6">
+          {/* Métricas Compactas Estilo Dashboard */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/10 shadow-lg space-y-1">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Órdenes con Saldo</span>
+              <div className="text-xl font-bold font-mono text-white">
+                {metricas.cantidadConSaldo} <span className="text-xs text-slate-500 font-normal">de {solicitudes.length}</span>
               </div>
+            </div>
 
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Input
-                    value={criterioBusqueda}
-                    onChange={(e) => setCriterioBusqueda(e.target.value)}
-                    placeholder="Ej: SOL-0001 o Juan Cardona..."
-                    onKeyDown={(e) => e.key === 'Enter' && buscarSolicitudes()}
-                  />
-                </div>
-                <Button variant="primary" onClick={() => buscarSolicitudes()} disabled={buscandoSolicitudes}>
-                  {buscandoSolicitudes ? '...' : 'Buscar'}
-                </Button>
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/10 shadow-lg space-y-1">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Facturado</span>
+              <div className="text-xl font-bold font-mono text-white">
+                ${metricas.totalFacturado.toLocaleString('es-CO')}
               </div>
+            </div>
 
-              {/* Lista de Solicitudes encontradas */}
-              <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
-                {solicitudesEncontradas.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-500 italic border border-dashed border-white/10 rounded-2xl">
-                    {buscandoSolicitudes ? 'Buscando solicitudes...' : 'No se encontraron solicitudes con saldo pendiente.'}
-                  </div>
-                ) : (
-                  solicitudesEncontradas.map((s) => {
-                    const isSelected = solicitudSeleccionada?.id === s.id;
-                    return (
-                      <div
-                        key={s.id}
-                        onClick={() => seleccionarSolicitud(s)}
-                        className={`p-3.5 rounded-2xl cursor-pointer transition-all border ${
-                          isSelected
-                            ? 'bg-indigo-600/20 border-indigo-500 ring-1 ring-indigo-500/30'
-                            : 'bg-slate-950/60 border-white/5 hover:border-white/20 hover:bg-slate-950/90'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="font-mono font-bold text-indigo-400 text-xs bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30">
-                              {s.number}
-                            </span>
-                            <div className="font-bold text-white text-sm mt-1">{s.customerName}</div>
-                          </div>
-                          <Badge variant={s.balanceDue > 0 ? 'warning' : 'success'}>
-                            {s.balanceDue > 0 ? 'Con Saldo' : 'Saldada'}
-                          </Badge>
-                        </div>
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/10 shadow-lg space-y-1">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Recaudado</span>
+              <div className="text-xl font-bold font-mono text-emerald-400">
+                ${metricas.totalRecaudado.toLocaleString('es-CO')}
+              </div>
+            </div>
 
-                        <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
-                          <span className="text-slate-400">Total: ${s.total.toLocaleString('es-CO')}</span>
-                          <span className={`font-bold ${s.balanceDue > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                            Saldo: ${s.balanceDue.toLocaleString('es-CO')}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-rose-500/20 shadow-lg space-y-1">
+              <span className="text-[11px] font-semibold text-rose-300 uppercase tracking-wider">Saldo Total por Cobrar</span>
+              <div className="text-xl font-black font-mono text-rose-400">
+                ${metricas.saldoTotal.toLocaleString('es-CO')}
               </div>
             </div>
           </div>
 
-          {/* Columna Derecha: Tarjeta Bento Grid y Formulario de Abono */}
-          <div className="lg:col-span-7 space-y-6">
-            {solicitudSeleccionada ? (
-              <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-6">
-                <div className="border-b border-white/10 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/60 px-2.5 py-0.5 rounded-full border border-indigo-700/30">
-                        {solicitudSeleccionada.number}
-                      </span>
-                      <h2 className="text-lg font-black text-white">{solicitudSeleccionada.customerName}</h2>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Fecha de registro: {new Date(solicitudSeleccionada.createdAt).toLocaleDateString('es-CO')}
-                    </p>
-                  </div>
+          {/* Tabla Paginada de Solicitudes */}
+          <Card className="overflow-hidden bg-slate-900/80 border border-white/10 rounded-3xl shadow-2xl">
+            <div className="p-5 border-b border-white/10 bg-slate-950/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span>📑</span> Solicitudes y Cartera Pendiente
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Seleccione cualquier solicitud para abrir el modal de abono rápido sin desplazamiento vertical.
+                </p>
+              </div>
 
-                  <Badge variant={solicitudSeleccionada.balanceDue > 0 ? 'warning' : 'success'}>
-                    {solicitudSeleccionada.balanceDue > 0 ? 'Saldo Pendiente' : 'Saldada al 100%'}
-                  </Badge>
+              {/* Filtros y Buscador */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="w-64">
+                  <Input
+                    value={criterioBusqueda}
+                    onChange={(e) => setCriterioBusqueda(e.target.value)}
+                    placeholder="Buscar SOL-..., cliente..."
+                  />
                 </div>
 
-                {/* Bento Grid: Estado de Cuenta de la Solicitud */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Facturado</span>
-                    <div className="text-xl font-bold font-mono text-white">
-                      ${solicitudSeleccionada.total.toLocaleString('es-CO')}
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Abonado</span>
-                    <div className="text-xl font-bold font-mono text-emerald-400">
-                      ${solicitudSeleccionada.paidAmount.toLocaleString('es-CO')}
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Saldo Pendiente</span>
-                    <div className={`text-xl font-black font-mono ${solicitudSeleccionada.balanceDue > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      ${solicitudSeleccionada.balanceDue.toLocaleString('es-CO')}
-                    </div>
-                  </div>
+                <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-xs">
+                  <button
+                    onClick={() => setSoloConSaldo(true)}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                      soloConSaldo ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Con Saldo ({metricas.cantidadConSaldo})
+                  </button>
+                  <button
+                    onClick={() => setSoloConSaldo(false)}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                      !soloConSaldo ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Todas ({solicitudes.length})
+                  </button>
                 </div>
 
-                {/* Formulario para Ingresar el Abono */}
-                <div className="p-5 rounded-2xl bg-slate-950/80 border border-indigo-500/20 space-y-4">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <span>💵</span> Registrar Nuevo Abono
-                  </h3>
+                <Button size="sm" variant="secondary" onClick={cargarSolicitudes} disabled={buscandoSolicitudes}>
+                  {buscandoSolicitudes ? '...' : '🔄'}
+                </Button>
+              </div>
+            </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                        Medio de Pago *
-                      </label>
-                      <select
-                        value={metodoPagoId}
-                        onChange={(e) => setMetodoPagoId(e.target.value)}
-                        className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            {/* Tabla de Resultados */}
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-white/10 text-sm">
+                <thead className="bg-white/[0.02]">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-300">Solicitud</th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-300">Cliente</th>
+                    <th className="px-4 py-3 text-left font-semibold text-slate-300">Fecha</th>
+                    <th className="px-4 py-3 text-right font-semibold text-slate-300">Total Facturado</th>
+                    <th className="px-4 py-3 text-right font-semibold text-slate-300">Abonado</th>
+                    <th className="px-4 py-3 text-right font-semibold text-slate-300">Saldo Pendiente</th>
+                    <th className="px-4 py-3 text-center font-semibold text-slate-300">Estado</th>
+                    <th className="px-4 py-3 text-right font-semibold text-slate-300">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {solicitudesPaginadas.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center text-slate-400 italic">
+                        {buscandoSolicitudes ? 'Cargando solicitudes...' : 'No se encontraron solicitudes con los filtros aplicados.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    solicitudesPaginadas.map((s) => (
+                      <tr
+                        key={s.id}
+                        className="hover:bg-white/[0.03] transition-colors cursor-pointer group"
+                        onClick={() => handleAbrirModalAbono(s)}
                       >
-                        {mediosPago.map((m) => (
-                          <option key={m.uuid} value={m.uuid}>
-                            {m.nombre} ({m.codigo})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-xs font-semibold text-slate-300 uppercase">
-                          Monto a Abonar (COP) *
-                        </label>
-                        {solicitudSeleccionada.balanceDue > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setMontoAbono(solicitudSeleccionada.balanceDue)}
-                            className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline"
+                        <td className="px-4 py-3">
+                          <span className="font-mono text-xs font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30 group-hover:border-indigo-500">
+                            {s.number}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-white">{s.customerName}</div>
+                          {s.customerDocument && (
+                            <div className="text-xs text-slate-400 font-mono">Doc: {s.customerDocument}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-400 font-mono">
+                          {new Date(s.createdAt).toLocaleDateString('es-CO')}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-200">
+                          ${s.total.toLocaleString('es-CO')}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-emerald-400">
+                          ${s.paidAmount.toLocaleString('es-CO')}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-bold">
+                          <span className={s.balanceDue > 0 ? 'text-rose-400' : 'text-emerald-400'}>
+                            ${s.balanceDue.toLocaleString('es-CO')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant={s.balanceDue > 0 ? 'warning' : 'success'}>
+                            {s.balanceDue > 0 ? 'Con Saldo' : 'Saldada'}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => handleAbrirModalAbono(s)}
                           >
-                            Pagar Saldo Completo
-                          </button>
-                        )}
-                      </div>
-                      <Input
-                        type="number"
-                        value={montoAbono}
-                        onChange={(e) => setMontoAbono(Number(e.target.value))}
-                        min={1}
-                        fullWidth
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <Input
-                        label="Referencia o Comprobante Bancario (Opcional)"
-                        value={referenciaPago}
-                        onChange={(e) => setReferenciaPago(e.target.value)}
-                        placeholder="Ej: Aprobación #782910, Nequi ref, etc."
-                        fullWidth
-                      />
-                    </div>
-                  </div>
-
-                  {/* Resumen del impacto del abono */}
-                  {montoAbono > 0 && (
-                    <div className="p-3.5 rounded-xl bg-slate-900/90 border border-white/5 flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-400">Nuevo Saldo Resultante:</span>
-                      <span className={`font-black ${montoAbono >= solicitudSeleccionada.balanceDue ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        ${Math.max(0, solicitudSeleccionada.balanceDue - montoAbono).toLocaleString('es-CO')}{' '}
-                        {montoAbono >= solicitudSeleccionada.balanceDue ? '(¡Saldado al 100%!)' : ''}
-                      </span>
-                    </div>
+                            💰 Abonar
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
                   )}
+                </tbody>
+              </table>
+            </div>
 
-                  <div className="flex justify-end pt-2">
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      loading={procesandoAbono}
-                      disabled={montoAbono <= 0}
-                      onClick={handleRegistrarAbono}
-                    >
-                      💰 Confirmar y Registrar Abono
-                    </Button>
-                  </div>
+            {/* Barra de Paginación */}
+            <div className="p-4 border-t border-white/10 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+              <div className="flex items-center gap-3">
+                <span>
+                  Mostrando{' '}
+                  <strong className="text-white">
+                    {solicitudesFiltradas.length > 0 ? (paginaActual - 1) * itemsPorPagina + 1 : 0}
+                  </strong>{' '}
+                  a{' '}
+                  <strong className="text-white">
+                    {Math.min(paginaActual * itemsPorPagina, solicitudesFiltradas.length)}
+                  </strong>{' '}
+                  de <strong className="text-white">{solicitudesFiltradas.length}</strong> solicitudes
+                </span>
+
+                <div className="flex items-center gap-1.5 border-l pl-3 border-white/10">
+                  <span>Por página:</span>
+                  <select
+                    value={itemsPorPagina}
+                    onChange={(e) => setItemsPorPagina(Number(e.target.value))}
+                    className="bg-slate-900 border border-white/10 rounded px-2 py-0.5 text-white"
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
                 </div>
               </div>
-            ) : (
-              <div className="p-16 text-center text-slate-400 bg-slate-900/50 rounded-3xl border border-dashed border-white/10 flex flex-col items-center justify-center space-y-2">
-                <span className="text-3xl">👈</span>
-                <span className="text-sm font-semibold">Seleccione una solicitud a la izquierda</span>
-                <span className="text-xs text-slate-500">
-                  Podrá revisar el saldo y registrar el abono en tiempo real.
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={paginaActual <= 1}
+                  onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
+                >
+                  ← Anterior
+                </Button>
+                <span className="font-mono px-2 py-1 bg-slate-900 rounded border border-white/5 text-white font-bold">
+                  {paginaActual} / {totalPaginas}
                 </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={paginaActual >= totalPaginas}
+                  onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+                >
+                  Siguiente →
+                </Button>
               </div>
-            )}
-          </div>
+            </div>
+          </Card>
         </div>
       )}
 
       {/* PESTAÑA 2: HISTORIAL DE PAGOS */}
       {tabActiva === 'historial' && (
         <Card className="overflow-hidden bg-slate-900/80 border border-white/10 rounded-3xl shadow-2xl">
-          <div className="p-5 border-b border-white/10 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-5 border-b border-white/10 bg-slate-950/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <span>📑</span> Historial de Recaudos y Pagos Registrados
@@ -547,9 +603,19 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
                 Transacciones de dinero registradas por caja, transferencias o datáfono.
               </p>
             </div>
-            <Button size="sm" variant="secondary" onClick={cargarHistorial} disabled={cargandoHistorial}>
-              {cargandoHistorial ? 'Cargando...' : '🔄 Refrescar'}
-            </Button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-64">
+                <Input
+                  value={busquedaHistorial}
+                  onChange={(e) => setBusquedaHistorial(e.target.value)}
+                  placeholder="Buscar en historial..."
+                />
+              </div>
+              <Button size="sm" variant="secondary" onClick={cargarHistorial} disabled={cargandoHistorial}>
+                {cargandoHistorial ? 'Cargando...' : '🔄 Refrescar'}
+              </Button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -566,14 +632,14 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {historialPagos.length === 0 ? (
+                {historialPaginado.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
                       {cargandoHistorial ? 'Cargando historial...' : 'No hay pagos registrados aún.'}
                     </td>
                   </tr>
                 ) : (
-                  historialPagos.map((p) => (
+                  historialPaginado.map((p) => (
                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-slate-300">
                         {new Date(p.receivedAt).toLocaleString('es-CO')}
@@ -600,6 +666,58 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
               </tbody>
             </table>
           </div>
+
+          {/* Barra de Paginación Historial */}
+          <div className="p-4 border-t border-white/10 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+            <div className="flex items-center gap-3">
+              <span>
+                Mostrando{' '}
+                <strong className="text-white">
+                  {historialFiltrado.length > 0 ? (paginaHistorial - 1) * itemsHistorialPorPagina + 1 : 0}
+                </strong>{' '}
+                a{' '}
+                <strong className="text-white">
+                  {Math.min(paginaHistorial * itemsHistorialPorPagina, historialFiltrado.length)}
+                </strong>{' '}
+                de <strong className="text-white">{historialFiltrado.length}</strong> pagos registrados
+              </span>
+
+              <div className="flex items-center gap-1.5 border-l pl-3 border-white/10">
+                <span>Por página:</span>
+                <select
+                  value={itemsHistorialPorPagina}
+                  onChange={(e) => setItemsHistorialPorPagina(Number(e.target.value))}
+                  className="bg-slate-900 border border-white/10 rounded px-2 py-0.5 text-white"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={paginaHistorial <= 1}
+                onClick={() => setPaginaHistorial((p) => Math.max(1, p - 1))}
+              >
+                ← Anterior
+              </Button>
+              <span className="font-mono px-2 py-1 bg-slate-900 rounded border border-white/5 text-white font-bold">
+                {paginaHistorial} / {totalPaginasHistorial}
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={paginaHistorial >= totalPaginasHistorial}
+                onClick={() => setPaginaHistorial((p) => Math.min(totalPaginasHistorial, p + 1))}
+              >
+                Siguiente →
+              </Button>
+            </div>
+          </div>
         </Card>
       )}
 
@@ -609,6 +727,160 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
           <ModuloCaja userRole={userRole} token={token} />
         </div>
       )}
+
+      {/* MODAL PARA REGISTRAR ABONO (SIN SCROLLING) */}
+      <Modal
+        isOpen={isModalAbonoOpen && !!solicitudAbono}
+        onClose={() => {
+          if (!procesandoAbono) {
+            setIsModalAbonoOpen(false);
+            setSolicitudAbono(null);
+          }
+        }}
+        title={`Registrar Abono · ${solicitudAbono?.number ?? ''}`}
+        size="lg"
+      >
+        {solicitudAbono && (
+          <div className="space-y-5 p-1">
+            {/* Cabecera y Resumen de Totales Compacto Estilo Solicitud */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-slate-950/80 rounded-2xl border border-white/10">
+              <div>
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Cliente</span>
+                <div className="font-bold text-white text-sm mt-0.5 truncate">{solicitudAbono.customerName}</div>
+                {solicitudAbono.customerDocument && (
+                  <div className="text-xs text-slate-400 font-mono">Doc: {solicitudAbono.customerDocument}</div>
+                )}
+              </div>
+
+              <div>
+                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total / Ya Abonado</span>
+                <div className="font-mono text-sm text-slate-300 mt-0.5">
+                  Total: <strong className="text-white">${solicitudAbono.total.toLocaleString('es-CO')}</strong>
+                </div>
+                <div className="font-mono text-xs text-emerald-400">
+                  Abonado: ${solicitudAbono.paidAmount.toLocaleString('es-CO')}
+                </div>
+              </div>
+
+              <div className="border-t md:border-t-0 md:border-l md:pl-3 pt-2 md:pt-0 border-white/10">
+                <span className="text-[11px] font-semibold text-rose-300 uppercase tracking-wider">Saldo Pendiente</span>
+                <div className="text-xl font-black font-mono text-rose-400 mt-0.5">
+                  ${solicitudAbono.balanceDue.toLocaleString('es-CO')}
+                </div>
+              </div>
+            </div>
+
+            {/* Formulario Compacto Estilo SolicitudCapturaMixta */}
+            <div className="space-y-4">
+              {/* Fila 1: Instrumento (~60%) y Monto (~40%) en la misma fila */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div className="md:col-span-7">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                    Instrumento de Pago *
+                  </label>
+                  <select
+                    value={metodoPagoId}
+                    onChange={(e) => setMetodoPagoId(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {mediosPago.map((m) => (
+                      <option key={m.uuid} value={m.uuid}>
+                        {m.codigo} - {m.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-300 uppercase">
+                      Monto a Abonar (COP) *
+                    </label>
+                    {solicitudAbono.balanceDue > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setMontoAbono(solicitudAbono.balanceDue)}
+                        className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline"
+                      >
+                        Pagar Saldo Total
+                      </button>
+                    )}
+                  </div>
+                  <Input
+                    type="number"
+                    value={montoAbono}
+                    onChange={(e) => setMontoAbono(Number(e.target.value))}
+                    min={1}
+                    fullWidth
+                  />
+                </div>
+              </div>
+
+              {/* Fila 2: Referencia / Comprobante */}
+              <div>
+                <Input
+                  label="Referencia / N° Transacción / Comprobante Bancario"
+                  value={referenciaPago}
+                  onChange={(e) => setReferenciaPago(e.target.value)}
+                  placeholder="Ej: Aprobación #123456, Nequi ref, etc."
+                  fullWidth
+                />
+              </div>
+
+              {/* Fila 3: Observaciones */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                  Observaciones del Recaudo / Pago
+                </label>
+                <textarea
+                  rows={2}
+                  value={observacionesPago}
+                  onChange={(e) => setObservacionesPago(e.target.value)}
+                  placeholder="Nota u observación opcional sobre este abono..."
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Resumen del impacto del abono */}
+              {montoAbono > 0 && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-white/10 flex items-center justify-between text-xs font-mono">
+                  <span className="text-slate-400">Nuevo Saldo Pendiente Resultante:</span>
+                  <span
+                    className={`font-black text-sm ${
+                      montoAbono >= solicitudAbono.balanceDue ? 'text-emerald-400' : 'text-amber-400'
+                    }`}
+                  >
+                    ${Math.max(0, solicitudAbono.balanceDue - montoAbono).toLocaleString('es-CO')}{' '}
+                    {montoAbono >= solicitudAbono.balanceDue ? '(¡Saldada al 100%!)' : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Acciones del Modal */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+              <Button
+                variant="secondary"
+                disabled={procesandoAbono}
+                onClick={() => {
+                  setIsModalAbonoOpen(false);
+                  setSolicitudAbono(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                loading={procesandoAbono}
+                disabled={montoAbono <= 0 || procesandoAbono}
+                onClick={handleRegistrarAbono}
+              >
+                💰 Confirmar y Registrar Abono
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
