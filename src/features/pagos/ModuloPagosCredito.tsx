@@ -1173,22 +1173,28 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
       >
         {solicitudAbono && (
           <div className="space-y-4 p-1">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-slate-950/80 rounded-xl border border-white/10 text-xs">
-              <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase">Cliente</span>
-                <div className="font-bold text-white truncate mt-0.5">{solicitudAbono.customerName}</div>
-                {solicitudAbono.customerDocument && (
-                  <div className="text-[11px] text-slate-400 font-mono">Doc: {solicitudAbono.customerDocument}</div>
-                )}
+            <div className="p-3 bg-slate-950/80 rounded-xl border border-white/10 text-xs space-y-2">
+              <div className="flex items-center justify-between text-xs pb-1.5 border-b border-white/5">
+                <span className="text-[11px] text-slate-400">Cliente: <strong className="text-white font-medium">{solicitudAbono.customerName}</strong>{solicitudAbono.customerDocument ? ` (${solicitudAbono.customerDocument})` : ''}</span>
+                <span className="text-[11px] text-indigo-400 font-mono font-bold">{solicitudAbono.number}</span>
               </div>
-              <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase">Total / Abonado</span>
-                <div className="font-mono text-slate-200 mt-0.5">${solicitudAbono.total.toLocaleString('es-CO')}</div>
-                <div className="font-mono text-emerald-400">${solicitudAbono.paidAmount.toLocaleString('es-CO')}</div>
-              </div>
-              <div>
-                <span className="text-[10px] font-semibold text-rose-300 uppercase">Saldo Pendiente</span>
-                <div className="text-base font-black font-mono text-rose-400 mt-0.5">${solicitudAbono.balanceDue.toLocaleString('es-CO')}</div>
+              <div className="grid grid-cols-4 gap-2 text-center font-mono">
+                <div className="bg-slate-900/60 p-2 rounded-lg border border-white/5">
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-sans">Orden</span>
+                  <span className="font-bold text-indigo-400 truncate block text-xs mt-0.5">{solicitudAbono.number}</span>
+                </div>
+                <div className="bg-slate-900/60 p-2 rounded-lg border border-white/5">
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-sans">Total</span>
+                  <span className="font-bold text-white block text-xs mt-0.5">${solicitudAbono.total.toLocaleString('es-CO')}</span>
+                </div>
+                <div className="bg-slate-900/60 p-2 rounded-lg border border-white/5">
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-sans">Abonado</span>
+                  <span className="font-bold text-emerald-400 block text-xs mt-0.5">${solicitudAbono.paidAmount.toLocaleString('es-CO')}</span>
+                </div>
+                <div className="bg-rose-950/30 p-2 rounded-lg border border-rose-500/20">
+                  <span className="text-[9px] text-rose-300 uppercase tracking-wider block font-sans font-bold">Saldo</span>
+                  <span className="font-black text-rose-400 block text-xs mt-0.5">${solicitudAbono.balanceDue.toLocaleString('es-CO')}</span>
+                </div>
               </div>
             </div>
 
