@@ -1,5 +1,5 @@
 node_modules
-dist
+# dist incluido para builds locales
 .git
 .vscode
 npm-debug.log*
