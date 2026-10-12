@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowPathIcon, BanknotesIcon, ClipboardDocumentListIcon, CubeIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
 import { dashboardApi } from '../../services/dashboardApi';
 import type { DashboardMetricasDto } from '../../types/dashboard';
-import { Card, Badge, Button, StatsCard, StatsCardGroup } from '@farutech/design-system';
+import { Badge, Button, StatsCard, StatsCardGroup } from '@farutech/design-system';
 
 interface DashboardOperativoProps {
   token?: string;
@@ -51,48 +51,76 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
   }, [token]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Encabezado y configuración de widgets */}
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0 }}>📊 Tablero de Control Operativo en Tiempo Real</h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: '4px 0 0 0' }}>
-              Monitoreo del motor POS, órdenes de trabajo satélite y flujo de entregas (RF-9.1, RF-9.2)
-            </p>
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Encabezado Glassmorphism estilo Apple / Vercel */}
+      <div className="relative overflow-hidden rounded-3xl p-6 bg-slate-900/80 backdrop-blur-2xl border border-white/10 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/70 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+              Operación · Tiempo Real POS & Taller
+            </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>Widgets Visibles:</span>
-            <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-              <input type="checkbox" checked={mostrarCanales} onChange={(e) => setMostrarCanales(e.target.checked)} />
-              Canales
-            </label>
-            <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-              <input type="checkbox" checked={mostrarUltimasSolicitudes} onChange={(e) => setMostrarUltimasSolicitudes(e.target.checked)} />
-              Solicitudes
-            </label>
-            <label style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-              <input type="checkbox" checked={mostrarColaTaller} onChange={(e) => setMostrarColaTaller(e.target.checked)} />
-              Taller
-            </label>
-            <Button variant="secondary" size="sm" onClick={cargarMetricas}>
-              <ArrowPathIcon aria-hidden="true" data-icon="inline-start" />
-              Actualizar
-            </Button>
-          </div>
+          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2">
+            <span>📊</span> Tablero de Control Operativo en Tiempo Real
+          </h1>
+          <p className="text-xs md:text-sm text-slate-400">
+            Monitoreo del motor POS, órdenes de trabajo satélite y flujo de entregas (RF-9.1, RF-9.2)
+          </p>
         </div>
-      </Card>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="bg-slate-950/90 px-3 py-1.5 rounded-xl border border-white/10 flex items-center gap-3 text-xs text-slate-300 shadow-inner">
+            <span className="font-semibold text-slate-400">Widgets Visibles:</span>
+            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors">
+              <input
+                type="checkbox"
+                aria-label="Canales"
+                checked={mostrarCanales}
+                onChange={(e) => setMostrarCanales(e.target.checked)}
+                className="rounded border-slate-700 bg-slate-900 text-indigo-500 focus:ring-indigo-400"
+              />
+              <span>Canales</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors">
+              <input
+                type="checkbox"
+                aria-label="Solicitudes"
+                checked={mostrarUltimasSolicitudes}
+                onChange={(e) => setMostrarUltimasSolicitudes(e.target.checked)}
+                className="rounded border-slate-700 bg-slate-900 text-indigo-500 focus:ring-indigo-400"
+              />
+              <span>Solicitudes</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors">
+              <input
+                type="checkbox"
+                aria-label="Taller"
+                checked={mostrarColaTaller}
+                onChange={(e) => setMostrarColaTaller(e.target.checked)}
+                className="rounded border-slate-700 bg-slate-900 text-indigo-500 focus:ring-indigo-400"
+              />
+              <span>Taller</span>
+            </label>
+          </div>
+
+          <Button variant="secondary" size="sm" onClick={cargarMetricas}>
+            <ArrowPathIcon aria-hidden="true" className="w-4 h-4 mr-1 inline" />
+            Actualizar
+          </Button>
+        </div>
+      </div>
 
       {errorMsg && (
-        <div style={{ padding: '12px', background: '#fee2e2', color: '#991b1b', borderRadius: '6px', fontSize: '0.875rem' }}>
-          {errorMsg}
+        <div className="p-4 bg-rose-950/40 border border-rose-800/50 text-rose-300 rounded-2xl text-sm flex items-center justify-between backdrop-blur-md shadow-lg">
+          <div>{errorMsg}</div>
+          <button onClick={() => setErrorMsg(null)} className="text-rose-400 font-bold ml-2">✕</button>
         </div>
       )}
 
       {loading && !metricas ? (
-        <Card>
-          <p style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>Cargando indicadores operativos en vivo...</p>
-        </Card>
+        <div className="p-12 text-center text-slate-400 bg-slate-900/60 rounded-3xl border border-white/10 backdrop-blur-md">
+          Cargando indicadores operativos en vivo...
+        </div>
       ) : metricas ? (
         <>
           {/* Tarjetas KPI Superiores usando Farutech Design System */}
@@ -133,72 +161,62 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
 
           {/* Gráfico / Distribución por Canales de Origen */}
           {mostrarCanales && (
-            <Card>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '16px' }}>
-                Distribución por Canal de Origen (RF-8.1, RF-8.2)
+            <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-4">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <span>📡</span> Distribución por Canal de Origen (RF-8.1, RF-8.2)
               </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 {metricas.distribucionCanales.map((c) => (
                   <div
                     key={c.canalCodigo}
-                    style={{
-                      padding: '16px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--color-border)',
-                      background: 'var(--color-surface-hover)',
-                    }}
+                    className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 hover:border-white/20 transition-all space-y-2"
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.canalNombre}</span>
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-sm text-white">{c.canalNombre}</span>
                       <Badge variant="info">{c.cantidadSolicitudes} ped.</Badge>
                     </div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '8px', color: 'var(--color-text)' }}>
+                    <div className="text-xl font-bold font-mono text-emerald-400">
                       ${c.totalVentas.toLocaleString('es-CO')}
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                    <div className="text-[11px] text-slate-400">
                       Volumen transaccional asentado
                     </div>
                   </div>
                 ))}
               </div>
-            </Card>
+            </div>
           )}
 
-          {/* Dos Columnas: Solicitudes Recientes y Cola de Taller */}
-          <div style={{ display: 'grid', gridTemplateColumns: mostrarUltimasSolicitudes && mostrarColaTaller ? '1fr 1fr' : '1fr', gap: '20px' }}>
+          {/* Bento Grid: Solicitudes Recientes y Cola de Taller */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Últimas Solicitudes */}
             {mostrarUltimasSolicitudes && (
-              <Card>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Últimas Solicitudes</h3>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Top 5</span>
+              <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-4">
+                <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <span>🧾</span> Últimas Solicitudes
+                  </h3>
+                  <span className="text-xs text-slate-400 font-mono">Top 5</span>
                 </div>
                 {metricas.ultimasSolicitudes.length === 0 ? (
-                  <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No hay solicitudes registradas.</p>
+                  <p className="text-xs text-slate-400 italic">No hay solicitudes registradas.</p>
                 ) : (
-                  <div className="dashboard-records-scroll" role="region" aria-label="Últimas solicitudes" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="dashboard-records-scroll space-y-2" role="region" aria-label="Últimas solicitudes">
                     {metricas.ultimasSolicitudes.map((s) => (
                       <div
                         key={s.uuid}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--color-border)',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
+                        className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/5 hover:border-white/15 transition-all flex justify-between items-center gap-3"
                       >
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                            {s.numeroDocumento} · <span style={{ fontWeight: 400 }}>{s.clienteNombre}</span>
+                          <div className="font-semibold text-sm text-white">
+                            <span className="font-mono text-indigo-400">{s.numeroDocumento}</span> · {s.clienteNombre}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                          <div className="text-xs text-slate-400 font-mono mt-0.5">
                             {new Date(s.fechaEmision).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })} · {s.canalNombre ?? 'Mostrador'}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>${s.total.toLocaleString('es-CO')}</div>
+                        <div className="text-right">
+                          <div className="font-mono font-bold text-sm text-white">${s.total.toLocaleString('es-CO')}</div>
                           <Badge variant={s.estado === 'ASENTADO' ? 'success' : s.estado === 'BORRADOR' ? 'neutral' : 'danger'}>
                             {s.estado}
                           </Badge>
@@ -207,44 +225,39 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
                     ))}
                   </div>
                 )}
-              </Card>
+              </div>
             )}
 
             {/* Trabajos Activos en Taller */}
             {mostrarColaTaller && (
-              <Card>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>Trabajos en Taller (OT Satélite)</h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-4">
+                <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <span>⚙️</span> Trabajos en Taller (OT Satélite)
+                  </h3>
+                  <div className="flex items-center gap-2">
                     {onNavigateTab && (
                       <Button variant="secondary" size="sm" onClick={() => onNavigateTab('taller')}>
                         Ir a cola de taller →
                       </Button>
                     )}
-                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Prioridad / Franja</span>
+                    <span className="text-xs text-slate-400 font-mono">Prioridad</span>
                   </div>
                 </div>
                 {metricas.itemsEnTaller.length === 0 ? (
-                  <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No hay trabajos activos en taller.</p>
+                  <p className="text-xs text-slate-400 italic">No hay trabajos activos en taller.</p>
                 ) : (
-                  <div className="dashboard-records-scroll" role="region" aria-label="Trabajos activos en taller" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="dashboard-records-scroll space-y-2" role="region" aria-label="Trabajos activos en taller">
                     {metricas.itemsEnTaller.map((it) => (
                       <div
                         key={it.itemUuid}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--color-border)',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
+                        className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/5 hover:border-white/15 transition-all flex justify-between items-center gap-3"
                       >
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                            {it.otNumero} · {it.itemDescripcion}
+                          <div className="font-semibold text-sm text-white">
+                            <span className="font-mono text-amber-400">{it.otNumero}</span> · {it.itemDescripcion}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                          <div className="text-xs text-slate-400 mt-0.5">
                             Promesa: {it.franjaCompromiso || 'Sin franja'}
                           </div>
                         </div>
@@ -255,7 +268,7 @@ export const DashboardOperativo: React.FC<DashboardOperativoProps> = ({ token, o
                     ))}
                   </div>
                 )}
-              </Card>
+              </div>
             )}
           </div>
         </>
