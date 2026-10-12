@@ -547,7 +547,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
               </h2>
               <span className="text-xs text-gray-400">Solo inserción (append-only)</span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
               <table className="w-full text-left text-sm text-gray-300">
                 <thead className="bg-white/5 text-xs uppercase text-gray-400 font-semibold border-b border-white/10">
                   <tr>

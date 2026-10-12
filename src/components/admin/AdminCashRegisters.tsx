@@ -398,7 +398,7 @@ export default function AdminCashRegisters({ token }: AdminCashRegistersProps) {
 
       {/* Tabla de Cajas con Controles de Paginación */}
       <div className="bg-gray-900/70 border border-white/10 rounded-xl overflow-hidden shadow-lg flex flex-col">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-white/10 bg-gray-950/80 text-gray-400 font-semibold text-[11px] uppercase tracking-wider">

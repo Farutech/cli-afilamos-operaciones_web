@@ -790,7 +790,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
             <table className="min-w-full divide-y divide-white/10 text-sm">
               <thead className="bg-white/[0.02]">
                 <tr>

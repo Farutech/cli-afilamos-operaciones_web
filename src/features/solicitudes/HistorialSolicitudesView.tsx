@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { CRUDTable, Badge, Button, Modal } from '@farutech/design-system';
-import { solicitudesApi } from '../../services/solicitudesApi';
+import { Eye, Printer, Pencil } from 'lucide-react';
+import { solicitudesApi } from '@/services/solicitudesApi';
 import { ModalComprobanteSolicitud } from './ModalComprobanteSolicitud';
 
 export interface SolicitudHistorialItem {
@@ -191,35 +192,35 @@ export function HistorialSolicitudesView({
               label: 'Acciones',
               align: 'right',
               render: (_: any, r: SolicitudHistorialItem) => (
-                <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                  <Button
-                    variant="secondary"
-                    size="sm"
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    type="button"
                     onClick={() => setSolicitudDetalle(r)}
-                    className="px-2.5 py-1 text-xs font-semibold"
+                    className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs"
                     title="Ver resumen y detalle de la solicitud"
                   >
-                    👁️ Ver
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
+                    <Eye className="w-3.5 h-3.5" />
+                    <span className="sr-only sm:not-sr-only">Ver</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setSolicitudParaImprimir(r)}
-                    className="px-2.5 py-1 text-xs font-semibold text-indigo-300 hover:text-white hover:bg-indigo-600/40 border-indigo-500/30"
+                    className="p-1.5 rounded-lg border border-indigo-500/30 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs"
                     title="Imprimir comprobante o reporte de la solicitud"
                   >
-                    🖨️ Imprimir
-                  </Button>
+                    <Printer className="w-3.5 h-3.5" />
+                    <span className="sr-only sm:not-sr-only">Imprimir</span>
+                  </button>
                   {r.estado === 'BORRADOR' && onEditarSolicitud && (
-                    <Button
-                      variant="primary"
-                      size="sm"
+                    <button
+                      type="button"
                       onClick={() => onEditarSolicitud(r)}
-                      className="px-2.5 py-1 text-xs bg-amber-600 hover:bg-amber-500 text-white font-semibold shadow-sm"
-                      title="Continuar con la captura y asentar la solicitud"
+                      className="p-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 hover:bg-amber-600/60 text-amber-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs"
+                      title="Continuar captura y asentar solicitud"
                     >
-                      ✏️ Editar
-                    </Button>
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span className="sr-only sm:not-sr-only">Editar</span>
+                    </button>
                   )}
                 </div>
               ),
