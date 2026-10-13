@@ -75,6 +75,17 @@ export const entregasApi = {
   },
 
   async generarEntregaConsolidada(data: GenerarEntregaConsolidadaData, token?: string): Promise<RemisionDetalle> {
+    const requestAdvancesMap: Record<string, number> = {};
+    if (Array.isArray(data.requestAdvanceApplications)) {
+      for (const item of data.requestAdvanceApplications) {
+        if (item.documentId && item.advanceToApply > 0) {
+          requestAdvancesMap[item.documentId] = item.advanceToApply;
+        }
+      }
+    } else if (data.requestAdvanceApplications && typeof data.requestAdvanceApplications === 'object') {
+      Object.assign(requestAdvancesMap, data.requestAdvanceApplications);
+    }
+
     const res = await api.post<any>(
       '/deliveries',
       {
@@ -83,7 +94,7 @@ export const entregasApi = {
           documentItemId: i.itemPublicId,
           quantityToDeliver: i.cantidad,
         })),
-        requestAdvanceApplications: data.requestAdvanceApplications || [],
+        ...(Object.keys(requestAdvancesMap).length > 0 ? { requestAdvanceApplications: requestAdvancesMap } : {}),
         customerAdvanceToApply: data.customerAdvanceToApply ?? 0,
         settlementPayments:
           data.pagoLiquidacion && data.pagoLiquidacion.monto > 0
