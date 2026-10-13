@@ -56,7 +56,7 @@ const getBaseUrl = (): string => {
     const { hostname } = window.location
 
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return API_URLS.local
+      return `http://${hostname}:5005/api/v1`
     }
 
     if (hostname.includes('afilamoshermanos.com')) {

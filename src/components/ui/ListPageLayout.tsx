@@ -111,9 +111,9 @@ export const ListPageLayout: React.FC<ListPageLayoutProps> = ({
           )}
         </div>
 
-        {/* Acciones principales en fila única */}
+        {/* Acciones principales en fila única (sin wrap de texto) */}
         {actions && (
-          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 whitespace-nowrap [&_button]:whitespace-nowrap [&_a]:whitespace-nowrap">
             {actions}
           </div>
         )}

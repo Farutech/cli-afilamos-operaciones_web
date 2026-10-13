@@ -5,9 +5,9 @@ import {
   Zap,
   ArrowRight,
   ClipboardList,
-  X,
   ShieldCheck,
 } from 'lucide-react';
+import { ListPageLayout, StandardDataTable, type ColumnDef } from '../../components/ui';
 import { tallerApi } from '../../services/tallerApi';
 import type {
   ItemTaller,
@@ -26,6 +26,7 @@ interface ColaTallerProps {
     codigo: string;
     rol: string;
   };
+  vistaSwitch?: React.ReactNode;
 }
 
 const ETAPAS_FILTRO = [
@@ -42,6 +43,7 @@ const ETAPAS_FILTRO = [
 export const ColaTaller: React.FC<ColaTallerProps> = ({
   token,
   usuarioActual = { codigo: 'OP-01', rol: 'OPERARIO' },
+  vistaSwitch,
 }) => {
   const [items, setItems] = useState<ItemTaller[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +51,16 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
   const [busqueda, setBusqueda] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (errorMsg || successMsg) {
+      const timer = setTimeout(() => {
+        setErrorMsg(null);
+        setSuccessMsg(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg, successMsg]);
 
   // Paginación estándar
   const [paginaActual, setPaginaActual] = useState(1);
@@ -126,7 +138,6 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
     setPaginaActual(1);
   }, [filtroEtapa, busqueda, itemsPorPagina]);
 
-  const totalPaginas = Math.max(1, Math.ceil(itemsFiltrados.length / itemsPorPagina));
   const itemsPaginados = useMemo(() => {
     const inicio = (paginaActual - 1) * itemsPorPagina;
     return itemsFiltrados.slice(inicio, inicio + itemsPorPagina);
@@ -272,252 +283,224 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Barra de estado y acciones rápidas */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="text-xs text-slate-400 font-medium">
-          Ítems en proceso técnico y cola de afilado ({items.length})
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" size="sm" onClick={cargarCola} disabled={loading}>
-            {loading ? 'Actualizando...' : 'Refrescar'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Alertas */}
-      {errorMsg && (
-        <div className="p-4 bg-red-950/60 border border-red-800/50 text-red-300 rounded-lg text-sm flex items-center justify-between">
-          <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-red-200 font-bold">✕</button>
-        </div>
-      )}
-      {successMsg && (
-        <div className="p-4 bg-emerald-950/60 border border-emerald-800/50 text-emerald-300 rounded-lg text-sm flex items-center justify-between">
-          <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-200 font-bold">✕</button>
-        </div>
-      )}
-
-      {/* Filtros */}
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  const columns: ColumnDef<ItemTaller>[] = useMemo(
+    () => [
+      {
+        key: 'ot',
+        header: 'OT / Solicitud',
+        render: (item: ItemTaller) => (
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">Filtrar por Etapa</label>
-            <select
-              value={filtroEtapa}
-              onChange={(e) => setFiltroEtapa(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-700 bg-slate-950 text-white rounded-md text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              {ETAPAS_FILTRO.map((et) => (
-                <option key={et.codigo} value={et.codigo}>
-                  {et.label}
-                </option>
-              ))}
-            </select>
+            <div className="font-bold text-white">{item.documentoOtNumero}</div>
+            <div className="text-xs text-slate-400">Sol: {item.documentoSolicitudNumero}</div>
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-slate-400 mb-1">Buscar OT / Solicitud / Cliente / Ítem</label>
-            <Input
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por código de ítem, OT, solicitud o cliente..."
-            />
-          </div>
-        </div>
-      </Card>
-
-      {/* Tabla de la Cola */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-800 text-sm">
-            <thead className="bg-slate-950/80">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">OT / Solicitud</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">Ítem & Detalle</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">Cliente</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">Franja Compromiso</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">Etapa Actual</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-400">Acciones Técnicas</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
-              {itemsPaginados.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                    {loading ? 'Cargando cola de taller...' : 'No hay ítems en la cola de taller para los criterios seleccionados.'}
-                  </td>
-                </tr>
-              ) : (
-                itemsPaginados.map((item) => (
-                  <tr key={item.itemPublicId} className="hover:bg-slate-950/80 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-white">{item.documentoOtNumero}</div>
-                      <div className="text-xs text-slate-400">Sol: {item.documentoSolicitudNumero}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-white">{item.descripcion}</div>
-                      <div className="text-xs text-gray-400">
-                        Cód: {item.itemCodigo} | Cant: {item.cantidad}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-white">{item.clienteNombre}</div>
-                      <div className="text-xs text-gray-400">{item.clienteTelefono}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-950/60 text-amber-300 border border-amber-500/30">
-                        ⏱ {item.franjaCompromiso || 'Sin Franja'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={getBadgeVariant(item.etapaActualCodigo)}>
-                        {item.etapaActualNombre}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {/* Botón Recepción Rápida (T032) */}
-                        {item.etapaActualCodigo === 'RECEPCION_TECNICA' && (
-                          <button
-                            type="button"
-                            onClick={() => handleRecepcionRapida(item)}
-                            disabled={loading}
-                            title="Recibir en Taller"
-                            className="p-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 hover:bg-amber-600/50 text-amber-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
-                          >
-                            <Zap className="w-3.5 h-3.5" />
-                            <span className="sr-only sm:not-sr-only text-[11px] font-semibold">Recibir</span>
-                            <span className="sr-only">⚡ Recibir en Taller</span>
-                          </button>
-                        )}
-
-                        {/* Transiciones permitidas */}
-                        {item.transicionesPermitidas.map((tr) => (
-                          <button
-                            key={tr.transicionPublicId}
-                            type="button"
-                            onClick={() => handleAbrirTransicion(item, tr)}
-                            disabled={loading}
-                            title={`Avanzar a: ${tr.nombre}`}
-                            className="p-1.5 rounded-lg border border-indigo-500/30 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
-                          >
-                            <ArrowRight className="w-3.5 h-3.5" />
-                            <span className="sr-only sm:not-sr-only text-[11px] font-semibold max-w-[120px] truncate">{tr.nombre}</span>
-                            {tr.requiereAprobacion && <ShieldCheck className="w-3 h-3 text-amber-400" />}
-                          </button>
-                        ))}
-
-                        {item.esFinal && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Finalizado
-                          </span>
-                        )}
-
-                        {/* Registrar Actividad (T034) */}
-                        {!item.esFinal && (
-                          <button
-                            type="button"
-                            onClick={() => handleAbrirActividad(item)}
-                            disabled={loading}
-                            title="Registrar bitácora / actividad técnica"
-                            className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
-                          >
-                            <ClipboardList className="w-3.5 h-3.5" />
-                            <span className="sr-only sm:not-sr-only text-[11px]">Actividad</span>
-                          </button>
-                        )}
-
-                        {/* Historial / Ver Detalle */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemSeleccionado(item);
-                            setIsHistorialModalOpen(true);
-                          }}
-                          title="Ver detalle e historial de la orden de trabajo"
-                          className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span className="sr-only sm:not-sr-only text-[11px]">Ver</span>
-                          <span className="sr-only">👁 Ver</span>
-                        </button>
-
-                        {/* Cancelar ítem (Invariante #8) */}
-                        {!item.esFinal && (
-                          <button
-                            type="button"
-                            onClick={() => handleAbrirCancelar(item)}
-                            disabled={loading}
-                            title="Cancelar orden de ítem (Invariante #8)"
-                            className="p-1.5 rounded-lg border border-rose-500/40 bg-rose-950/40 hover:bg-rose-600/60 text-rose-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            <span className="sr-only">✕</span>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Paginación Estandarizada */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
-          <div className="flex items-center gap-3">
-            <span>
-              Mostrando{' '}
-              <strong className="text-white">
-                {itemsFiltrados.length > 0 ? (paginaActual - 1) * itemsPorPagina + 1 : 0}
-              </strong>{' '}
-              a{' '}
-              <strong className="text-white">
-                {Math.min(paginaActual * itemsPorPagina, itemsFiltrados.length)}
-              </strong>{' '}
-              de <strong className="text-white">{itemsFiltrados.length}</strong> órdenes
-            </span>
-
-            <div className="flex items-center gap-1.5 border-l pl-3 border-slate-800">
-              <span>Por página:</span>
-              <select
-                value={itemsPorPagina}
-                onChange={(e) => setItemsPorPagina(Number(e.target.value))}
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-white text-xs cursor-pointer"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
+        ),
+      },
+      {
+        key: 'item',
+        header: 'Ítem & Detalle',
+        render: (item: ItemTaller) => (
+          <div>
+            <div className="font-medium text-white">{item.descripcion}</div>
+            <div className="text-xs text-slate-400">
+              Cód: {item.itemCodigo} | Cant: {item.cantidad}
             </div>
           </div>
+        ),
+      },
+      {
+        key: 'cliente',
+        header: 'Cliente',
+        render: (item: ItemTaller) => (
+          <div>
+            <div className="text-white font-medium">{item.clienteNombre}</div>
+            <div className="text-xs text-slate-400">{item.clienteTelefono}</div>
+          </div>
+        ),
+      },
+      {
+        key: 'franja',
+        header: 'Franja Compromiso',
+        render: (item: ItemTaller) => (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-950/60 text-amber-300 border border-amber-500/30">
+            ⏱ {item.franjaCompromiso || 'Sin Franja'}
+          </span>
+        ),
+      },
+      {
+        key: 'etapa',
+        header: 'Etapa Actual',
+        render: (item: ItemTaller) => (
+          <Badge variant={getBadgeVariant(item.etapaActualCodigo)}>
+            {item.etapaActualNombre}
+          </Badge>
+        ),
+      },
+      {
+        key: 'acciones',
+        header: 'Acciones Técnicas',
+        align: 'right',
+        render: (item: ItemTaller) => (
+          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+            {item.etapaActualCodigo === 'RECEPCION_TECNICA' && (
+              <button
+                type="button"
+                onClick={() => handleRecepcionRapida(item)}
+                disabled={loading}
+                title="Recibir en Taller"
+                className="p-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 hover:bg-amber-600/50 text-amber-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold">⚡ Recibir en Taller</span>
+              </button>
+            )}
 
+            {item.transicionesPermitidas.map((tr: TransicionDisponible) => (
+              <button
+                key={tr.transicionPublicId}
+                type="button"
+                onClick={() => handleAbrirTransicion(item, tr)}
+                disabled={loading}
+                title={`Avanzar a: ${tr.nombre}`}
+                className="p-1.5 rounded-lg border border-indigo-500/30 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold max-w-[120px] truncate">{tr.nombre}</span>
+                {tr.requiereAprobacion && <ShieldCheck className="w-3 h-3 text-amber-400" />}
+              </button>
+            ))}
+
+            {item.esFinal && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Finalizado
+              </span>
+            )}
+
+            {!item.esFinal && (
+              <button
+                type="button"
+                onClick={() => handleAbrirActividad(item)}
+                disabled={loading}
+                title="Registrar bitácora / actividad técnica"
+                className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span className="text-[11px]">Actividad</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setItemSeleccionado(item);
+                setIsHistorialModalOpen(true);
+              }}
+              title="Ver detalle e historial de la orden de trabajo"
+              className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Ver</span>
+            </button>
+
+            {!item.esFinal && (
+              <button
+                type="button"
+                onClick={() => handleAbrirCancelar(item)}
+                disabled={loading}
+                title="Cancelar orden de ítem (Invariante #8)"
+                className="p-1.5 rounded-lg border border-rose-500/40 bg-rose-950/40 hover:bg-rose-600/60 text-rose-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+              >
+                <span>✕</span>
+              </button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [loading]
+  );
+
+  return (
+    <div className="space-y-4">
+      <ListPageLayout
+        title="Cola de Trabajo de Taller"
+        eyebrow="OPERACIÓN · TALLER"
+        description="Control de procesos, cola de afilado y asignación técnica en tiempo real."
+        actions={
           <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={paginaActual <= 1}
-              onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
-            >
-              ← Anterior
-            </Button>
-            <span className="font-mono px-2.5 py-1 bg-slate-900 rounded border border-slate-700 text-white font-bold">
-              {paginaActual} / {totalPaginas}
-            </span>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={paginaActual >= totalPaginas}
-              onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
-            >
-              Siguiente →
+            {vistaSwitch}
+            <Button variant="secondary" size="sm" onClick={cargarCola} disabled={loading} className="cursor-pointer">
+              {loading ? 'Actualizando...' : 'Refrescar'}
             </Button>
           </div>
-        </div>
-      </Card>
+        }
+        search={{
+          value: busqueda,
+          onChange: (val) => {
+            setBusqueda(val);
+            setPaginaActual(1);
+          },
+          placeholder: 'Buscar por OT, solicitud, cliente o código...',
+          isSearching: loading,
+        }}
+        filters={
+          <select
+            value={filtroEtapa}
+            onChange={(e) => {
+              setFiltroEtapa(e.target.value);
+              setPaginaActual(1);
+            }}
+            className="h-8 px-2.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+          >
+            {ETAPAS_FILTRO.map((et) => (
+              <option key={et.codigo} value={et.codigo}>
+                {et.label}
+              </option>
+            ))}
+          </select>
+        }
+        onRefresh={cargarCola}
+        isRefreshing={loading}
+      >
+        {(errorMsg || successMsg) && (
+          <div
+            className={`mb-3 flex items-center justify-between gap-3 p-3 rounded-lg border text-xs shadow-md backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-300 ${
+              errorMsg
+                ? 'bg-rose-950/40 border-rose-800/40 text-rose-300'
+                : 'bg-emerald-950/40 border-emerald-800/40 text-emerald-300'
+            }`}
+          >
+            <span>{errorMsg || successMsg}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="text-slate-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        <StandardDataTable<ItemTaller>
+          columns={columns}
+          data={itemsPaginados}
+          keyExtractor={(item) => item.itemPublicId}
+          loading={loading && items.length === 0}
+          pagination={{
+            currentPage: paginaActual,
+            pageSize: itemsPorPagina,
+            totalItems: itemsFiltrados.length,
+            onPageChange: (p) => setPaginaActual(p),
+            onPageSizeChange: (s) => {
+              setItemsPorPagina(s);
+              setPaginaActual(1);
+            },
+          }}
+          emptyMessage="No hay ítems en la cola de taller para los criterios seleccionados."
+        />
+      </ListPageLayout>
 
       {/* MODAL TRANSICIÓN */}
       {isTransicionModalOpen && itemSeleccionado && transicionSeleccionada && (

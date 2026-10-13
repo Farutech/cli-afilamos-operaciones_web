@@ -110,6 +110,16 @@ export default function AdminClients({ token }: { token: string }) {
     }
   }, [page, pageSize, query, token]);
 
+  useEffect(() => {
+    if (error || notice) {
+      const timer = setTimeout(() => {
+        setError('');
+        setNotice('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, notice]);
+
   async function saveCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!modal) return;
@@ -298,23 +308,33 @@ export default function AdminClients({ token }: { token: string }) {
           <Button
             variant="primary"
             onClick={() => setModal('new')}
-            className="flex items-center gap-2"
+            className="whitespace-nowrap flex items-center gap-1.5"
           >
-            <Users className="w-4 h-4 mr-2" /> Nuevo cliente
+            <Users className="w-4 h-4 mr-1.5" />
+            <span>Nuevo cliente</span>
           </Button>
         }
         onRefresh={loadCustomers}
         isRefreshing={isRefreshing}
       >
-        {error && (
-          <p className="form-error api-feedback mb-3 text-sm text-rose-400" role="alert">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p className="api-notice mb-3 text-sm text-sky-400" role="status">
-            {notice}
-          </p>
+        {(error || notice) && (
+          <div className="mb-3 flex items-center justify-between gap-3 p-3 rounded-lg border text-xs animate-in fade-in slide-in-from-top-2 duration-300 shadow-md backdrop-blur-md bg-rose-950/40 border-rose-800/40 text-rose-300">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">{error ? '⚠️ Error:' : 'ℹ️ Aviso:'}</span>
+              <span>{error || notice}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setError('');
+                setNotice('');
+              }}
+              className="text-slate-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
+              title="Cerrar alerta"
+            >
+              ✕
+            </button>
+          </div>
         )}
 
         <StandardDataTable

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Badge, Button, Modal } from '@farutech/design-system';
-import { Eye, Printer, Pencil } from 'lucide-react';
+import { Eye, Printer, Pencil, Plus } from 'lucide-react';
 import { ListPageLayout, StandardDataTable, type ColumnDef } from '@/components/ui';
 import { solicitudesApi } from '@/services/solicitudesApi';
 import { ModalComprobanteSolicitud } from './ModalComprobanteSolicitud';
@@ -34,7 +34,7 @@ interface HistorialSolicitudesViewProps {
 }
 
 export function HistorialSolicitudesView({
-  onNuevaSolicitud: _onNuevaSolicitud,
+  onNuevaSolicitud,
   onEditarSolicitud,
   solicitudesExtra = [],
   token,
@@ -266,6 +266,16 @@ export function HistorialSolicitudesView({
         title="Historial de Solicitudes"
         eyebrow="OPERACIÓN · SOLICITUDES"
         description="Consulta y seguimiento integral de solicitudes de servicio, borradores y órdenes asentadas."
+        actions={
+          <button
+            type="button"
+            onClick={onNuevaSolicitud}
+            className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm hover:shadow whitespace-nowrap cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Nueva Solicitud</span>
+          </button>
+        }
         search={{
           value: query,
           onChange: (val) => {

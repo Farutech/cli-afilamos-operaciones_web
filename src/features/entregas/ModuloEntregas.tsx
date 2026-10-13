@@ -10,7 +10,7 @@ import {
   EmptyState,
 } from '@farutech/design-system';
 import { FileText, Printer, CheckCircle } from 'lucide-react';
-import { DocumentPrintPreviewModal, type DocumentPrintData } from '../../components/ui';
+import { DocumentPrintPreviewModal, type DocumentPrintData, ListPageLayout } from '../../components/ui';
 import { entregasApi } from '../../services/entregasApi';
 import { catalogosApi } from '../../services/catalogosApi';
 import type {
@@ -63,6 +63,16 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const [busqueda, setBusqueda] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (errorMsg || successMsg) {
+      const timer = setTimeout(() => {
+        setErrorMsg(null);
+        setSuccessMsg(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg, successMsg]);
 
   // Pestaña activa: 'solicitudes' (Por Solicitud) | 'cliente' (Entrega Consolidada por Cliente)
   const [vistaActiva, setVistaActiva] = useState<'solicitudes' | 'cliente'>('solicitudes');
@@ -678,69 +688,66 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Encabezado Glassmorphism Unificado */}
-      <div className="relative overflow-hidden rounded-3xl p-6 bg-slate-900/80 backdrop-blur-2xl border border-white/10 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/70 px-2.5 py-0.5 rounded-full border border-indigo-500/20">
-              Operación · Despachos y Liquidación
-            </span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">
-            Módulo de Entregas y Despacho
-          </h1>
-          <p className="text-xs md:text-sm text-slate-400">
-            Consulte órdenes listas de taller paginadas, liquide saldos con formato sobrio libre de scroll y despache formalmente.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={cargarItemsListos} disabled={loading} className="min-h-[44px]">
+    <div className="space-y-4 max-w-7xl mx-auto pb-12">
+      <ListPageLayout
+        title="Módulo de Entregas y Despacho"
+        eyebrow="OPERACIÓN · DESPACHOS"
+        description="Consulte órdenes listas de taller, liquide saldos con formato unificado y despache formalmente."
+        actions={
+          <Button variant="secondary" size="sm" onClick={cargarItemsListos} disabled={loading} className="cursor-pointer">
             {loading ? 'Sincronizando...' : '🔄 Actualizar'}
           </Button>
-
-          {/* Selector de Pestañas Sobrio */}
-          <div className="bg-slate-950/90 p-1 rounded-2xl border border-white/10 flex items-center gap-1 shadow-inner">
+        }
+        filters={
+          <div className="bg-slate-950/90 p-0.5 rounded-lg border border-slate-700/80 flex items-center gap-1">
             <button
               type="button"
               onClick={() => setVistaActiva('solicitudes')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 min-h-[44px] cursor-pointer ${
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer ${
                 vistaActiva === 'solicitudes'
-                  ? 'bg-indigo-600 text-white shadow-lg'
+                  ? 'bg-indigo-600 text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <span>📋</span>
-              <span>Por Solicitud</span>
+              <span>📋 Por Solicitud</span>
             </button>
             <button
               type="button"
               onClick={() => setVistaActiva('cliente')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 min-h-[44px] cursor-pointer ${
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer ${
                 vistaActiva === 'cliente'
-                  ? 'bg-indigo-600 text-white shadow-lg'
+                  ? 'bg-indigo-600 text-white shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <span>👥</span>
-              <span>Por Cliente (Consolidada)</span>
+              <span>👥 Por Cliente (Consolidada)</span>
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Alertas dinámicas */}
-      {errorMsg && (
-        <Alert variant="error" onClose={() => setErrorMsg(null)}>
-          {errorMsg}
-        </Alert>
-      )}
-      {successMsg && (
-        <Alert variant="success" onClose={() => setSuccessMsg(null)}>
-          {successMsg}
-        </Alert>
-      )}
+        }
+        onRefresh={cargarItemsListos}
+        isRefreshing={loading}
+      >
+        {(errorMsg || successMsg) && (
+          <div
+            className={`mb-4 flex items-center justify-between gap-3 p-3 rounded-lg border text-xs shadow-md backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-300 ${
+              errorMsg
+                ? 'bg-rose-950/40 border-rose-800/40 text-rose-300'
+                : 'bg-emerald-950/40 border-emerald-800/40 text-emerald-300'
+            }`}
+          >
+            <span>{errorMsg || successMsg}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="text-slate-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
       {/* DETALLE DE REMISIÓN ACTIVA / RESULTADO INDIVIDUAL */}
       {remisionActiva && (
@@ -1689,6 +1696,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           defaultFormat="pos-80mm"
         />
       )}
+      </ListPageLayout>
     </div>
   );
 };

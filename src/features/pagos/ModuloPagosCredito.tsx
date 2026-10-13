@@ -13,6 +13,7 @@ import {
   DollarSign,
   Receipt,
 } from 'lucide-react';
+import { ListPageLayout } from '../../components/ui';
 import { api } from '../../services/api';
 import { catalogosApi } from '../../services/catalogosApi';
 import type { MedioPagoInstrumento } from '../../types/catalogos';
@@ -92,6 +93,16 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
   // Mensajes globales
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (errorMsg || successMsg) {
+      const timer = setTimeout(() => {
+        setErrorMsg(null);
+        setSuccessMsg(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg, successMsg]);
 
   // Cargar Medios de Pago
   useEffect(() => {
@@ -386,72 +397,64 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
   }, [mediosPago, metodoPagoId]);
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto pb-8">
-      {/* Header Glassmorphic Compacto */}
-      <div className="relative overflow-hidden rounded-2xl p-4 bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-indigo-400 bg-indigo-950/70 px-2 py-0.5 rounded-full border border-indigo-500/20">
-              Operación · Tesorería & Cartera
-            </span>
+    <div className="space-y-4 max-w-7xl mx-auto pb-8">
+      <ListPageLayout
+        title="Pagos, Abonos y Crédito"
+        eyebrow="OPERACIÓN · TESORERÍA & CARTERA"
+        description="Gestión ágil de recaudos, abonos a solicitudes e historial de movimientos."
+        filters={
+          <div className="bg-slate-950/90 p-0.5 rounded-lg border border-slate-700/80 flex items-center gap-1">
+            <button
+              onClick={() => setTabActiva('abono')}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                tabActiva === 'abono'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Formulario ágil de recaudo y abonos con selector modal"
+            >
+              <DollarSign className="w-3.5 h-3.5" />
+              <span>Registrar Abono</span>
+            </button>
+            <button
+              onClick={() => setTabActiva('historial')}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                tabActiva === 'historial'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Historial de recaudos con cuadre de caja diario"
+            >
+              <Receipt className="w-3.5 h-3.5" />
+              <span>Historial de Pagos</span>
+            </button>
           </div>
-          <h1 className="text-xl md:text-2xl font-black text-white tracking-tight mt-0.5">
-            Pagos, Abonos y Crédito
-          </h1>
-        </div>
-
-        {/* Selector de Pestañas SaaS con Iconos */}
-        <div className="bg-slate-950/90 p-1 rounded-xl border border-white/10 flex items-center gap-1 shadow-inner self-start md:self-auto">
-          <button
-            onClick={() => setTabActiva('abono')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              tabActiva === 'abono'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
+        }
+      >
+        {(errorMsg || successMsg) && (
+          <div
+            className={`mb-3 flex items-center justify-between gap-3 p-3 rounded-lg border text-xs shadow-md backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-300 ${
+              errorMsg
+                ? 'bg-rose-950/40 border-rose-800/40 text-rose-300'
+                : 'bg-emerald-950/40 border-emerald-800/40 text-emerald-300'
             }`}
-            title="Formulario ágil de recaudo y abonos con selector modal"
           >
-            <DollarSign className="w-3.5 h-3.5" />
-            <span>Registrar Abono</span>
-          </button>
-          <button
-            onClick={() => setTabActiva('historial')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-              tabActiva === 'historial'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Historial de recaudos con cuadre de caja diario"
-          >
-            <Receipt className="w-3.5 h-3.5" />
-            <span>Historial de Pagos</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Alertas */}
-      {errorMsg && (
-        <div className="p-3 bg-rose-950/50 border border-rose-800/60 text-rose-300 rounded-xl text-xs flex items-center justify-between backdrop-blur-md shadow-md">
-          <div className="flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{errorMsg}</span>
+            <div className="flex items-center gap-2">
+              {errorMsg ? <span>⚠️</span> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+              <span>{errorMsg || successMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="text-slate-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button onClick={() => setErrorMsg(null)} className="text-rose-400 hover:text-white p-1">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-      {successMsg && (
-        <div className="p-3 bg-emerald-950/50 border border-emerald-800/60 text-emerald-300 rounded-xl text-xs flex items-center justify-between backdrop-blur-md shadow-md">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>{successMsg}</span>
-          </div>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-white p-1">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+        )}
 
       {/* PESTAÑA 1: FORMULARIO CON VINCULACIÓN (ENTITY PICKER) SIN SCROLL */}
       {tabActiva === 'abono' && (
@@ -1320,6 +1323,7 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
           </div>
         )}
       </Modal>
+      </ListPageLayout>
     </div>
   );
 };

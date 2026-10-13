@@ -1,7 +1,8 @@
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { Toaster, toast } from 'sonner';
-import { DesignSystemProvider, SegmentedControl } from '@farutech/design-system';
+import { DesignSystemProvider } from '@farutech/design-system';
+import { ListPageLayout } from '@/components/ui';
 
 import { apiBaseUrl } from '@/lib/api-client';
 import { LoginScreen } from '@/features/auth/LoginScreen';
@@ -559,7 +560,11 @@ export function App() {
       <OrdeonDashboard
         userName={session.name}
         token={session.token}
-        onNew={() => setNewRequestOpen(true)}
+        onNew={() => {
+          setSolicitudEnEdicion(null);
+          setActiveSection('Solicitudes');
+          setSolicitudesSubView('nueva');
+        }}
         showCashSummary={session.canAccessCash === true}
         onNavigateSection={setActiveSection}
       />
@@ -572,35 +577,16 @@ export function App() {
     content = <AdminCreditLimits token={session.token} />;
   } else if (activeSection === 'Historial de solicitudes') {
     content = (
-      <div className="page-content">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">ADMINISTRACIÓN · CLIENTES</p>
-            <h1>Historial de Solicitudes</h1>
-            <p className="heading-copy">Consulta cronológica de pedidos y solicitudes emitidas por clientes.</p>
-          </div>
-          <button
-            className="primary-button"
-            onClick={() => {
-              setSolicitudEnEdicion(null);
-              setActiveSection('Solicitudes');
-              setSolicitudesSubView('nueva');
-            }}
-          >
-            + Nueva Solicitud
-          </button>
-        </div>
-        <HistorialSolicitudesView
-          onNuevaSolicitud={() => {
-            setSolicitudEnEdicion(null);
-            setActiveSection('Solicitudes');
-            setSolicitudesSubView('nueva');
-          }}
-          onEditarSolicitud={handleEditarSolicitud}
-          solicitudesExtra={solicitudesCreadas}
-          token={session?.token}
-        />
-      </div>
+      <HistorialSolicitudesView
+        onNuevaSolicitud={() => {
+          setSolicitudEnEdicion(null);
+          setActiveSection('Solicitudes');
+          setSolicitudesSubView('nueva');
+        }}
+        onEditarSolicitud={handleEditarSolicitud}
+        solicitudesExtra={solicitudesCreadas}
+        token={session?.token}
+      />
     );
   } else if (activeSection === 'Solicitudes') {
     content = solicitudesSubView === 'lista' ? (
@@ -614,29 +600,23 @@ export function App() {
         token={session?.token}
       />
     ) : (
-      <div className="page-content">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">OPERACIÓN · SOLICITUDES</p>
-            <h1>Captura de Solicitudes (POS)</h1>
-            <p className="heading-copy">Captura y asienta solicitudes operativas de afilado y servicios.</p>
-          </div>
-          <SegmentedControl
-            size="sm"
-            value={solicitudesSubView}
-            onChange={(val) => {
-              if (val === 'nueva') {
-                setSolicitudEnEdicion(null);
-              }
-              setSolicitudesSubView(val as 'nueva' | 'lista');
+      <ListPageLayout
+        title={solicitudEnEdicion ? `Modificando Solicitud: ${solicitudEnEdicion.numeroDocumentoVisible || 'Borrador'}` : 'Captura de Solicitudes (POS)'}
+        eyebrow="OPERACIÓN · SOLICITUDES"
+        description="Captura y asienta solicitudes operativas de afilado, servicios e ítems de mostrador."
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              setSolicitudEnEdicion(null);
+              setSolicitudesSubView('lista');
             }}
-            options={[
-              { value: 'nueva', label: 'Captura (POS)' },
-              { value: 'lista', label: 'Historial' },
-            ]}
-          />
-        </div>
-
+            className="h-8 px-3.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <span>← Volver al Historial</span>
+          </button>
+        }
+      >
         <SolicitudCapturaMixta
           canales={canales}
           tiposDocumento={tiposDoc}
@@ -648,46 +628,44 @@ export function App() {
             setSolicitudesSubView('lista');
           }}
         />
-      </div>
+      </ListPageLayout>
     );
   } else if (activeSection === 'Órdenes de trabajo') {
-    content = (
-      <div className="page-content">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">OPERACIÓN · TALLER</p>
-            <h1>Órdenes de Trabajo</h1>
-            <p className="heading-copy">Control de procesos, cola de afilado y tablero Kanban en tiempo real.</p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              className={tallerSubView === 'cola' ? 'primary-button' : 'secondary-button'}
-              onClick={() => setTallerSubView('cola')}
-            >
-              Cola de Trabajo
-            </button>
-            <button
-              className={tallerSubView === 'kanban' ? 'primary-button' : 'secondary-button'}
-              onClick={() => setTallerSubView('kanban')}
-            >
-              Tablero Kanban
-            </button>
-          </div>
-        </div>
-
-        {tallerSubView === 'cola' ? (
-          <ColaTaller
-            token={session.token || ''}
-            usuarioActual={{
-              publicId: session.publicId || 'usr-001',
-              codigo: session.codigo || 'admin',
-              rol: session.role || 'Administrador',
-            }}
-          />
-        ) : (
-          <TableroKanbanTaller />
-        )}
-      </div>
+    content = tallerSubView === 'cola' ? (
+      <ColaTaller
+        token={session.token || ''}
+        usuarioActual={{
+          publicId: session.publicId || 'usr-001',
+          codigo: session.codigo || 'admin',
+          rol: session.role || 'Administrador',
+        }}
+        vistaSwitch={
+          <button
+            type="button"
+            onClick={() => setTallerSubView('kanban')}
+            className="h-8 px-3 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <span>Tablero Kanban →</span>
+          </button>
+        }
+      />
+    ) : (
+      <ListPageLayout
+        title="Tablero Kanban de Taller"
+        eyebrow="OPERACIÓN · TALLER"
+        description="Visualización y seguimiento ágil de órdenes de trabajo por estado."
+        actions={
+          <button
+            type="button"
+            onClick={() => setTallerSubView('cola')}
+            className="h-8 px-3 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <span>← Ver Cola de Trabajo</span>
+          </button>
+        }
+      >
+        <TableroKanbanTaller />
+      </ListPageLayout>
     );
   } else if (activeSection === 'Entregas') {
     content = (
@@ -710,16 +688,13 @@ export function App() {
     );
   } else if (activeSection === 'Caja y turnos') {
     content = (
-      <div className="page-content">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">OPERACIÓN · TESORERÍA</p>
-            <h1>Caja y Turnos</h1>
-            <p className="heading-copy">Apertura, cierre de turnos, arqueos y registro de movimientos de caja.</p>
-          </div>
-        </div>
+      <ListPageLayout
+        title="Caja y Turnos"
+        eyebrow="OPERACIÓN · TESORERÍA"
+        description="Apertura, cierre de turnos, arqueos y registro de movimientos de caja."
+      >
         <ModuloCaja userRole={session.role} token={session.token} />
-      </div>
+      </ListPageLayout>
     );
   } else if (
     activeSection === 'Cajas y terminales' ||
@@ -754,16 +729,13 @@ export function App() {
     activeSection === 'Reporte de auditoría'
   ) {
     content = (
-      <div className="page-content">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">ADMINISTRACIÓN · REPORTES</p>
-            <h1>Reportes y Estadísticas</h1>
-            <p className="heading-copy">Métricas operativas, financieras y auditoría de movimientos.</p>
-          </div>
-        </div>
+      <ListPageLayout
+        title="Reportes y Estadísticas"
+        eyebrow="ADMINISTRACIÓN · REPORTES"
+        description="Métricas operativas, financieras y auditoría de movimientos."
+      >
         <ModuloReportes token={session.token} />
-      </div>
+      </ListPageLayout>
     );
   } else if (activeSection === 'Auditoría' || activeSection === 'Registro de actividad') {
     content = <AdminAuditLogs token={session.token} />;
