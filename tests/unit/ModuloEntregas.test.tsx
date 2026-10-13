@@ -201,4 +201,27 @@ describe('ModuloEntregas Component', () => {
       );
     });
   });
+
+  it('llama payment-methods una sola vez al montar y 0 veces al volver a entrar (P1)', async () => {
+    const { getPaymentMethodsFetchCount, resetPaymentMethodsCache } = await import('@/services/catalogosApi');
+    resetPaymentMethodsCache();
+
+    // Primer montaje: debe realizar 1 petición
+    const { unmount } = render(<ModuloEntregas />);
+
+    await waitFor(() => {
+      expect(getPaymentMethodsFetchCount()).toBe(1);
+    });
+
+    // Desmontar el módulo y volver a entrar
+    unmount();
+    render(<ModuloEntregas />);
+
+    // Al volver a entrar, el contador de peticiones a /catalogs/payment-methods debe seguir en 1 (0 peticiones adicionales)
+    await waitFor(() => {
+      expect(screen.getByText('SOL-0001')).toBeInTheDocument();
+    });
+    expect(getPaymentMethodsFetchCount()).toBe(1);
+  });
 });
+

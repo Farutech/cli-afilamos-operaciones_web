@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, Button, Badge, Input, Modal } from '@farutech/design-system';
 import { FileText } from 'lucide-react';
 import { entregasApi } from '../../services/entregasApi';
@@ -23,9 +23,11 @@ interface ModuloEntregasProps {
   };
 }
 
+const EMPTY_INSTRUMENTOS: MedioPagoInstrumento[] = [];
+
 export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   token,
-  instrumentosPago: instrumentosProps = [],
+  instrumentosPago: instrumentosProps = EMPTY_INSTRUMENTOS,
   usuarioActual = { id: 1, publicId: 'usr-01', codigo: 'CAJ-01', rol: 'Cajero' },
 }) => {
   const [itemsListos, setItemsListos] = useState<ItemListoEntrega[]>([]);
@@ -80,13 +82,21 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const [recibidoPorDocumento, setRecibidoPorDocumento] = useState('');
 
   // Cargar medios de pago del catálogo si no vinieron en props
+  const fetchedMediosRef = useRef(false);
   useEffect(() => {
     let activo = true;
+    if (instrumentosProps.length > 0) {
+      setMediosPago(instrumentosProps);
+      return;
+    }
+    if (fetchedMediosRef.current && mediosPago.length > 0) {
+      return;
+    }
     const fetchMedios = async () => {
-      if (instrumentosProps.length > 0) return;
       try {
         const arbol = await catalogosApi.getMediosPagoArbol();
         if (activo) {
+          fetchedMediosRef.current = true;
           const list = arbol.categorias.flatMap((c) => c.instrumentos).filter((m) => m.activo);
           if (list.length > 0) {
             setMediosPago(list);
@@ -110,7 +120,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     };
     fetchMedios();
     return () => { activo = false; };
-  }, [instrumentosProps]);
+  }, [instrumentosProps, mediosPago.length]);
 
   const cargarItemsListos = useCallback(async () => {
     setLoading(true);

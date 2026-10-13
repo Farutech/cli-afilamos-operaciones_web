@@ -248,6 +248,17 @@ export const PARAMETROS_SISTEMA_DEFAULT: ParametroSistema[] = [
   },
 ];
 
+let cachedMediosPagoArbol: { categorias: MedioPagoCategoria[] } | null = null;
+let pendingMediosPagoArbolPromise: Promise<{ categorias: MedioPagoCategoria[] }> | null = null;
+let paymentMethodsFetchCount = 0;
+
+export const getPaymentMethodsFetchCount = (): number => paymentMethodsFetchCount;
+export const resetPaymentMethodsCache = (): void => {
+  cachedMediosPagoArbol = null;
+  pendingMediosPagoArbolPromise = null;
+  paymentMethodsFetchCount = 0;
+};
+
 export const catalogosApi = {
   async getItems(params?: { q?: string; naturaleza?: string; activo?: boolean; page?: number; pageSize?: number }): Promise<ItemsResponse> {
     const searchParams = new URLSearchParams();
@@ -592,53 +603,20 @@ export const catalogosApi = {
     await api.patch<void>(`/configuration/cash-registers/${uuid}/active`, { activo, active: activo }, token);
   },
 
-  async getMediosPagoArbol(token?: string): Promise<{ categorias: MedioPagoCategoria[] }> {
-    try {
-      const res = await api.get<any>('/catalogs/payment-methods', token);
-      const raw = Array.isArray(res) ? res : (res?.paymentMethods || res?.items || []);
-      const instrumentos: MedioPagoInstrumento[] = raw.map((m: any) => ({
-        uuid: m.id || m.uuid,
-        codigo: m.code || m.codigo,
-        nombre: m.name || m.nombre,
-        categoria: m.type || 'EFECTIVO',
-        esHoja: true,
-        requiereReferencia: (m.code || m.codigo) !== 'EFECTIVO',
-        isDefault: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
-        esPorDefecto: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
-        activo: m.active ?? true,
-      }));
-
-      const categorias: MedioPagoCategoria[] = [
-        {
-          uuid: 'cat-efectivo',
-          codigo: 'EFECTIVO',
-          nombre: 'Efectivo',
-          orden: 1,
-          activo: true,
-          instrumentos: instrumentos.filter((i) => i.categoria === 'EFECTIVO'),
-        },
-        {
-          uuid: 'cat-electronico',
-          codigo: 'ELECTRONICO',
-          nombre: 'Electrónico y Transferencias',
-          orden: 2,
-          activo: true,
-          instrumentos: instrumentos.filter((i) => i.categoria !== 'EFECTIVO'),
-        },
-      ];
-
-      return { categorias };
-    } catch {
-      return { categorias: [] };
+  async getMediosPagoArbol(token?: string, forceRefresh = false): Promise<{ categorias: MedioPagoCategoria[] }> {
+    if (!forceRefresh && cachedMediosPagoArbol) {
+      return cachedMediosPagoArbol;
     }
-  },
+    if (!forceRefresh && pendingMediosPagoArbolPromise) {
+      return pendingMediosPagoArbolPromise;
+    }
 
-  async getMediosPagoInstrumentos(token?: string): Promise<{ instrumentos: MedioPagoInstrumento[] }> {
-    try {
-      const res = await api.get<any>('/catalogs/payment-methods', token);
-      const raw = Array.isArray(res) ? res : (res?.paymentMethods || res?.instrumentos || res?.items || []);
-      return {
-        instrumentos: raw.map((m: any) => ({
+    pendingMediosPagoArbolPromise = (async () => {
+      try {
+        paymentMethodsFetchCount++;
+        const res = await api.get<any>('/catalogs/payment-methods', token);
+        const raw = Array.isArray(res) ? res : (res?.paymentMethods || res?.items || []);
+        const instrumentos: MedioPagoInstrumento[] = raw.map((m: any) => ({
           uuid: m.id || m.uuid,
           codigo: m.code || m.codigo,
           nombre: m.name || m.nombre,
@@ -648,11 +626,44 @@ export const catalogosApi = {
           isDefault: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
           esPorDefecto: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
           activo: m.active ?? true,
-        })),
-      };
-    } catch {
-      return { instrumentos: [] };
-    }
+        }));
+
+        const categorias: MedioPagoCategoria[] = [
+          {
+            uuid: 'cat-efectivo',
+            codigo: 'EFECTIVO',
+            nombre: 'Efectivo',
+            orden: 1,
+            activo: true,
+            instrumentos: instrumentos.filter((i) => i.categoria === 'EFECTIVO'),
+          },
+          {
+            uuid: 'cat-electronico',
+            codigo: 'ELECTRONICO',
+            nombre: 'Electrónico y Transferencias',
+            orden: 2,
+            activo: true,
+            instrumentos: instrumentos.filter((i) => i.categoria !== 'EFECTIVO'),
+          },
+        ];
+
+        const result = { categorias };
+        cachedMediosPagoArbol = result;
+        return result;
+      } catch {
+        return { categorias: [] };
+      } finally {
+        pendingMediosPagoArbolPromise = null;
+      }
+    })();
+
+    return pendingMediosPagoArbolPromise;
+  },
+
+  async getMediosPagoInstrumentos(token?: string, forceRefresh = false): Promise<{ instrumentos: MedioPagoInstrumento[] }> {
+    const arbol = await this.getMediosPagoArbol(token, forceRefresh);
+    const instrumentos = arbol.categorias.flatMap((c) => c.instrumentos);
+    return { instrumentos };
   },
 
   async crearMedioPagoInstrumento(dto: {
