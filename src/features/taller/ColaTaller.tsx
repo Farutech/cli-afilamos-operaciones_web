@@ -274,16 +274,13 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Cola de Trabajo de Taller</h1>
-          <p className="text-sm text-slate-400">
-            Control técnico de ítems de servicio, órdenes de trabajo (OT) y transiciones de workflow.
-          </p>
+      {/* Barra de estado y acciones rápidas */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="text-xs text-slate-400 font-medium">
+          Ítems en proceso técnico y cola de afilado ({items.length})
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={cargarCola} disabled={loading}>
+          <Button variant="secondary" size="sm" onClick={cargarCola} disabled={loading}>
             {loading ? 'Actualizando...' : 'Refrescar'}
           </Button>
         </div>

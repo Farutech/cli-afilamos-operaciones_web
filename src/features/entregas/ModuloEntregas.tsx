@@ -44,6 +44,8 @@ const DEFAULT_EFECTIVO: MedioPagoInstrumento = {
   requiereReferencia: false,
   isDefault: true,
   esPorDefecto: true,
+  validaEnCierre: true,
+  permiteEnCierre: true,
   activo: true,
 };
 

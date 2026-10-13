@@ -147,6 +147,8 @@ export interface MedioPagoInstrumento {
   requiereReferencia: boolean;
   activo: boolean;
   diasCredito?: number;
+  validaEnCierre?: boolean;
+  permiteEnCierre?: boolean;
   isDefault?: boolean;
   esPorDefecto?: boolean;
 }

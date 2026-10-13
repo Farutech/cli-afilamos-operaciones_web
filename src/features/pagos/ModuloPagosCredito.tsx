@@ -676,15 +676,31 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
 
                 {/* Formas de Pago tipo Chips con Iconos */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-2">
-                    Forma de Pago *
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-semibold text-slate-300 uppercase">
+                      Forma de Pago *
+                    </label>
+                    {(() => {
+                      const mActual = mediosPago.find((m) => m.uuid === metodoPagoId);
+                      const valida = mActual?.validaEnCierre ?? !mActual?.codigo?.startsWith('CRED');
+                      return valida ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 font-medium">
+                          Valida en Cierre de Caja
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/60 text-amber-300 font-medium">
+                          Cobro Futuro / Cartera
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {mediosPago.map((m) => {
                       const isSelected = metodoPagoId === m.uuid;
                       const esEfectivo = m.codigo.includes('EFECTIVO');
                       const esTransf = m.codigo.includes('TRANSFERENCIA') || m.codigo.includes('NEQUI');
                       const esTarj = m.codigo.includes('DATAFONO') || m.codigo.includes('TARJETA');
+                      const esCred = m.codigo.startsWith('CRED');
 
                       return (
                         <button
@@ -702,6 +718,9 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
                           {esTarj && <CreditCard className="w-4 h-4" />}
                           {!esEfectivo && !esTransf && !esTarj && <Smartphone className="w-4 h-4" />}
                           <span className="truncate w-full text-center">{m.nombre.split(' ')[0]}</span>
+                          {esCred && (
+                            <span className="text-[9px] text-amber-300 font-normal">Cartera</span>
+                          )}
                         </button>
                       );
                     })}
@@ -1199,9 +1218,24 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                  Instrumento de Pago *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase">
+                    Instrumento de Pago *
+                  </label>
+                  {(() => {
+                    const mActual = mediosPago.find((m) => m.uuid === metodoPagoId);
+                    const valida = mActual?.validaEnCierre ?? !mActual?.codigo?.startsWith('CRED');
+                    return valida ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 font-medium">
+                        Valida en Cierre de Caja
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/60 text-amber-300 font-medium">
+                        Cobro Futuro / Cartera
+                      </span>
+                    );
+                  })()}
+                </div>
                 <select
                   value={metodoPagoId}
                   onChange={(e) => setMetodoPagoId(e.target.value)}
@@ -1209,7 +1243,7 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
                 >
                   {mediosPago.map((m) => (
                     <option key={m.uuid} value={m.uuid}>
-                      {m.codigo} - {m.nombre}
+                      {m.codigo} - {m.nombre} {m.validaEnCierre === false ? '(Cartera)' : ''}
                     </option>
                   ))}
                 </select>

@@ -1025,6 +1025,11 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                 />
               </div>
 
+              <div className="p-2.5 bg-slate-950/60 border border-slate-800 rounded-lg text-[11px] text-slate-400 flex items-center gap-2">
+                <span className="text-amber-400 font-bold">ℹ️ Cartera y Créditos:</span>
+                <span>Los pagos a crédito comercial (15, 30, 60, 90 y 120 días) representan cobro diferido; no requieren arqueo físico ni afectan el cuadre de este turno.</span>
+              </div>
+
               <div className="flex gap-2 justify-end pt-3 border-t border-slate-800">
                 <Button
                   type="button"

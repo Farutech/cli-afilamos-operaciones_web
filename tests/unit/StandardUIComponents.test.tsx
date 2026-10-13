@@ -162,7 +162,7 @@ describe('Standard UI Components Suite', () => {
       expect(handleChange).toHaveBeenCalledTimes(1);
       const nuevoPago = handleChange.mock.calls[0][0][0];
       expect(nuevoPago.monto).toBe(50000);
-      expect(nuevoPago.instrumentoNombre).toBe('Efectivo Caja');
+      expect(nuevoPago.instrumentoNombre).toBe('Efectivo');
     });
 
     it('muestra el banner de prelación de inventario si hay desglose mixto', () => {

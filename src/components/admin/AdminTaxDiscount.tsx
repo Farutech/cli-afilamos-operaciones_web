@@ -3,12 +3,12 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Eye,
   Pencil,
-  Search,
   Sliders,
   Percent,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { ParametroSistema } from '@/types/catalogos';
 
@@ -83,111 +83,99 @@ export default function AdminTaxDiscount({ token }: { token?: string }) {
     [params, query]
   );
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visible = useMemo(() => {
-    return filtered.slice((page - 1) * pageSize, page * pageSize);
-  }, [filtered, page, pageSize]);
+  const columns: ColumnDef<ParametroSistema>[] = [
+    {
+      key: 'parametro',
+      header: 'PARÁMETRO / DESCRIPCIÓN',
+      render: (param) => (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center shrink-0">
+            <Sliders className="w-4 h-4 text-violet-400" />
+          </div>
+          <div>
+            <strong className="text-white font-medium block">
+              {param.clave.replace(/_/g, ' ')}
+            </strong>
+            <span className="text-[11px] text-slate-400">{param.descripcion}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'clave',
+      header: 'CLAVE TÉCNICA',
+      render: (param) => <span className="font-mono text-xs text-amber-300">{param.clave}</span>,
+    },
+    {
+      key: 'valorJson',
+      header: 'VALOR CONFIGURADO',
+      align: 'right',
+      render: (param) => (
+        <span className="font-mono font-bold text-xs text-violet-300">
+          {param.valorJson} {param.clave.includes('PORCENTAJE') ? '%' : ''}
+        </span>
+      ),
+    },
+    {
+      key: 'categoria',
+      header: 'CATEGORÍA',
+      align: 'center',
+      render: (param) => (
+        <Badge variant={param.categoria === 'FISCAL' ? 'info' : 'neutral'}>
+          {param.categoria || 'SISTEMA'}
+        </Badge>
+      ),
+    },
+  ];
+
+  const rowActions: StandardRowAction<ParametroSistema>[] = [
+    {
+      label: 'Ver detalle',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (param) => setViewParam(param),
+    },
+    {
+      label: 'Editar valor',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: (param) => setModal(param),
+    },
+  ];
 
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ADMINISTRACIÓN · CATÁLOGOS</p>
-          <h1>Impuestos y parámetros</h1>
-          <p className="heading-copy">
-            Reglas de liquidación fiscal, límites de descuento y parámetros maestros de operación.
-          </p>
-        </div>
-      </div>
-
-      <section className="panel clients-panel">
-        <div className="panel-heading">
-          <div className="panel-title-row">
-            <h2>Parámetros Maestros</h2>
-          </div>
-          <div className="client-search">
-            <Search className="w-4 h-4" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar parámetro o clave..."
-              aria-label="Buscar parámetros"
-            />
-          </div>
-        </div>
-
-        <div className="client-table-head">
-          <span>PARÁMETRO</span>
-          <span>CLAVE</span>
-          <span>VALOR CONFIGURADO</span>
-          <span>CATEGORÍA</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {loading && params.length === 0 ? (
-          <div className="empty-state">Cargando parámetros…</div>
-        ) : visible.length === 0 ? (
-          <div className="empty-state">No hay parámetros coincidentes.</div>
-        ) : (
-          <div className="client-list">
-            {visible.map((param) => (
-              <div className="client-row" key={param.clave}>
-                <div className="client-cell-main">
-
-                  <div className="client-avatar">
-                  <Sliders className="w-4 h-4" />
-                </div>
-
-                  <div className="client-main">
-                  <strong>{param.clave.replace(/_/g, ' ')}</strong>
-                  <span>{param.descripcion}</span>
-                </div>
-
-                </div>
-                <span className="client-contact font-mono text-xs">{param.clave}</span>
-                <span className="client-orders font-bold text-violet-300">
-                  {param.valorJson} {param.clave.includes('PORCENTAJE') ? '%' : ''}
-                </span>
-                <span className="client-status">
-                  {param.categoria || 'SISTEMA'}
-                </span>
-                <div className="client-actions">
-                  <button
-                    className="icon-action"
-                    onClick={() => setViewParam(param)}
-                    aria-label={`Ver detalle de ${param.clave}`}
-                    title="Ver detalle completo"
-                  >
-                    <Eye className="w-4 h-4 text-violet-400" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => setModal(param)}
-                    aria-label={`Editar ${param.clave}`}
-                    title="Editar parámetro"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
-        <CrudPagination
-          currentPage={page}
-          totalPages={totalPages}
-          perPage={pageSize}
-          total={filtered.length}
-          onPageChange={(newPage) => setPage(newPage)}
-          onPerPageChange={(newSize) => {
-            setPageSize(newSize);
+      <ListPageLayout
+        title="Impuestos y parámetros"
+        eyebrow="ADMINISTRACIÓN · CATÁLOGOS"
+        description="Reglas de liquidación fiscal, límites de descuento y parámetros maestros de operación."
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
             setPage(1);
+          },
+          placeholder: 'Buscar parámetro o clave...',
+          isSearching: loading,
+        }}
+      >
+        <StandardDataTable<ParametroSistema>
+          columns={columns}
+          data={filtered.slice((page - 1) * pageSize, page * pageSize)}
+          keyExtractor={(param) => param.clave}
+          rowActions={rowActions}
+          loading={loading && params.length === 0}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalItems: filtered.length,
+            onPageChange: (p) => setPage(p),
+            onPageSizeChange: (s) => {
+              setPageSize(s);
+              setPage(1);
+            },
           }}
-          variant="dark"
+          emptyMessage="No hay parámetros coincidentes."
         />
-      </section>
+      </ListPageLayout>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal

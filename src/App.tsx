@@ -603,13 +603,23 @@ export function App() {
       </div>
     );
   } else if (activeSection === 'Solicitudes') {
-    content = (
+    content = solicitudesSubView === 'lista' ? (
+      <HistorialSolicitudesView
+        onNuevaSolicitud={() => {
+          setSolicitudEnEdicion(null);
+          setSolicitudesSubView('nueva');
+        }}
+        onEditarSolicitud={handleEditarSolicitud}
+        solicitudesExtra={solicitudesCreadas}
+        token={session?.token}
+      />
+    ) : (
       <div className="page-content">
         <div className="page-heading">
           <div>
             <p className="eyebrow">OPERACIÓN · SOLICITUDES</p>
-            <h1>Gestión de Solicitudes</h1>
-            <p className="heading-copy">Captura y consulta solicitudes operativas de afilado y servicios.</p>
+            <h1>Captura de Solicitudes (POS)</h1>
+            <p className="heading-copy">Captura y asienta solicitudes operativas de afilado y servicios.</p>
           </div>
           <SegmentedControl
             size="sm"
@@ -627,29 +637,17 @@ export function App() {
           />
         </div>
 
-        {solicitudesSubView === 'lista' ? (
-          <HistorialSolicitudesView
-            onNuevaSolicitud={() => {
-              setSolicitudEnEdicion(null);
-              setSolicitudesSubView('nueva');
-            }}
-            onEditarSolicitud={handleEditarSolicitud}
-            solicitudesExtra={solicitudesCreadas}
-            token={session?.token}
-          />
-        ) : (
-          <SolicitudCapturaMixta
-            canales={canales}
-            tiposDocumento={tiposDoc}
-            clientes={clientes}
-            onAsentarSolicitud={handleAsentarSolicitud}
-            solicitudInicial={solicitudEnEdicion}
-            onCancelarEdicion={() => {
-              setSolicitudEnEdicion(null);
-              setSolicitudesSubView('lista');
-            }}
-          />
-        )}
+        <SolicitudCapturaMixta
+          canales={canales}
+          tiposDocumento={tiposDoc}
+          clientes={clientes}
+          onAsentarSolicitud={handleAsentarSolicitud}
+          solicitudInicial={solicitudEnEdicion}
+          onCancelarEdicion={() => {
+            setSolicitudEnEdicion(null);
+            setSolicitudesSubView('lista');
+          }}
+        />
       </div>
     );
   } else if (activeSection === 'Órdenes de trabajo') {

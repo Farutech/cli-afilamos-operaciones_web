@@ -4,13 +4,13 @@ import {
   Eye,
   Pencil,
   Power,
-  Search,
   Layers,
   Ruler,
   FolderTree,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { UnidadPresentacion, CategoriaItem } from '@/types/catalogos';
 
@@ -154,145 +154,158 @@ export default function AdminUnitsCategories({ token }: { token?: string }) {
     });
   }, [items, activeTab, query]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visible = useMemo(() => {
-    return filtered.slice((page - 1) * pageSize, page * pageSize);
-  }, [filtered, page, pageSize]);
+  const columns: ColumnDef<UnitOrCatItem>[] = [
+    {
+      key: 'nombre',
+      header: 'NOMBRE / IDENTIFICACIÓN',
+      render: (item) => (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center shrink-0">
+            {item.tipo === 'UNIDAD' ? (
+              <Ruler className="w-4 h-4 text-sky-400" />
+            ) : (
+              <FolderTree className="w-4 h-4 text-indigo-400" />
+            )}
+          </div>
+          <div>
+            <strong className="text-white font-medium block">{item.nombre}</strong>
+            <span className="text-[11px] text-slate-400">{item.detalle}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'codigo',
+      header: 'CÓDIGO',
+      render: (item) => <span className="font-mono text-xs text-amber-300">{item.codigo}</span>,
+    },
+    {
+      key: 'tipo',
+      header: 'TIPO',
+      align: 'center',
+      render: (item) => (
+        <Badge variant={item.tipo === 'UNIDAD' ? 'info' : 'neutral'}>
+          {item.tipo === 'UNIDAD' ? 'Unidad' : 'Categoría'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (item) => (
+        <Badge variant={item.activo ? 'success' : 'neutral'}>
+          {item.activo ? 'Activo' : 'Inactivo'}
+        </Badge>
+      ),
+    },
+  ];
+
+  const rowActions: StandardRowAction<UnitOrCatItem>[] = [
+    {
+      label: 'Ver detalle',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (item) => setViewItem(item),
+    },
+    {
+      label: 'Editar registro',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: (item) => setModal(item),
+    },
+    {
+      label: 'Activar/Desactivar',
+      icon: <Power className="w-3.5 h-3.5" />,
+      onClick: (item) => toggleStatus(item),
+      variant: 'ghost',
+    },
+  ];
 
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ADMINISTRACIÓN · CATÁLOGOS</p>
-          <h1>Unidades y categorías</h1>
-          <p className="heading-copy">
-            Unidades de presentación de servicios/materiales y jerarquías de agrupación.
-          </p>
-        </div>
-        <button className="primary-button" onClick={() => setModal('new')}>
-          <Layers className="w-4 h-4 mr-2 inline" /> Nuevo registro
-        </button>
-      </div>
-
-      <section className="panel clients-panel">
-        <div className="panel-heading">
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <ListPageLayout
+        title="Unidades y categorías"
+        eyebrow="ADMINISTRACIÓN · CATÁLOGOS"
+        description="Unidades de presentación de servicios/materiales y jerarquías de agrupación."
+        actions={
+          <Button variant="primary" onClick={() => setModal('new')}>
+            <Layers className="w-4 h-4 mr-2 inline" /> Nuevo registro
+          </Button>
+        }
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
+            setPage(1);
+          },
+          placeholder: 'Buscar por código o nombre...',
+          isSearching: loading,
+        }}
+        filters={
+          <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800">
             <button
-              className={activeTab === 'TODOS' ? 'primary-button' : 'secondary-button'}
-              style={{ height: '32px', padding: '0 12px', fontSize: '10px' }}
-              onClick={() => setActiveTab('TODOS')}
+              type="button"
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                activeTab === 'TODOS'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              onClick={() => {
+                setActiveTab('TODOS');
+                setPage(1);
+              }}
             >
               Todos ({items.length})
             </button>
             <button
-              className={activeTab === 'UNIDADES' ? 'primary-button' : 'secondary-button'}
-              style={{ height: '32px', padding: '0 12px', fontSize: '10px' }}
-              onClick={() => setActiveTab('UNIDADES')}
+              type="button"
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${
+                activeTab === 'UNIDADES'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              onClick={() => {
+                setActiveTab('UNIDADES');
+                setPage(1);
+              }}
             >
-              <Ruler className="w-3.5 h-3.5 mr-1 inline" /> Unidades
+              <Ruler className="w-3.5 h-3.5" /> Unidades
             </button>
             <button
-              className={activeTab === 'CATEGORIAS' ? 'primary-button' : 'secondary-button'}
-              style={{ height: '32px', padding: '0 12px', fontSize: '10px' }}
-              onClick={() => setActiveTab('CATEGORIAS')}
+              type="button"
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${
+                activeTab === 'CATEGORIAS'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              onClick={() => {
+                setActiveTab('CATEGORIAS');
+                setPage(1);
+              }}
             >
-              <FolderTree className="w-3.5 h-3.5 mr-1 inline" /> Categorías
+              <FolderTree className="w-3.5 h-3.5" /> Categorías
             </button>
           </div>
-
-          <div className="client-search">
-            <Search className="w-4 h-4" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por código o nombre..."
-              aria-label="Buscar unidades y categorías"
-            />
-          </div>
-        </div>
-
-        <div className="client-table-head">
-          <span>NOMBRE</span>
-          <span>CÓDIGO</span>
-          <span>TIPO / DETALLE</span>
-          <span>ESTADO</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {loading && items.length === 0 ? (
-          <div className="empty-state">Cargando registros…</div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">No hay registros que coincidan con el filtro.</div>
-        ) : (
-          <div className="client-list">
-            {visible.map((item) => (
-              <div className="client-row" key={item.id}>
-                <div className="client-cell-main">
-
-                  <div className="client-avatar">
-                  {item.tipo === 'UNIDAD' ? <Ruler className="w-4 h-4" /> : <FolderTree className="w-4 h-4" />}
-                </div>
-
-                  <div className="client-main">
-                  <strong>{item.nombre}</strong>
-                  <span>{item.detalle}</span>
-                </div>
-
-                </div>
-                <span className="client-contact font-mono text-xs">{item.codigo}</span>
-                <span className="client-orders font-medium text-slate-300">
-                  <Badge variant={item.tipo === 'UNIDAD' ? 'info' : 'neutral'}>
-                    {item.tipo}
-                  </Badge>
-                </span>
-                <span className={`client-status ${!item.activo ? 'is-pending' : ''}`}>
-                  {item.activo ? 'Activo' : 'Inactivo'}
-                </span>
-                <div className="client-actions">
-                  <button
-                    className="icon-action"
-                    onClick={() => setViewItem(item)}
-                    aria-label={`Ver detalle de ${item.nombre}`}
-                    title="Ver detalle completo"
-                  >
-                    <Eye className="w-4 h-4 text-violet-400" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => setModal(item)}
-                    aria-label={`Editar ${item.nombre}`}
-                    title="Editar registro"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => toggleStatus(item)}
-                    aria-label={`Cambiar estado de ${item.nombre}`}
-                    title="Activar o desactivar"
-                  >
-                    <Power className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
-        <CrudPagination
-          currentPage={page}
-          totalPages={totalPages}
-          perPage={pageSize}
-          total={filtered.length}
-          onPageChange={(newPage) => setPage(newPage)}
-          onPerPageChange={(newSize) => {
-            setPageSize(newSize);
-            setPage(1);
+        }
+      >
+        <StandardDataTable<UnitOrCatItem>
+          columns={columns}
+          data={filtered.slice((page - 1) * pageSize, page * pageSize)}
+          keyExtractor={(item) => item.id}
+          rowActions={rowActions}
+          loading={loading && items.length === 0}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalItems: filtered.length,
+            onPageChange: (p) => setPage(p),
+            onPageSizeChange: (s) => {
+              setPageSize(s);
+              setPage(1);
+            },
           }}
-          variant="dark"
+          emptyMessage="No hay registros que coincidan con el filtro."
         />
-      </section>
+      </ListPageLayout>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal
