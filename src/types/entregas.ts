@@ -25,34 +25,28 @@ export interface ItemListoEntrega {
 export interface RequestAdvanceBreakdownDto {
   documentId: string;
   documentNumber: string;
-  orderTotal: number;
-  totalAdvancePaid: number;
-  unallocatedAdvance: number;
-  deliverySubtotal: number;
-  uncoveredRemainingSubtotal: number;
-  minAdvanceToApply: number;
-  maxAdvanceToApply: number;
-  suggestedAdvanceToApply: number;
+  totalPendingAllItems: number; // P
+  deliveringItemsPending: number; // D
+  undeliveredItemsPending: number; // U = P - D
+  availableAdvance: number; // A
+  minAdvanceToApply: number; // m = max(0, A - U)
+  maxAdvanceToApply: number; // M = min(A, D)
+  suggestedAdvanceToApply: number; // M
 }
 
 export interface CustomerAdvanceBreakdownDto {
-  advanceId: string;
-  receiptNumber: string;
-  availableAmount: number;
-  date: string;
+  availableAdvance: number;
+  maxApplicableAdvance: number;
 }
 
 export interface DeliveryPreviewResultDto {
   customerId: string;
   customerName: string;
-  availableCustomerAdvance: number;
-  customerAdvances: CustomerAdvanceBreakdownDto[];
-  requests: RequestAdvanceBreakdownDto[];
-  totalDeliverySubtotal: number;
-  totalMinAdvanceRequired: number;
-  totalMaxAdvanceApplicable: number;
-  totalSuggestedAdvance: number;
-  estimatedRemainingToCollect: number;
+  totalDeliveredAmount: number;
+  requestAdvances: RequestAdvanceBreakdownDto[];
+  customerAdvance: CustomerAdvanceBreakdownDto;
+  totalOrderAdvanceSuggested: number;
+  netBalanceToCollect: number;
 }
 
 export interface DeliveryPreviewItemRequest {

@@ -83,7 +83,11 @@ export const entregasApi = {
         }
       }
     } else if (data.requestAdvanceApplications && typeof data.requestAdvanceApplications === 'object') {
-      Object.assign(requestAdvancesMap, data.requestAdvanceApplications);
+      for (const [docId, adv] of Object.entries(data.requestAdvanceApplications)) {
+        if (typeof adv === 'number' && adv > 0) {
+          requestAdvancesMap[docId] = adv;
+        }
+      }
     }
 
     const res = await api.post<any>(
