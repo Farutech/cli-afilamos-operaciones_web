@@ -49,13 +49,13 @@ export const ModalComprobanteSolicitud: React.FC<ModalComprobanteSolicitudProps>
   solicitud,
   esConfirmacionAsentada = false,
 }) => {
+  const [formato, setFormato] = React.useState<'half-letter' | 'pos-80mm'>('half-letter');
+
   if (!isOpen || !solicitud) return null;
 
   const handleImprimir = () => {
     window.print();
   };
-
-  const [formato, setFormato] = React.useState<'half-letter' | 'pos-80mm'>('half-letter');
 
   const formatCOP = (val: number) => `$ ${Number(val || 0).toLocaleString('es-CO')}`;
 
