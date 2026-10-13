@@ -16,10 +16,9 @@ export const tallerApi = {
 
       for (let colIdx = 0; colIdx < colList.length; colIdx++) {
         const col = colList[colIdx];
-        const esUltimoPaso = colIdx === colList.length - 1;
         for (const card of (col.cards || [])) {
           if (!etapaCodigo || col.stepCode === etapaCodigo || card.currentStepCode === etapaCodigo) {
-            const esFinal = card.isCompleted === true || esUltimoPaso;
+            const esFinal = card.isCompleted === true || col.isFinal === true;
             items.push({
               itemPublicId: card.workOrderItemId,
               itemCodigo: 'ITEM',
