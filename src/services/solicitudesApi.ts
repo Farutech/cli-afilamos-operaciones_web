@@ -12,6 +12,8 @@ import type { Cliente } from '../types/catalogos';
 function mapRequestDetails(res: any): SolicitudDetalleDto {
   const items: ItemOperacionDto[] = (res?.items || []).map((it: any) => ({
     publicId: it.id || it.publicId || String(it.lineNumber),
+    lineaId: it.id || it.publicId || undefined,
+    itemCatalogoId: it.itemId || it.itemCatalogoId || it.itemCatalogoPublicId || undefined,
     codigo: it.itemCode || it.codigo || 'SRV',
     naturaleza: (it.itemsTypeCode === 'SERVICE' || it.naturaleza === 'SERVICIO') ? 'SERVICIO' : 'INVENTARIO',
     descripcion: it.itemName || it.descripcion || it.technicalObservation || 'Item',
