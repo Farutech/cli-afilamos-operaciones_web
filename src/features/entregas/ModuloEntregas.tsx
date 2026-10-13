@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Card, Button, Badge, Input, Modal } from '@farutech/design-system';
-import { FileText } from 'lucide-react';
+import {
+  Card,
+  Button,
+  Badge,
+  Input,
+  Textarea,
+  Modal,
+  Alert,
+  EmptyState,
+} from '@farutech/design-system';
+import { FileText, Printer, CheckCircle } from 'lucide-react';
 import { entregasApi } from '../../services/entregasApi';
 import { catalogosApi } from '../../services/catalogosApi';
 import type {
@@ -25,6 +34,22 @@ interface ModuloEntregasProps {
 
 const EMPTY_INSTRUMENTOS: MedioPagoInstrumento[] = [];
 
+const DEFAULT_EFECTIVO: MedioPagoInstrumento = {
+  uuid: 'inst-efectivo',
+  codigo: 'EFECTIVO',
+  nombre: 'Efectivo',
+  categoria: 'EFECTIVO',
+  esHoja: true,
+  requiereReferencia: false,
+  isDefault: true,
+  esPorDefecto: true,
+  activo: true,
+};
+
+export const formatMoneyCOP = (val: number | null | undefined): string => {
+  return `$${Math.round(val || 0).toLocaleString('es-CO')}`;
+};
+
 export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   token,
   instrumentosPago: instrumentosProps = EMPTY_INSTRUMENTOS,
@@ -43,45 +68,55 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const [paginaSolicitudes, setPaginaSolicitudes] = useState(1);
   const [itemsPorPaginaSolicitudes, setItemsPorPaginaSolicitudes] = useState(10);
   const [busquedaSolicitudes, setBusquedaSolicitudes] = useState('');
+  const [solicitudSeleccionadaId, setSolicitudSeleccionadaId] = useState<string>('');
 
   // Paginación para vista Por Cliente
   const [paginaClientes, setPaginaClientes] = useState(1);
   const [itemsPorPaginaClientes, setItemsPorPaginaClientes] = useState(8);
 
-  // Medios de pago cargados
-  const [mediosPago, setMediosPago] = useState<MedioPagoInstrumento[]>(instrumentosProps);
+  // Medios de pago cargados (con fallback inicial por defecto a Efectivo)
+  const [mediosPago, setMediosPago] = useState<MedioPagoInstrumento[]>(
+    instrumentosProps.length > 0 ? instrumentosProps : [DEFAULT_EFECTIVO]
+  );
 
-  // Cliente seleccionado en la vista consolidada
+  // Cliente seleccionado (tanto en vista consolidada como por selección de solicitud)
   const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState<string>('');
 
-  // Ítems seleccionados para la entrega consolidada
+  // Ítems seleccionados para el despacho actual
   const [itemsSeleccionadosIds, setItemsSeleccionadosIds] = useState<string[]>([]);
 
-  // Pago en Entrega Consolidada
+  // Pago en Entrega
   const [incluirPagoConsolidado, setIncluirPagoConsolidado] = useState<boolean>(true);
   const [montoPagoConsolidado, setMontoPagoConsolidado] = useState<number>(0);
-  const [metodoPagoConsolidado, setMetodoPagoConsolidado] = useState<string>('');
+  const [metodoPagoConsolidado, setMetodoPagoConsolidado] = useState<string>(
+    instrumentosProps[0]?.uuid || DEFAULT_EFECTIVO.uuid
+  );
   const [referenciaPagoConsolidado, setReferenciaPagoConsolidado] = useState<string>('');
 
-  // Datos de despacho de la entrega consolidada
+  // Datos de despacho (Receptor)
   const [receptorNombre, setReceptorNombre] = useState<string>('');
   const [receptorDocumento, setReceptorDocumento] = useState<string>('');
   const [observacionEntrega, setObservacionEntrega] = useState<string>('');
 
-  // Remisión Activa en edición / despacho (flujo individual o resultado)
+  // Modal post-despacho exitoso
+  const [despachoExitoso, setDespachoExitoso] = useState<RemisionDetalle | null>(null);
+
+  // Remisión Activa en edición / despacho (flujo individual de remisión previa)
   const [remisionActiva, setRemisionActiva] = useState<RemisionDetalle | null>(null);
 
-  // Modal de Pago para remisión activa individual
+  // Modal de Pago para remisión individual activa
   const [isPagoModalOpen, setIsPagoModalOpen] = useState(false);
   const [montoPago, setMontoPago] = useState<number>(0);
-  const [instrumentoSeleccionado, setInstrumentoSeleccionado] = useState<string>('');
+  const [instrumentoSeleccionado, setInstrumentoSeleccionado] = useState<string>(
+    instrumentosProps[0]?.uuid || DEFAULT_EFECTIVO.uuid
+  );
   const [referenciaPago, setReferenciaPago] = useState('');
 
-  // Formulario de Despacho tradicional (T044)
+  // Formulario de Despacho tradicional individual
   const [recibidoPorNombre, setRecibidoPorNombre] = useState('');
   const [recibidoPorDocumento, setRecibidoPorDocumento] = useState('');
 
-  // Cargar medios de pago del catálogo si no vinieron en props
+  // Cargar medios de pago del catálogo (una sola vez por sesión P1)
   const fetchedMediosRef = useRef(false);
   useEffect(() => {
     let activo = true;
@@ -89,7 +124,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       setMediosPago(instrumentosProps);
       return;
     }
-    if (fetchedMediosRef.current && mediosPago.length > 0) {
+    if (fetchedMediosRef.current && mediosPago.length > 1) {
       return;
     }
     const fetchMedios = async () => {
@@ -103,19 +138,10 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
             const defaultMethod = list.find((m) => m.isDefault || m.esPorDefecto) ?? list[0];
             setMetodoPagoConsolidado(defaultMethod.uuid);
             setInstrumentoSeleccionado(defaultMethod.uuid);
-          } else {
-            setMediosPago([]);
-            setMetodoPagoConsolidado('');
-            setInstrumentoSeleccionado('');
           }
         }
       } catch {
-        if (activo) {
-          setMediosPago([]);
-          setMetodoPagoConsolidado('');
-          setInstrumentoSeleccionado('');
-          setErrorMsg('No fue posible cargar las formas de pago configuradas en el sistema.');
-        }
+        // Fallback activo
       }
     };
     fetchMedios();
@@ -203,6 +229,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const solicitudesAgrupadas = useMemo(() => {
     const map = new Map<string, {
       solicitudNumero: string;
+      clientePublicId: string;
       clienteNombre: string;
       clienteDocumento: string;
       items: ItemListoEntrega[];
@@ -216,6 +243,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       if (!map.has(solId)) {
         map.set(solId, {
           solicitudNumero: item.documentoSolicitudNumero,
+          clientePublicId: item.clientePublicId || item.clienteNumeroDocumento || 'sin-cliente',
           clienteNombre: item.clienteNombre,
           clienteDocumento: item.clienteNumeroDocumento,
           items: [],
@@ -263,7 +291,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     return clientesAgrupados.slice(inicio, inicio + itemsPorPaginaClientes);
   }, [clientesAgrupados, paginaClientes, itemsPorPaginaClientes]);
 
-  // Cliente activo para la entrega consolidada
+  // Cliente activo para el despacho (bien sea por cliente directo o por solicitud)
   const clienteActivo = useMemo(() => {
     return clientesAgrupados.find((c) => c.clienteId === clienteSeleccionadoId) || null;
   }, [clientesAgrupados, clienteSeleccionadoId]);
@@ -296,6 +324,21 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     }
   };
 
+  const handleSeleccionarSolicitud = (solicitudPublicId: string) => {
+    setSolicitudSeleccionadaId(solicitudPublicId);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    const sol = solicitudesAgrupadas.find((s) => s.solicitudPublicId === solicitudPublicId);
+    if (sol) {
+      setClienteSeleccionadoId(sol.clientePublicId);
+      setItemsSeleccionadosIds(sol.items.map((i) => i.itemPublicId));
+      setReceptorNombre(sol.clienteNombre);
+      setReceptorDocumento(sol.clienteDocumento);
+      setMontoPagoConsolidado(sol.saldoPendiente);
+    }
+  };
+
+  // Ítems marcados actualmente para el cliente activo
   const itemsClienteMarcados = useMemo(() => {
     if (!clienteActivo) return [];
     return clienteActivo.items.filter((i) => itemsSeleccionadosIds.includes(i.itemPublicId));
@@ -308,7 +351,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     return { totalNeto, totalAnticipos, saldoPendiente };
   }, [itemsClienteMarcados]);
 
-  // Límites matemáticos [m, M] (Doc 13 / RA-01 a RA-12, CF-10 a CF-13)
+  // Preview de entrega consolidada (cálculo oficial de cotas y saldo a cobrar)
   const [previewData, setPreviewData] = useState<DeliveryPreviewResultDto | null>(null);
   const [ordenesAvanceAplicado, setOrdenesAvanceAplicado] = useState<Record<string, number>>({});
   const [anticipoClienteAplicado, setAnticipoClienteAplicado] = useState<number>(0);
@@ -394,7 +437,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     setOrdenesAvanceAplicado((prev) => {
       const next = { ...prev, [documentId]: valorClamp };
       const suma = Object.values(next).reduce((a, b) => a + b, 0);
-      const subtotal = previewData?.totalDeliverySubtotal ?? totalesSeleccion.totalNeto;
+      const subtotal = previewData?.totalDeliveredAmount ?? totalesSeleccion.totalNeto;
       const saldoTrasOrdenes = Math.max(0, subtotal - suma);
       const clienteUsar = Math.min(anticipoClienteAplicado, saldoTrasOrdenes);
       setAnticipoClienteAplicado(clienteUsar);
@@ -413,14 +456,14 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const seleccionarTodosLosItems = () => {
     setErrorMsg(null);
     if (!clienteActivo) return;
-    if (itemsSeleccionadosIds.length === clienteActivo.items.length) {
+    if (itemsClienteMarcados.length === clienteActivo.items.length) {
       setItemsSeleccionadosIds([]);
     } else {
       setItemsSeleccionadosIds(clienteActivo.items.map((i) => i.itemPublicId));
     }
   };
 
-  // Crear y Despachar Entrega Consolidada
+  // Crear y Despachar Entrega Consolidada / Por Solicitud
   const handleCrearEntregaConsolidada = async () => {
     if (!clienteActivo) {
       setErrorMsg('Seleccione un cliente para realizar la entrega.');
@@ -432,6 +475,10 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     }
     if (!receptorNombre.trim() || !receptorDocumento.trim()) {
       setErrorMsg('Debe registrar el nombre y documento de la persona que recibe la entrega.');
+      return;
+    }
+    if (!metodoPagoConsolidado) {
+      setErrorMsg('Debe seleccionar un instrumento de pago.');
       return;
     }
 
@@ -471,6 +518,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         token
       );
 
+      // Si la remisión quedó con saldo saldado pero en borrador, despachar
       if (rem.saldoPendiente === 0 && rem.estado !== 'DESPACHADO' && rem.estado !== 'ASENTADO') {
         try {
           const desp = await entregasApi.despacharRemision(
@@ -482,16 +530,16 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
             },
             token
           );
-          setRemisionActiva(desp);
+          setDespachoExitoso(desp);
         } catch {
-          setRemisionActiva(rem);
+          setDespachoExitoso(rem);
         }
       } else {
-        setRemisionActiva(rem);
+        setDespachoExitoso(rem);
       }
 
       setSuccessMsg(
-        `¡Entrega ${rem.numeroDocumento} registrada y saldada con éxito para ${clienteActivo.clienteNombre}!`
+        `¡Entrega ${rem.numeroDocumento} registrada con éxito para ${clienteActivo.clienteNombre}!`
       );
       await cargarItemsListos();
     } catch (err: unknown) {
@@ -499,6 +547,18 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDespacharOtra = () => {
+    setDespachoExitoso(null);
+    setItemsSeleccionadosIds([]);
+    setReceptorNombre('');
+    setReceptorDocumento('');
+    setObservacionEntrega('');
+    setReferenciaPagoConsolidado('');
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    cargarItemsListos();
   };
 
   // Generar Remisión individual
@@ -557,7 +617,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       const remActualizada = await entregasApi.registrarPago(remisionActiva.publicId, req, token);
       setRemisionActiva(remActualizada);
       setIsPagoModalOpen(false);
-      setSuccessMsg(`Pago de $${montoPago.toLocaleString('es-CO')} registrado con éxito.`);
+      setSuccessMsg(`Pago de ${formatMoneyCOP(montoPago)} registrado con éxito.`);
     } catch (err: unknown) {
       setErrorMsg((err as { message?: string }).message || 'Error registrando el pago');
     }
@@ -592,7 +652,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Encabezado Glassmorphism estilo Apple / SaaS */}
+      {/* Encabezado Glassmorphism Unificado */}
       <div className="relative overflow-hidden rounded-3xl p-6 bg-slate-900/80 backdrop-blur-2xl border border-white/10 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -609,15 +669,16 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={cargarItemsListos} disabled={loading}>
+          <Button variant="secondary" onClick={cargarItemsListos} disabled={loading} className="min-h-[44px]">
             {loading ? 'Sincronizando...' : '🔄 Actualizar'}
           </Button>
 
           {/* Selector de Pestañas Sobrio */}
           <div className="bg-slate-950/90 p-1 rounded-2xl border border-white/10 flex items-center gap-1 shadow-inner">
             <button
+              type="button"
               onClick={() => setVistaActiva('solicitudes')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 min-h-[44px] cursor-pointer ${
                 vistaActiva === 'solicitudes'
                   ? 'bg-indigo-600 text-white shadow-lg'
                   : 'text-slate-400 hover:text-white'
@@ -627,8 +688,9 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
               <span>Por Solicitud</span>
             </button>
             <button
+              type="button"
               onClick={() => setVistaActiva('cliente')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 min-h-[44px] cursor-pointer ${
                 vistaActiva === 'cliente'
                   ? 'bg-indigo-600 text-white shadow-lg'
                   : 'text-slate-400 hover:text-white'
@@ -643,25 +705,17 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
 
       {/* Alertas dinámicas */}
       {errorMsg && (
-        <div className="p-4 bg-rose-950/40 border border-rose-800/50 text-rose-300 rounded-2xl text-sm flex items-center justify-between backdrop-blur-md shadow-lg animate-fade-in">
-          <div className="flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{errorMsg}</span>
-          </div>
-          <button onClick={() => setErrorMsg(null)} className="text-rose-400 hover:text-rose-200 font-bold p-1">✕</button>
-        </div>
+        <Alert variant="error" onClose={() => setErrorMsg(null)}>
+          {errorMsg}
+        </Alert>
       )}
       {successMsg && (
-        <div className="p-4 bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 rounded-2xl text-sm flex items-center justify-between backdrop-blur-md shadow-lg animate-fade-in">
-          <div className="flex items-center gap-2">
-            <span>✅</span>
-            <span>{successMsg}</span>
-          </div>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-200 font-bold p-1">✕</button>
-        </div>
+        <Alert variant="success" onClose={() => setSuccessMsg(null)}>
+          {successMsg}
+        </Alert>
       )}
 
-      {/* DETALLE DE REMISIÓN ACTIVA / RESULTADO (FORMATO SOBRIO ESTILO SOLICITUD) */}
+      {/* DETALLE DE REMISIÓN ACTIVA / RESULTADO INDIVIDUAL */}
       {remisionActiva && (
         <Card className="p-6 border border-indigo-500/40 bg-slate-900/90 backdrop-blur-2xl rounded-3xl space-y-6 shadow-2xl ring-1 ring-indigo-500/20">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
@@ -678,7 +732,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 Cliente: <span className="font-bold text-white">{remisionActiva.cliente.nombreRazonSocial}</span> ({remisionActiva.cliente.numeroDocumento})
               </p>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => setRemisionActiva(null)}>
+            <Button variant="secondary" size="sm" onClick={() => setRemisionActiva(null)} className="min-h-[44px]">
               ✕ Cerrar Vista
             </Button>
           </div>
@@ -687,20 +741,20 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-950/70 rounded-2xl border border-white/5">
             <div>
               <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Facturado</span>
-              <div className="text-lg font-bold text-white font-mono">${remisionActiva.totalNeto.toLocaleString('es-CO')}</div>
+              <div className="text-lg font-bold text-white font-mono">{formatMoneyCOP(remisionActiva.totalNeto)}</div>
             </div>
             <div>
               <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Anticipos Previos</span>
-              <div className="text-lg font-bold text-emerald-400 font-mono">-${remisionActiva.totalAnticiposPrevios.toLocaleString('es-CO')}</div>
+              <div className="text-lg font-bold text-emerald-400 font-mono">-{formatMoneyCOP(remisionActiva.totalAnticiposPrevios)}</div>
             </div>
             <div>
               <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Cobrado en Entrega</span>
-              <div className="text-lg font-bold text-indigo-400 font-mono">-${remisionActiva.totalPagosEntrega.toLocaleString('es-CO')}</div>
+              <div className="text-lg font-bold text-indigo-400 font-mono">-{formatMoneyCOP(remisionActiva.totalPagosEntrega)}</div>
             </div>
             <div className="border-l pl-4 border-white/10">
               <span className="text-[11px] font-black text-slate-300 uppercase tracking-wider">Saldo Pendiente</span>
               <div className={`text-xl font-black font-mono ${remisionActiva.saldoPendiente > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                ${remisionActiva.saldoPendiente.toLocaleString('es-CO')}
+                {formatMoneyCOP(remisionActiva.saldoPendiente)}
               </div>
             </div>
           </div>
@@ -711,10 +765,10 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
               {remisionActiva.saldoPendiente > 0 ? (
                 <div className="p-4 bg-amber-950/40 border border-amber-800/50 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-3">
                   <div className="text-sm text-amber-300">
-                    <span className="font-bold">⚠️ Invariante #3:</span> Existe un saldo pendiente de <strong className="font-mono">${remisionActiva.saldoPendiente.toLocaleString('es-CO')}</strong>. El sistema bloquea el despacho hasta que el saldo esté 100% saldado.
+                    <span className="font-bold">⚠️ Invariante #3:</span> Existe un saldo pendiente de <strong className="font-mono">{formatMoneyCOP(remisionActiva.saldoPendiente)}</strong>. El sistema bloquea el despacho hasta que el saldo esté 100% saldado.
                   </div>
-                  <Button variant="primary" onClick={handleAbrirPago}>
-                    💳 Registrar Cobro (${remisionActiva.saldoPendiente.toLocaleString('es-CO')})
+                  <Button variant="primary" onClick={handleAbrirPago} className="min-h-[44px]">
+                    💳 Registrar Cobro ({formatMoneyCOP(remisionActiva.saldoPendiente)})
                   </Button>
                 </div>
               ) : (
@@ -726,7 +780,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-950/60 rounded-2xl border border-white/5">
                 <div>
                   <Input
-                    label="Entregado a (Nombre Completo) *"
+                    label="Entregado a (Nombre Completo)"
                     value={recibidoPorNombre}
                     onChange={(e) => setRecibidoPorNombre(e.target.value)}
                     placeholder="Ej: Carlos Mendoza"
@@ -736,7 +790,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 </div>
                 <div>
                   <Input
-                    label="Cédula / Documento Identidad *"
+                    label="Cédula / Documento Identidad"
                     value={recibidoPorDocumento}
                     onChange={(e) => setRecibidoPorDocumento(e.target.value)}
                     placeholder="Ej: 1098765432"
@@ -756,6 +810,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                     !recibidoPorDocumento.trim()
                   }
                   onClick={handleDespacharRemision}
+                  className="min-h-[44px]"
                 >
                   🚀 Asentar y Despachar al Cliente
                 </Button>
@@ -775,192 +830,206 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         </Card>
       )}
 
-      {/* VISTA 1: POR SOLICITUD (PAGINADA Y SOBRIA) */}
-      {vistaActiva === 'solicitudes' && (
-        <Card className="overflow-hidden bg-slate-900/80 border border-white/10 rounded-3xl shadow-xl">
-          <div className="p-5 border-b border-white/10 bg-slate-950/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>📋</span> Órdenes Listas para Entrega (Por Solicitud)
-              </h2>
-              <p className="text-xs text-slate-400">
-                Trabajos de taller finalizados pendientes de entrega y liquidación individual en mostrador.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-64">
-                <Input
-                  value={busquedaSolicitudes}
-                  onChange={(e) => setBusquedaSolicitudes(e.target.value)}
-                  placeholder="Buscar SOL-..., cliente..."
-                />
-              </div>
-              <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-full bg-slate-800 text-slate-300 border border-white/10">
-                {solicitudesAgrupadas.length} órdenes listas
-              </span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/[0.02]">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Solicitud</th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Cliente</th>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-300">Ítems Listos</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Total</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Anticipos</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Saldo a Cobrar</th>
-                  <th className="px-4 py-3 text-right font-semibold text-slate-300">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {solicitudesPaginadas.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-slate-400 italic">
-                      {loading ? 'Cargando órdenes listas...' : 'No hay órdenes listas para entrega pendientes.'}
-                    </td>
-                  </tr>
-                ) : (
-                  solicitudesPaginadas.map((sol) => (
-                    <tr key={sol.solicitudPublicId} className="hover:bg-white/[0.03] transition-colors">
-                      <td className="px-4 py-3 font-bold font-mono text-white">
-                        <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30">
-                          {sol.solicitudNumero}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-white">{sol.clienteNombre}</div>
-                        <div className="text-xs text-slate-400 font-mono">{sol.clienteDocumento}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          {sol.items.map((it) => (
-                            <div key={it.itemPublicId} className="text-xs text-slate-300 flex items-center gap-2">
-                              <span>• {it.descripcion} (Cant: {it.cantidad})</span>
-                              <Badge variant="success">{it.etapaActualNombre}</Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-white font-semibold">
-                        ${sol.totalNeto.toLocaleString('es-CO')}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-emerald-400">
-                        ${sol.totalAnticipos.toLocaleString('es-CO')}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-rose-400">
-                        ${sol.saldoPendiente.toLocaleString('es-CO')}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleGenerarRemision(sol.solicitudPublicId)}
-                            disabled={loading}
-                            title="Generar remisión de entrega y despacho"
-                            className="p-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                            <span className="sr-only sm:not-sr-only text-[11px] font-semibold">Remisión</span>
-                            <span className="sr-only">📄 Generar Remisión</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Barra de Paginación */}
-          <div className="p-4 border-t border-white/10 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
-            <div className="flex items-center gap-3">
-              <span>
-                Mostrando{' '}
-                <strong className="text-white">
-                  {solicitudesAgrupadas.length > 0 ? (paginaSolicitudes - 1) * itemsPorPaginaSolicitudes + 1 : 0}
-                </strong>{' '}
-                a{' '}
-                <strong className="text-white">
-                  {Math.min(paginaSolicitudes * itemsPorPaginaSolicitudes, solicitudesAgrupadas.length)}
-                </strong>{' '}
-                de <strong className="text-white">{solicitudesAgrupadas.length}</strong> órdenes
-              </span>
-
-              <div className="flex items-center gap-1.5 border-l pl-3 border-white/10">
-                <span>Por página:</span>
-                <select
-                  value={itemsPorPaginaSolicitudes}
-                  onChange={(e) => setItemsPorPaginaSolicitudes(Number(e.target.value))}
-                  className="bg-slate-900 border border-white/10 rounded px-2 py-0.5 text-white"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={paginaSolicitudes <= 1}
-                onClick={() => setPaginaSolicitudes((p) => Math.max(1, p - 1))}
-              >
-                ← Anterior
-              </Button>
-              <span className="font-mono px-2 py-1 bg-slate-900 rounded border border-white/5 text-white font-bold">
-                {paginaSolicitudes} / {totalPaginasSolicitudes}
-              </span>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={paginaSolicitudes >= totalPaginasSolicitudes}
-                onClick={() => setPaginaSolicitudes((p) => Math.min(totalPaginasSolicitudes, p + 1))}
-              >
-                Siguiente →
-              </Button>
-            </div>
-          </div>
+      {/* ESTADO VACÍO CUANDO NO HAY ÓRDENES NI ÍTEMS */}
+      {!loading && itemsListos.length === 0 ? (
+        <Card className="p-12 bg-slate-900/80 border border-white/10 rounded-3xl shadow-xl">
+          <EmptyState
+            title="No hay órdenes listas para entrega"
+            description="Todos los trabajos de taller finalizados ya fueron despachados o no se encontraron ítems pendientes de liquidación."
+            action={{
+              label: 'Actualizar lista',
+              onClick: cargarItemsListos,
+              variant: 'primary',
+            }}
+          />
         </Card>
-      )}
+      ) : (
+        /* LAYOUT DE DOS COLUMNAS (Wireframe Fase 2) */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* COLUMNA PRINCIPAL (~65% en lg:col-span-8): Selección, Ítems, Liquidación y Receptor */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* SUB-VISTA 1: Por Solicitud */}
+            {vistaActiva === 'solicitudes' && (
+              <Card className="overflow-hidden bg-slate-900/80 border border-white/10 rounded-3xl shadow-xl">
+                <div className="p-5 border-b border-white/10 bg-slate-950/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <span>📋</span> Órdenes Listas para Entrega
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Seleccione una orden para cargarla directamente en la liquidación de mostrador.
+                    </p>
+                  </div>
 
-      {/* VISTA 2: ENTREGA CONSOLIDADA POR CLIENTE */}
-      {vistaActiva === 'cliente' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Columna Izquierda: Filtro / Lista de Clientes Paginada */}
-            <div className="lg:col-span-4 space-y-4">
-              <div className="p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-xl space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-64">
+                      <Input
+                        value={busquedaSolicitudes}
+                        onChange={(e) => setBusquedaSolicitudes(e.target.value)}
+                        placeholder="Buscar SOL-..., cliente..."
+                      />
+                    </div>
+                    <span className="text-xs font-mono font-bold px-3 py-1.5 rounded-full bg-slate-800 text-slate-300 border border-white/10">
+                      {solicitudesAgrupadas.length} órdenes
+                    </span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <table className="min-w-full divide-y divide-white/10 text-sm">
+                    <thead className="bg-white/[0.02]">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-300">Solicitud</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-300">Cliente</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-300">Ítems Listos</th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-300">Total</th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-300">Anticipos</th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-300">Saldo</th>
+                        <th className="px-4 py-3 text-right font-semibold text-slate-300">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {solicitudesPaginadas.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-12 text-center text-slate-400 italic">
+                            No hay órdenes que coincidan con la búsqueda.
+                          </td>
+                        </tr>
+                      ) : (
+                        solicitudesPaginadas.map((sol) => {
+                          const isSelected = solicitudSeleccionadaId === sol.solicitudPublicId;
+                          return (
+                            <tr
+                              key={sol.solicitudPublicId}
+                              onClick={() => handleSeleccionarSolicitud(sol.solicitudPublicId)}
+                              className={`cursor-pointer transition-colors ${
+                                isSelected ? 'bg-indigo-600/20' : 'hover:bg-white/[0.03]'
+                              }`}
+                            >
+                              <td className="px-4 py-3 font-bold font-mono text-white">
+                                <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30">
+                                  {sol.solicitudNumero}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="font-semibold text-white">{sol.clienteNombre}</div>
+                                <div className="text-xs text-slate-400 font-mono">{sol.clienteDocumento}</div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="space-y-1">
+                                  {sol.items.map((it) => (
+                                    <div key={it.itemPublicId} className="text-xs text-slate-300 flex items-center gap-2">
+                                      <span>• {it.descripcion} (x{it.cantidad})</span>
+                                      <Badge variant="success">{it.etapaActualNombre}</Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-white font-semibold">
+                                {formatMoneyCOP(sol.totalNeto)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-emerald-400">
+                                {formatMoneyCOP(sol.totalAnticipos)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono font-bold text-rose-400">
+                                {formatMoneyCOP(sol.saldoPendiente)}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGenerarRemision(sol.solicitudPublicId)}
+                                    disabled={loading}
+                                    title="Generar remisión de entrega"
+                                    className="p-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50 min-h-[32px]"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span className="sr-only sm:not-sr-only text-[11px] font-semibold">Remisión</span>
+                                    <span className="sr-only">📄 Generar Remisión</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Barra de Paginación */}
+                <div className="p-4 border-t border-white/10 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+                  <div className="flex items-center gap-3">
+                    <span>
+                      Mostrando{' '}
+                      <strong className="text-white">
+                        {solicitudesAgrupadas.length > 0 ? (paginaSolicitudes - 1) * itemsPorPaginaSolicitudes + 1 : 0}
+                      </strong>{' '}
+                      a{' '}
+                      <strong className="text-white">
+                        {Math.min(paginaSolicitudes * itemsPorPaginaSolicitudes, solicitudesAgrupadas.length)}
+                      </strong>{' '}
+                      de <strong className="text-white">{solicitudesAgrupadas.length}</strong> órdenes
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={paginaSolicitudes <= 1}
+                      onClick={() => setPaginaSolicitudes((p) => Math.max(1, p - 1))}
+                      className="min-h-[36px]"
+                    >
+                      ← Anterior
+                    </Button>
+                    <span className="font-mono px-2 py-1 bg-slate-900 rounded border border-white/5 text-white font-bold">
+                      {paginaSolicitudes} / {totalPaginasSolicitudes}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={paginaSolicitudes >= totalPaginasSolicitudes}
+                      onClick={() => setPaginaSolicitudes((p) => Math.min(totalPaginasSolicitudes, p + 1))}
+                      className="min-h-[36px]"
+                    >
+                      Siguiente →
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* SUB-VISTA 2: Por Cliente (Consolidada) */}
+            {vistaActiva === 'cliente' && (
+              <div className="p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-xl space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                    <span>👥</span> Clientes con Ítems Listos
-                  </h3>
-                  <span className="text-[10px] font-mono font-bold bg-indigo-950 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20">
-                    {clientesAgrupados.length}
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <span>👥</span> Clientes con Ítems Listos
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Seleccione el cliente para consolidar todas sus solicitudes en un solo despacho.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-bold bg-indigo-950 text-indigo-400 px-3 py-1 rounded-full border border-indigo-500/20">
+                    {clientesAgrupados.length} clientes
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">
-                  Seleccione el cliente para consolidar todas sus solicitudes en un solo despacho.
-                </p>
 
-                {/* Buscador reactivo */}
-                <div className="pt-1">
+                <div className="w-full">
                   <Input
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
                     placeholder="Filtrar por nombre o cédula..."
+                    fullWidth
                   />
                 </div>
 
-                <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
                   {clientesPaginados.length === 0 ? (
-                    <div className="p-8 text-center text-xs text-slate-500 italic border border-dashed border-white/10 rounded-2xl">
-                      No hay clientes con ítems listos pendientes.
+                    <div className="col-span-2 p-8 text-center text-xs text-slate-500 italic border border-dashed border-white/10 rounded-2xl">
+                      No hay clientes que coincidan con la búsqueda.
                     </div>
                   ) : (
                     clientesPaginados.map((c) => {
@@ -979,10 +1048,10 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                             <div>
                               <div className="font-bold text-white text-sm flex items-center gap-1.5">
                                 <span className="text-indigo-400">👤</span>
-                                <span>{c.clienteNombre && c.clienteNombre !== 'Cliente' ? c.clienteNombre : 'Cliente Registrado'}</span>
+                                <span>{c.clienteNombre || 'Cliente Registrado'}</span>
                               </div>
                               <div className="text-xs text-slate-400 font-mono mt-0.5">
-                                Doc: {c.clienteDocumento && c.clienteDocumento !== '0000000' && c.clienteDocumento !== '—' ? c.clienteDocumento : 'Consumidor Final'}
+                                Doc: {c.clienteDocumento || '0000000'}
                               </div>
                             </div>
                             <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/5">
@@ -992,10 +1061,10 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
 
                           <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
                             <span className="text-slate-400">
-                              {c.solicitudesNumeros.size} {c.solicitudesNumeros.size === 1 ? 'solicitud' : 'solicitudes'}
+                              {c.solicitudesNumeros.size} {c.solicitudesNumeros.size === 1 ? 'orden' : 'órdenes'}
                             </span>
                             <span className={`font-bold ${c.saldoPendiente > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                              Saldo: COP ${c.saldoPendiente.toLocaleString('es-CO')}
+                              Saldo: {formatMoneyCOP(c.saldoPendiente)}
                             </span>
                           </div>
                         </div>
@@ -1005,479 +1074,551 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 </div>
 
                 {/* Paginación de Clientes */}
-                <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
-                  <div className="flex items-center gap-1.5">
-                    <span>Ver:</span>
-                    <select
-                      value={itemsPorPaginaClientes}
-                      onChange={(e) => setItemsPorPaginaClientes(Number(e.target.value))}
-                      className="bg-slate-900 border border-white/10 rounded px-1.5 py-0.5 text-white text-[10px]"
-                    >
-                      <option value={6}>6</option>
-                      <option value={8}>8</option>
-                      <option value={15}>15</option>
-                    </select>
-                  </div>
-
-                  {totalPaginasClientes > 1 && (
+                {totalPaginasClientes > 1 && (
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
+                    <span>
+                      Página {paginaClientes} de {totalPaginasClientes}
+                    </span>
                     <div className="flex items-center gap-1.5">
-                      <button
+                      <Button
+                        size="sm"
+                        variant="secondary"
                         disabled={paginaClientes <= 1}
                         onClick={() => setPaginaClientes((p) => Math.max(1, p - 1))}
-                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white"
+                        className="min-h-[36px]"
                       >
-                        ←
-                      </button>
-                      <span>
-                        {paginaClientes} / {totalPaginasClientes}
-                      </span>
-                      <button
+                        ← Anterior
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
                         disabled={paginaClientes >= totalPaginasClientes}
                         onClick={() => setPaginaClientes((p) => Math.min(totalPaginasClientes, p + 1))}
-                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white"
+                        className="min-h-[36px]"
                       >
-                        →
-                      </button>
+                        Siguiente →
+                      </Button>
                     </div>
-                  )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SECCIÓN UNIFICADA: Ítems Listos para Despacho del Cliente/Orden Activo */}
+            {clienteActivo ? (
+              <div className="space-y-6">
+                <Card className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-black text-white">
+                          Cliente: {clienteActivo.clienteNombre || 'Cliente Registrado'}
+                        </h2>
+                        <span className="text-xs font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-white/5">
+                          Doc: {clienteActivo.clienteDocumento || '0000000'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Solicitudes involucradas:{' '}
+                        <span className="font-mono text-indigo-400 font-bold">
+                          {Array.from(clienteActivo.solicitudesNumeros).join(', ')}
+                        </span>
+                      </p>
+                    </div>
+
+                    <Button size="sm" variant="secondary" onClick={seleccionarTodosLosItems} className="min-h-[44px]">
+                      {itemsSeleccionadosIds.length === clienteActivo.items.length
+                        ? 'Deseleccionar Todos'
+                        : 'Seleccionar Todos'}
+                    </Button>
+                  </div>
+
+                  {/* Tabla de Selección de Ítems */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Ítems Disponibles para Entrega
+                      </h4>
+                      <span className="text-xs text-slate-400 font-mono">
+                        {itemsClienteMarcados.length} de {clienteActivo.items.length} seleccionados
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/80">
+                      <table className="min-w-full divide-y divide-white/5 text-sm">
+                        <thead className="bg-white/[0.02]">
+                          <tr>
+                            <th className="px-4 py-3 text-left w-10">
+                              <input
+                                type="checkbox"
+                                aria-label="Seleccionar todos los ítems"
+                                className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                checked={itemsClienteMarcados.length === clienteActivo.items.length && clienteActivo.items.length > 0}
+                                onChange={seleccionarTodosLosItems}
+                              />
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400">Ítem / Servicio</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400">Solicitud</th>
+                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400">Cant</th>
+                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400">Subtotal</th>
+                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400">Anticipo</th>
+                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400">Saldo</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {clienteActivo.items.map((it) => {
+                            const marcado = itemsSeleccionadosIds.includes(it.itemPublicId);
+                            return (
+                              <tr
+                                key={it.itemPublicId}
+                                onClick={() => toggleSeleccionItem(it.itemPublicId)}
+                                className={`cursor-pointer transition-colors ${
+                                  marcado ? 'bg-indigo-600/10' : 'hover:bg-white/[0.02]'
+                                }`}
+                              >
+                                <td className="px-4 py-3">
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Seleccionar ${it.descripcion}`}
+                                    checked={marcado}
+                                    onChange={() => toggleSeleccionItem(it.itemPublicId)}
+                                    className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="font-semibold text-white">{it.descripcion}</div>
+                                  <div className="text-[11px] text-slate-400 font-mono">Cód: {it.itemCodigo}</div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="font-mono text-xs font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30">
+                                    {it.documentoSolicitudNumero}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono text-slate-300">{it.cantidad}</td>
+                                <td className="px-4 py-3 text-right font-mono font-semibold text-white">
+                                  {formatMoneyCOP(it.subtotal)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono text-emerald-400">
+                                  {formatMoneyCOP(it.anticipoDirectoImputado)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-mono font-bold text-rose-400">
+                                  {formatMoneyCOP(it.saldoPendienteItem)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* DISTRIBUCIÓN MATEMÁTICA DE ANTICIPOS [m, M] */}
+                {previewData && previewData.requestAdvances && previewData.requestAdvances.length > 0 && (
+                  <Card className="p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-indigo-500/30 shadow-xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">⚖️</span>
+                        <div>
+                          <h3 className="text-sm font-bold text-white">
+                            Distribución de Anticipos y Límites Matemáticos [m, M]
+                          </h3>
+                          <p className="text-xs text-slate-400">
+                            Límites legales calculados para proteger ítems pendientes en taller.
+                          </p>
+                        </div>
+                      </div>
+                      {loadingPreview && (
+                        <span className="text-xs text-indigo-400 animate-pulse font-mono">Calculando cotas...</span>
+                      )}
+                    </div>
+
+                    <div className="space-y-3 pt-1">
+                      {previewData.requestAdvances.map((req) => {
+                        const aplicado = ordenesAvanceAplicado[req.documentId] ?? req.suggestedAdvanceToApply;
+                        const min = req.minAdvanceToApply;
+                        const max = req.maxAdvanceToApply;
+
+                        return (
+                          <div
+                            key={req.documentId}
+                            className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/10 space-y-2"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/40">
+                                  {req.documentNumber}
+                                </span>
+                                <span className="text-xs text-slate-400">
+                                  Pendiente Entregar: <strong className="text-white font-mono">{formatMoneyCOP(req.deliveringItemsPending)}</strong>
+                                </span>
+                              </div>
+                              <div className="text-xs font-mono font-bold text-emerald-400">
+                                Rango [{formatMoneyCOP(min)} - {formatMoneyCOP(max)}]
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="range"
+                                min={min}
+                                max={max}
+                                step={100}
+                                value={aplicado}
+                                disabled={min === max}
+                                onChange={(e) =>
+                                  handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
+                                }
+                                className="flex-1 accent-indigo-500 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                              />
+                              <div className="w-36">
+                                <Input
+                                  type="number"
+                                  min={min}
+                                  max={max}
+                                  value={aplicado}
+                                  onChange={(e) =>
+                                    handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
+                                  }
+                                  fullWidth
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {previewData.customerAdvance?.availableAdvance > 0 && (
+                        <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                          <span className="text-indigo-200">
+                            🌟 Anticipo a favor global: <strong>{formatMoneyCOP(previewData.customerAdvance.availableAdvance)}</strong>
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span>Aplicar:</span>
+                            <div className="w-32">
+                              <Input
+                                type="number"
+                                min={0}
+                                max={previewData.customerAdvance.maxApplicableAdvance}
+                                value={anticipoClienteAplicado}
+                                onChange={(e) =>
+                                  setAnticipoClienteAplicado(
+                                    Math.min(
+                                      previewData.customerAdvance.maxApplicableAdvance,
+                                      Math.max(0, Number(e.target.value))
+                                    )
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
+                {/* FORMULARIO DE LIQUIDACIÓN Y RECEPTOR */}
+                <Card className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-5">
+                  <div className="border-b border-white/10 pb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">💵</span>
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                        Liquidación de Pago y Receptor
+                      </h3>
+                    </div>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={incluirPagoConsolidado}
+                        onChange={(e) => setIncluirPagoConsolidado(e.target.checked)}
+                        className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <span>Registrar cobro en entrega</span>
+                    </label>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Fila 1: Instrumento de Pago y Monto a Cobrar */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                      <div className="md:col-span-7">
+                        <label htmlFor="instrumento-pago-select" className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                          Instrumento de pago *
+                        </label>
+                        <select
+                          id="instrumento-pago-select"
+                          aria-label="Instrumento de pago"
+                          value={metodoPagoConsolidado}
+                          onChange={(e) => {
+                            setMetodoPagoConsolidado(e.target.value);
+                            setErrorMsg(null);
+                          }}
+                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px] cursor-pointer"
+                        >
+                          {mediosPago.map((m) => (
+                            <option key={m.uuid} value={m.uuid}>
+                              {m.codigo} - {m.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-5">
+                        <div className="flex items-center justify-between mb-1">
+                          <label htmlFor="monto-a-cobrar-input" className="block text-xs font-semibold text-slate-300 uppercase">
+                            Monto a cobrar *
+                          </label>
+                          {resumenFinanciero.saldoPendiente > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setMontoPagoConsolidado(resumenFinanciero.saldoPendiente)}
+                              className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                            >
+                              Pagar Saldo Completo
+                            </button>
+                          )}
+                        </div>
+                        <Input
+                          id="monto-a-cobrar-input"
+                          type="number"
+                          value={montoPagoConsolidado}
+                          onChange={(e) => setMontoPagoConsolidado(Number(e.target.value))}
+                          min={0}
+                          fullWidth
+                          className="min-h-[44px]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Fila 2: Referencia / Comprobante */}
+                    <div>
+                      <Input
+                        label="Referencia / N° Transacción / Comprobante"
+                        value={referenciaPagoConsolidado}
+                        onChange={(e) => setReferenciaPagoConsolidado(e.target.value)}
+                        placeholder="Ej: Aprobación datáfono #123456"
+                        fullWidth
+                        className="min-h-[44px]"
+                      />
+                    </div>
+
+                    {/* Fila 3: Receptor (Nombre y Documento sin asterisco duplicado) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Recibido por (Nombre)"
+                        required
+                        value={receptorNombre}
+                        onChange={(e) => {
+                          setReceptorNombre(e.target.value);
+                          setErrorMsg(null);
+                        }}
+                        placeholder="Nombre de quien retira"
+                        fullWidth
+                        className="min-h-[44px]"
+                      />
+                      <Input
+                        label="Documento de identidad"
+                        required
+                        value={receptorDocumento}
+                        onChange={(e) => {
+                          setReceptorDocumento(e.target.value);
+                          setErrorMsg(null);
+                        }}
+                        placeholder="Cédula o NIT"
+                        fullWidth
+                        className="min-h-[44px]"
+                      />
+                    </div>
+
+                    {/* Fila 4: Observaciones */}
+                    <div>
+                      <Textarea
+                        label="Observaciones de entrega"
+                        rows={2}
+                        value={observacionEntrega}
+                        onChange={(e) => setObservacionEntrega(e.target.value)}
+                        placeholder="Notas adicionales sobre la entrega, estado del paquete, etc."
+                        fullWidth
+                      />
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            ) : (
+              <div className="p-12 text-center text-slate-400 bg-slate-900/50 rounded-3xl border border-dashed border-white/10">
+                Seleccione una orden o cliente arriba para preparar la entrega y liquidación.
+              </div>
+            )}
+          </div>
+
+          {/* COLUMNA LATERAL FIJA (~35% en lg:col-span-4): Resumen Financiero Sticky y Despacho */}
+          <div className="lg:col-span-4 lg:sticky lg:top-6 space-y-4">
+            <Card className="p-5 bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <span>🧾</span> Resumen de Liquidación
+                </h3>
+                <Badge variant={resumenFinanciero.saldoPendiente <= 0 || montoPagoConsolidado >= resumenFinanciero.saldoPendiente ? 'success' : 'warning'}>
+                  {resumenFinanciero.saldoPendiente <= 0 || montoPagoConsolidado >= resumenFinanciero.saldoPendiente ? '100% Cubierto' : 'Con Saldo'}
+                </Badge>
+              </div>
+
+              {/* Métricas reales del Preview */}
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center text-slate-300">
+                  <span className="font-medium">Total Ítems:</span>
+                  <span className="font-mono text-white text-sm font-bold">
+                    {formatMoneyCOP(resumenFinanciero.totalEntregar)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-slate-300">
+                  <span className="font-medium">Anticipos Aplicados:</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    -{formatMoneyCOP(resumenFinanciero.totalAnticipos)}
+                  </span>
+                </div>
+
+                {anticipoClienteAplicado > 0 && (
+                  <div className="flex justify-between items-center text-indigo-300">
+                    <span className="font-medium">Anticipo Libre Cliente:</span>
+                    <span className="font-mono text-indigo-400 font-bold">
+                      -{formatMoneyCOP(anticipoClienteAplicado)}
+                    </span>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-rose-300 font-bold">
+                  <span>Saldo a Cobrar:</span>
+                  <span className="font-mono text-rose-400 text-base font-black">
+                    {formatMoneyCOP(resumenFinanciero.saldoPendiente)}
+                  </span>
+                </div>
+
+                {montoPagoConsolidado > 0 && (
+                  <div className="flex justify-between items-center text-emerald-400 pt-1">
+                    <span className="font-medium">Abono / Pago mostrador:</span>
+                    <span className="font-mono text-emerald-300 font-bold">
+                      {formatMoneyCOP(montoPagoConsolidado)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Alerta de error del backend visible inmediatamente junto al botón Despachar */}
+              {errorMsg && (
+                <Alert variant="error" onClose={() => setErrorMsg(null)} className="text-xs">
+                  {errorMsg}
+                </Alert>
+              )}
+
+              {/* Botón Principal de Despacho (mínimo 44px de alto) */}
+              <Button
+                variant="primary"
+                size="lg"
+                fullWidth
+                disabled={
+                  loading ||
+                  itemsClienteMarcados.length === 0 ||
+                  !receptorNombre.trim() ||
+                  !receptorDocumento.trim() ||
+                  !metodoPagoConsolidado
+                }
+                onClick={handleCrearEntregaConsolidada}
+                className="min-h-[44px] py-3 text-sm font-bold tracking-wide shadow-lg"
+              >
+                {loading
+                  ? 'Despachando...'
+                  : `🚀 Despachar (${itemsClienteMarcados.length} ${itemsClienteMarcados.length === 1 ? 'ítem' : 'ítems'})`}
+              </Button>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL POST-DESPACHO EXITOSO (Número de Remisión, Imprimir Comprobante, Despachar Otra) */}
+      <Modal
+        isOpen={!!despachoExitoso}
+        onClose={handleDespacharOtra}
+        title="¡Entrega Despachada Exitosamente!"
+        size="lg"
+      >
+        {despachoExitoso && (
+          <div className="space-y-6 p-2">
+            <div className="p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="text-xs uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4" /> Remisión y Entrega Asentada
+                </span>
+                <div className="text-2xl font-black font-mono text-white mt-1">
+                  {despachoExitoso.numeroDocumento}
+                </div>
+                <div className="text-xs text-slate-300 mt-1">
+                  Cliente: <strong className="text-white">{despachoExitoso.cliente.nombreRazonSocial}</strong> ({despachoExitoso.cliente.numeroDocumento})
+                </div>
+              </div>
+              <Badge variant="success">DESPACHADO</Badge>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-950 rounded-2xl border border-white/5 text-xs">
+              <div>
+                <span className="text-slate-400">Total Liquidado</span>
+                <div className="text-base font-bold font-mono text-white mt-0.5">
+                  {formatMoneyCOP(despachoExitoso.totalNeto)}
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-400">Anticipos Imputados</span>
+                <div className="text-base font-bold font-mono text-emerald-400 mt-0.5">
+                  -{formatMoneyCOP(despachoExitoso.totalAnticiposPrevios)}
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-400">Cobro en Entrega</span>
+                <div className="text-base font-bold font-mono text-indigo-400 mt-0.5">
+                  {formatMoneyCOP(despachoExitoso.totalPagosEntrega)}
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-400">Saldo Pendiente</span>
+                <div className="text-base font-bold font-mono text-white mt-0.5">
+                  {formatMoneyCOP(despachoExitoso.saldoPendiente)}
                 </div>
               </div>
             </div>
 
-            {/* Columna Derecha: Detalle de Ítems, Liquidación y Despacho */}
-            <div className="lg:col-span-8 space-y-6">
-              {clienteActivo ? (
-                <div className="space-y-6">
-                  {/* Tarjeta del Cliente y Bento Grid de Totales */}
-                  <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-lg font-black text-white">
-                            Cliente: {clienteActivo.clienteNombre && clienteActivo.clienteNombre !== 'Cliente' ? clienteActivo.clienteNombre : 'Cliente Registrado'}
-                          </h2>
-                          <span className="text-xs font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-white/5">
-                            Doc: {clienteActivo.clienteDocumento && clienteActivo.clienteDocumento !== '0000000' && clienteActivo.clienteDocumento !== '—' ? clienteActivo.clienteDocumento : 'Consumidor Final'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Solicitudes involucradas:{' '}
-                          <span className="font-mono text-indigo-400 font-bold">
-                            {Array.from(clienteActivo.solicitudesNumeros).join(', ')}
-                          </span>
-                        </p>
-                      </div>
+            <div className="p-3.5 bg-slate-950/60 rounded-xl border border-white/5 text-xs text-slate-300 space-y-1">
+              <div>
+                Recibido por: <strong className="text-white">{despachoExitoso.recibidoPorNombre || receptorNombre}</strong> (Doc: {despachoExitoso.recibidoPorDocumento || receptorDocumento})
+              </div>
+              <div className="text-slate-400 text-[11px]">
+                Fecha de despacho: {new Date(despachoExitoso.fechaEmision || Date.now()).toLocaleString('es-CO')}
+              </div>
+            </div>
 
-                      <Button size="sm" variant="secondary" onClick={seleccionarTodosLosItems}>
-                        {itemsSeleccionadosIds.length === clienteActivo.items.length
-                          ? 'Deseleccionar Todos'
-                          : 'Seleccionar Todos'}
-                      </Button>
-                    </div>
-
-                    {/* Bento Grid: Métricas de la selección */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Ítems a Entregar</span>
-                        <div className="text-xl font-bold font-mono text-white">
-                          {itemsClienteMarcados.length} <span className="text-xs text-slate-500 font-normal">de {clienteActivo.items.length}</span>
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Ítems</span>
-                        <div className="text-xl font-bold font-mono text-white">
-                          COP ${resumenFinanciero.totalEntregar.toLocaleString('es-CO')}
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Anticipos Imputados</span>
-                        <div className="text-xl font-bold font-mono text-emerald-400">
-                          -COP ${resumenFinanciero.totalAnticipos.toLocaleString('es-CO')}
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-1">
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Saldo Pendiente</span>
-                        <div className={`text-xl font-black font-mono ${resumenFinanciero.saldoPendiente > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                          COP ${resumenFinanciero.saldoPendiente.toLocaleString('es-CO')}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Tabla de Selección de Ítems */}
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                        Ítems Disponibles de Taller para este Cliente
-                      </h4>
-                      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/80">
-                        <table className="min-w-full divide-y divide-white/5 text-sm">
-                          <thead className="bg-white/[0.02]">
-                            <tr>
-                              <th className="px-4 py-3 text-left w-10">
-                                <input
-                                  type="checkbox"
-                                  className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
-                                  checked={itemsClienteMarcados.length === clienteActivo.items.length && clienteActivo.items.length > 0}
-                                  onChange={seleccionarTodosLosItems}
-                                />
-                              </th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400">Ítem / Servicio</th>
-                              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400">Solicitud / OT</th>
-                              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400">Cant</th>
-                              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400">Subtotal</th>
-                              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400">Anticipo</th>
-                              <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400">Saldo Ítem</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {clienteActivo.items.map((it) => {
-                              const marcado = itemsSeleccionadosIds.includes(it.itemPublicId);
-                              return (
-                                <tr
-                                  key={it.itemPublicId}
-                                  onClick={() => toggleSeleccionItem(it.itemPublicId)}
-                                  className={`cursor-pointer transition-colors ${
-                                    marcado ? 'bg-indigo-600/10' : 'hover:bg-white/[0.02]'
-                                  }`}
-                                >
-                                  <td className="px-4 py-3">
-                                    <input
-                                      type="checkbox"
-                                      checked={marcado}
-                                      onChange={() => toggleSeleccionItem(it.itemPublicId)}
-                                      className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <div className="font-semibold text-white">{it.descripcion}</div>
-                                    <div className="text-[11px] text-slate-400 font-mono">Cód: {it.itemCodigo}</div>
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <span className="font-mono text-xs font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30">
-                                      {it.documentoSolicitudNumero}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3 text-right font-mono text-slate-300">{it.cantidad}</td>
-                                  <td className="px-4 py-3 text-right font-mono font-semibold text-white">
-                                    ${it.subtotal.toLocaleString('es-CO')}
-                                  </td>
-                                  <td className="px-4 py-3 text-right font-mono text-emerald-400">
-                                    ${it.anticipoDirectoImputado.toLocaleString('es-CO')}
-                                  </td>
-                                  <td className="px-4 py-3 text-right font-mono font-bold text-rose-400">
-                                    ${it.saldoPendienteItem.toLocaleString('es-CO')}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* LÍMITES MATEMÁTICOS DE ANTICIPO [m, M] (Doc 13) */}
-                  {previewData && previewData.requests && previewData.requests.length > 0 && (
-                    <div className="p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-indigo-500/30 shadow-xl space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">⚖️</span>
-                          <div>
-                            <h3 className="text-sm font-bold text-white">
-                              Distribución de Anticipos y Límites Matemáticos [m, M]
-                            </h3>
-                            <p className="text-xs text-slate-400">
-                              Límites legales calculados para proteger ítems pendientes en taller (Doc 13).
-                            </p>
-                          </div>
-                        </div>
-                        {loadingPreview && (
-                          <span className="text-xs text-indigo-400 animate-pulse font-mono">Calculando cotas...</span>
-                        )}
-                      </div>
-
-                      <div className="space-y-3 pt-1">
-                        {previewData.requests.map((req) => {
-                          const aplicado = ordenesAvanceAplicado[req.documentId] ?? req.suggestedAdvanceToApply;
-                          const min = req.minAdvanceToApply;
-                          const max = req.maxAdvanceToApply;
-
-                          return (
-                            <div
-                              key={req.documentId}
-                              className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/10 space-y-2"
-                            >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/40">
-                                    {req.documentNumber}
-                                  </span>
-                                  <span className="text-xs text-slate-400">
-                                    Subtotal Entregar: <strong className="text-white font-mono">${req.deliverySubtotal.toLocaleString('es-CO')}</strong>
-                                  </span>
-                                </div>
-                                <div className="text-xs font-mono font-bold text-emerald-400">
-                                  Rango [m={min.toLocaleString('es-CO')}, M={max.toLocaleString('es-CO')}]
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-3">
-                                <input
-                                  type="range"
-                                  min={min}
-                                  max={max}
-                                  step={100}
-                                  value={aplicado}
-                                  disabled={min === max}
-                                  onChange={(e) =>
-                                    handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
-                                  }
-                                  className="flex-1 accent-indigo-500 h-2 bg-slate-800 rounded-lg cursor-pointer"
-                                />
-                                <div className="w-36">
-                                  <Input
-                                    type="number"
-                                    min={min}
-                                    max={max}
-                                    value={aplicado}
-                                    onChange={(e) =>
-                                      handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
-                                    }
-                                    fullWidth
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                        {previewData.availableCustomerAdvance > 0 && (
-                          <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                            <span className="text-indigo-200">
-                              🌟 Saldo a favor global: <strong>${previewData.availableCustomerAdvance.toLocaleString('es-CO')}</strong>
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span>Aplicar:</span>
-                              <div className="w-28">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  max={previewData.availableCustomerAdvance}
-                                  value={anticipoClienteAplicado}
-                                  onChange={(e) =>
-                                    setAnticipoClienteAplicado(
-                                      Math.min(
-                                        previewData.availableCustomerAdvance,
-                                        Math.max(0, Number(e.target.value))
-                                      )
-                                    )
-                                  }
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* FORMATO SOBRIO DE PAGO Y DESPACHO (ESTILO SOLICITUD DE 2 COLUMNAS) */}
-                  <div className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-4">
-                    <div className="border-b border-white/10 pb-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">💵</span>
-                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                          Liquidación de Pago y Datos de Despacho
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={incluirPagoConsolidado}
-                            onChange={(e) => setIncluirPagoConsolidado(e.target.checked)}
-                            className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span>Registrar cobro en entrega</span>
-                        </label>
-                        <Badge variant={resumenFinanciero.saldoPendiente > 0 ? 'warning' : 'success'}>
-                          {resumenFinanciero.saldoPendiente > 0 ? 'Con Saldo en Mostrador' : '100% Cubierto'}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {/* Estructura Sobria 2 Columnas Estilo SolicitudCapturaMixta */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                      {/* Columna Izquierda (~65%): Formulario Compacto de Cobro y Receptor */}
-                      <div className="lg:col-span-7 space-y-4">
-                        {/* Fila 1: Instrumento (~60%) y Monto (~40%) en la MISMA línea */}
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                          <div className="md:col-span-7">
-                            <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                              Medio de Pago *
-                            </label>
-                            <select
-                              value={metodoPagoConsolidado}
-                              onChange={(e) => {
-                                setMetodoPagoConsolidado(e.target.value);
-                                setErrorMsg(null);
-                              }}
-                              className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                              {mediosPago.map((m) => (
-                                <option key={m.uuid} value={m.uuid}>
-                                  {m.codigo} - {m.nombre}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="md:col-span-5">
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="block text-xs font-semibold text-slate-300 uppercase">
-                                Monto a Cobrar *
-                              </label>
-                              {resumenFinanciero.saldoPendiente > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setMontoPagoConsolidado(resumenFinanciero.saldoPendiente)}
-                                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline"
-                                >
-                                  Pagar Total
-                                </button>
-                              )}
-                            </div>
-                            <Input
-                              type="number"
-                              value={montoPagoConsolidado}
-                              onChange={(e) => setMontoPagoConsolidado(Number(e.target.value))}
-                              min={0}
-                              fullWidth
-                            />
-                          </div>
-                        </div>
-
-                        {/* Fila 2: Referencia / Comprobante */}
-                        <div>
-                          <Input
-                            label="Referencia / N° Transacción / Comprobante"
-                            value={referenciaPagoConsolidado}
-                            onChange={(e) => setReferenciaPagoConsolidado(e.target.value)}
-                            placeholder="Ej: Aprobación datáfono #123456"
-                            fullWidth
-                          />
-                        </div>
-
-                        {/* Fila 3: Receptor (Nombre y Documento juntos) */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <Input
-                            label="Recibido por (Nombre) *"
-                            value={receptorNombre}
-                            onChange={(e) => setReceptorNombre(e.target.value)}
-                            placeholder="Nombre de quien retira"
-                            required
-                            fullWidth
-                          />
-                          <Input
-                            label="Documento Identidad *"
-                            value={receptorDocumento}
-                            onChange={(e) => setReceptorDocumento(e.target.value)}
-                            placeholder="Cédula o NIT"
-                            required
-                            fullWidth
-                          />
-                        </div>
-
-                        {/* Fila 4: Observaciones */}
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                            Observaciones de Entrega
-                          </label>
-                          <textarea
-                            rows={2}
-                            value={observacionEntrega}
-                            onChange={(e) => setObservacionEntrega(e.target.value)}
-                            placeholder="Notas adicionales sobre la entrega, embalaje..."
-                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Columna Derecha (~35%): Panel Sobrio de Totales y Acción */}
-                      <div className="lg:col-span-5 p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3 text-xs">
-                        <div className="flex justify-between items-center text-slate-300">
-                          <span className="font-medium">Total Ítems:</span>
-                          <span className="font-mono text-white text-sm font-bold">
-                            ${resumenFinanciero.totalEntregar.toLocaleString('es-CO')}
-                          </span>
-                        </div>
-
-                        <div className="flex justify-between items-center text-slate-300">
-                          <span className="font-medium">Anticipos Imputados:</span>
-                          <span className="font-mono text-emerald-400 font-bold">
-                            -${resumenFinanciero.totalAnticipos.toLocaleString('es-CO')}
-                          </span>
-                        </div>
-
-                        <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-rose-300 font-bold">
-                          <span>Saldo en Mostrador:</span>
-                          <span className="font-mono text-rose-400 text-base font-black">
-                            ${resumenFinanciero.saldoPendiente.toLocaleString('es-CO')}
-                          </span>
-                        </div>
-
-                        {/* Indicador de Despacho */}
-                        {montoPagoConsolidado >= resumenFinanciero.saldoPendiente ? (
-                          <div className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-[11px] font-semibold flex items-center gap-1.5">
-                            <span>✓</span> Saldo 100% cubierto. Despacho directo habilitado.
-                          </div>
-                        ) : (
-                          <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1.5">
-                            <span>⚠️</span> Saldo restante de ${(resumenFinanciero.saldoPendiente - montoPagoConsolidado).toLocaleString('es-CO')}.
-                          </div>
-                        )}
-
-                        {errorMsg && (
-                          <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/50 text-rose-300 text-xs flex items-center justify-between animate-fade-in">
-                            <div className="flex items-center gap-1.5">
-                              <span>⚠️</span>
-                              <span>{errorMsg}</span>
-                            </div>
-                            <button onClick={() => setErrorMsg(null)} className="text-rose-400 hover:text-rose-200 font-bold ml-2">✕</button>
-                          </div>
-                        )}
-
-                        <Button
-                          variant="primary"
-                          size="lg"
-                          fullWidth
-                          loading={loading}
-                          disabled={
-                            itemsClienteMarcados.length === 0 ||
-                            !receptorNombre.trim() ||
-                            !receptorDocumento.trim()
-                          }
-                          onClick={handleCrearEntregaConsolidada}
-                          className="mt-2"
-                        >
-                          🚀 Despachar ({itemsClienteMarcados.length} ítems)
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-12 text-center text-slate-400 bg-slate-900/50 rounded-3xl border border-dashed border-white/10">
-                  Seleccione un cliente a la izquierda para ver sus ítems listos y preparar la entrega.
-                </div>
-              )}
+            <div className="flex flex-col sm:flex-row justify-end gap-3 pt-3 border-t border-white/10">
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => window.print()}
+                className="min-h-[44px] flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Imprimir Comprobante</span>
+              </Button>
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={handleDespacharOtra}
+                className="min-h-[44px]"
+              >
+                Despachar Otra Entrega
+              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* MODAL COBRAR SALDO PENDIENTE (REMISIÓN INDIVIDUAL) */}
       <Modal
@@ -1497,11 +1638,14 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                 <div className="md:col-span-7">
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Medio de Pago *</label>
+                  <label htmlFor="modal-instrumento-pago" className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                    Instrumento de pago *
+                  </label>
                   <select
+                    id="modal-instrumento-pago"
                     value={instrumentoSeleccionado}
                     onChange={(e) => setInstrumentoSeleccionado(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px]"
                   >
                     {mediosPago.map((inst) => (
                       <option key={inst.uuid} value={inst.uuid}>
@@ -1512,14 +1656,18 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 </div>
 
                 <div className="md:col-span-5">
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Monto a Cobrar *</label>
+                  <label htmlFor="modal-monto-pago" className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                    Monto a Cobrar *
+                  </label>
                   <Input
+                    id="modal-monto-pago"
                     type="number"
                     value={montoPago}
                     onChange={(e) => setMontoPago(Number(e.target.value))}
                     max={remisionActiva.saldoPendiente}
                     min={1}
                     fullWidth
+                    className="min-h-[44px]"
                   />
                 </div>
               </div>
@@ -1531,15 +1679,16 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                   onChange={(e) => setReferenciaPago(e.target.value)}
                   placeholder="Ej: Aprobación datáfono #987654"
                   fullWidth
+                  className="min-h-[44px]"
                 />
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
-              <Button variant="secondary" onClick={() => setIsPagoModalOpen(false)}>
+              <Button variant="secondary" onClick={() => setIsPagoModalOpen(false)} className="min-h-[44px]">
                 Cancelar
               </Button>
-              <Button variant="primary" onClick={handleConfirmarPago} disabled={montoPago <= 0}>
+              <Button variant="primary" onClick={handleConfirmarPago} disabled={montoPago <= 0} className="min-h-[44px]">
                 Confirmar Recaudo
               </Button>
             </div>
