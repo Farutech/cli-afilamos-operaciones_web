@@ -470,19 +470,6 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     };
   }, [despachoExitoso]);
 
-  const handleCambiarAnticipoOrden = (documentId: string, nuevoMonto: number, min: number, max: number) => {
-    const valorClamp = Math.max(min, Math.min(max, isNaN(nuevoMonto) ? min : nuevoMonto));
-    setOrdenesAvanceAplicado((prev) => {
-      const next = { ...prev, [documentId]: valorClamp };
-      const suma = Object.values(next).reduce((a, b) => a + b, 0);
-      const subtotal = previewData?.totalDeliveredAmount ?? totalesSeleccion.totalNeto;
-      const saldoTrasOrdenes = Math.max(0, subtotal - suma);
-      const clienteUsar = Math.min(anticipoClienteAplicado, saldoTrasOrdenes);
-      setAnticipoClienteAplicado(clienteUsar);
-      setMontoPagoConsolidado(Math.max(0, saldoTrasOrdenes - clienteUsar));
-      return next;
-    });
-  };
 
   const toggleSeleccionItem = (itemPublicId: string) => {
     setErrorMsg(null);

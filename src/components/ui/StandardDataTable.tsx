@@ -46,6 +46,15 @@ export interface RowActionsConfig {
   menu?: RowActionMenuOption[];
 }
 
+export interface StandardRowAction<T> {
+  id?: string;
+  label: string;
+  icon?: React.ReactNode;
+  onClick: (row: T) => void;
+  variant?: 'danger' | 'default' | 'primary' | 'secondary' | 'success' | 'ghost';
+  disabled?: boolean;
+}
+
 export interface BulkActionConfig {
   label: string;
   icon?: React.ReactNode;
@@ -63,6 +72,7 @@ export interface StandardDataTableProps<T> {
   onRetry?: () => void;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyMessage?: string;
   emptyAction?: {
     label: string;
     onClick: () => void;
@@ -73,15 +83,20 @@ export interface StandardDataTableProps<T> {
   selectedKeys?: Set<string>;
   onSelectionChange?: (newSelected: Set<string>) => void;
   bulkActions?: BulkActionConfig[];
-  rowActions?: (row: T) => RowActionsConfig;
+  rowActions?:
+    | ((row: T) => RowActionsConfig | StandardRowAction<T>[])
+    | StandardRowAction<T>[]
+    | RowActionsConfig;
   sortColumn?: string;
   sortDirection?: 'asc' | 'desc';
   onSort?: (columnKey: string) => void;
   pagination?: {
-    currentPage: number;
+    currentPage?: number;
+    page?: number;
     pageSize: number;
     totalItems: number;
     onPageChange: (page: number) => void;
+    onPageSizeChange?: (pageSize: number) => void;
   };
 }
 
@@ -101,6 +116,7 @@ export function StandardDataTable<T>({
   onRetry,
   emptyTitle = 'No hay registros',
   emptyDescription = 'No se encontraron datos disponibles en este módulo.',
+  emptyMessage,
   emptyAction,
   isSearching = false,
   onClearSearch,
@@ -115,6 +131,54 @@ export function StandardDataTable<T>({
   pagination,
 }: StandardDataTableProps<T>): React.ReactElement {
   const [openMenuRowKey, setOpenMenuRowKey] = useState<string | null>(null);
+
+  const effectiveEmptyTitle = emptyMessage || emptyTitle;
+  const currentPg = pagination ? (pagination.currentPage ?? pagination.page ?? 1) : 1;
+  const totalPages = pagination ? Math.max(1, Math.ceil(pagination.totalItems / pagination.pageSize)) : 1;
+
+  const resolveActionsConfig = (row: T): RowActionsConfig | null => {
+    if (!rowActions) return null;
+    if (typeof rowActions === 'function') {
+      const res = (rowActions as any)(row);
+      if (Array.isArray(res)) {
+        return {
+          primary: res[0],
+          secondary: res[1],
+          menu: res.slice(2),
+        };
+      }
+      return res;
+    }
+    if (Array.isArray(rowActions)) {
+      const list = rowActions as StandardRowAction<T>[];
+      return {
+        primary: list[0]
+          ? {
+              label: list[0].label,
+              icon: list[0].icon,
+              onClick: () => list[0].onClick(row),
+              disabled: list[0].disabled,
+            }
+          : undefined,
+        secondary: list[1]
+          ? {
+              label: list[1].label,
+              icon: list[1].icon,
+              onClick: () => list[1].onClick(row),
+              disabled: list[1].disabled,
+            }
+          : undefined,
+        menu: list.slice(2).map((a) => ({
+          label: a.label,
+          icon: a.icon,
+          onClick: () => a.onClick(row),
+          disabled: a.disabled,
+          variant: a.variant,
+        })),
+      };
+    }
+    return rowActions as RowActionsConfig;
+  };
 
   // Clases por densidad
   const densityCellClasses: Record<TableDensity, string> = {
@@ -296,7 +360,7 @@ export function StandardDataTable<T>({
                     <div className="max-w-sm mx-auto space-y-3">
                       <Inbox className="w-9 h-9 text-slate-500 mx-auto" />
                       <h3 className="text-sm font-semibold text-slate-200">
-                        {isSearching ? 'Sin resultados para la búsqueda' : emptyTitle}
+                        {isSearching ? 'Sin resultados para la búsqueda' : effectiveEmptyTitle}
                       </h3>
                       <p className="text-xs text-slate-400">
                         {isSearching ? 'Intenta modificar los términos o limpiar los filtros aplicados.' : emptyDescription}
@@ -320,7 +384,7 @@ export function StandardDataTable<T>({
                 data.map((row, rIdx) => {
                   const rowKey = keyExtractor(row);
                   const isSelected = selectedKeys.has(rowKey);
-                  const actionsConfig = rowActions ? rowActions(row) : null;
+                  const actionsConfig = resolveActionsConfig(row);
                   const isMenuOpen = openMenuRowKey === rowKey;
 
                   return (
@@ -446,36 +510,56 @@ export function StandardDataTable<T>({
         {/* Paginación Integrada */}
         {pagination && pagination.totalItems > 0 && (
           <div className="border-t border-slate-800/80 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 bg-slate-950/40">
-            <div>
-              Mostrando{' '}
-              <span className="font-semibold text-slate-200">
-                {(pagination.currentPage - 1) * pagination.pageSize + 1}
-              </span>{' '}
-              a{' '}
-              <span className="font-semibold text-slate-200">
-                {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalItems)}
-              </span>{' '}
-              de <span className="font-semibold text-slate-200">{pagination.totalItems}</span> registros
+            <div className="flex items-center gap-3">
+              <div>
+                Mostrando{' '}
+                <span className="font-semibold text-slate-200">
+                  {(currentPg - 1) * pagination.pageSize + 1}
+                </span>{' '}
+                a{' '}
+                <span className="font-semibold text-slate-200">
+                  {Math.min(currentPg * pagination.pageSize, pagination.totalItems)}
+                </span>{' '}
+                de <span className="font-semibold text-slate-200">{pagination.totalItems}</span> registros
+              </div>
+
+              {pagination.onPageSizeChange && (
+                <div className="flex items-center gap-1.5 pl-3 border-l border-slate-800">
+                  <span className="text-[11px] text-slate-400">Filas:</span>
+                  <select
+                    value={pagination.pageSize}
+                    onChange={(e) => pagination.onPageSizeChange!(Number(e.target.value))}
+                    className="bg-slate-900 border border-slate-700/80 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none cursor-pointer"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5">
               <Button
                 size="sm"
                 variant="outline"
-                disabled={pagination.currentPage <= 1}
-                onClick={() => pagination.onPageChange(pagination.currentPage - 1)}
+                disabled={currentPg <= 1}
+                onClick={() => pagination.onPageChange(currentPg - 1)}
+                title="Página anterior"
                 className="h-7 px-2.5 text-xs"
               >
                 Anterior
               </Button>
               <span className="px-2 text-slate-300 font-medium">
-                Pág. {pagination.currentPage} de {Math.max(1, Math.ceil(pagination.totalItems / pagination.pageSize))}
+                Pág. {currentPg} de {totalPages}
               </span>
               <Button
                 size="sm"
                 variant="outline"
-                disabled={pagination.currentPage >= Math.ceil(pagination.totalItems / pagination.pageSize)}
-                onClick={() => pagination.onPageChange(pagination.currentPage + 1)}
+                disabled={currentPg >= totalPages}
+                onClick={() => pagination.onPageChange(currentPg + 1)}
+                title="Página siguiente"
                 className="h-7 px-2.5 text-xs"
               >
                 Siguiente

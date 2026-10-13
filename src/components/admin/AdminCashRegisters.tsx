@@ -4,20 +4,14 @@ import {
   Plus,
   Pencil,
   Power,
-  Search,
   CheckCircle2,
   XCircle,
   Building,
   MapPin,
-  Wallet,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Modal, Badge, Button } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { Caja } from '@/types/catalogos';
 
@@ -135,12 +129,6 @@ export default function AdminCashRegisters({ token }: AdminCashRegistersProps) {
     }
   }, [totalPaginas, paginaActual]);
 
-  const indiceInicio = (paginaActual - 1) * tamanoPagina;
-  const indiceFin = Math.min(indiceInicio + tamanoPagina, totalRegistros);
-
-  const cajasPaginadas = useMemo(() => {
-    return cajasFiltradas.slice(indiceInicio, indiceFin);
-  }, [cajasFiltradas, indiceInicio, indiceFin]);
 
   // Estadísticas compactas
   const stats = useMemo(() => {
@@ -282,23 +270,97 @@ export default function AdminCashRegisters({ token }: AdminCashRegistersProps) {
     setPaginaActual(1);
   };
 
+  const columns = useMemo<ColumnDef<Caja>[]>(
+    () => [
+      {
+        key: 'codigoCaja',
+        header: 'Código',
+        sortable: true,
+        render: (caja) => (
+          <span className="font-mono font-bold text-xs text-blue-300 bg-blue-950/60 border border-blue-800/50 px-2 py-0.5 rounded">
+            {caja.codigoCaja}
+          </span>
+        ),
+      },
+      {
+        key: 'nombre',
+        header: 'Nombre Descriptivo',
+        sortable: true,
+        render: (caja) => <div className="font-semibold text-white">{caja.nombre}</div>,
+      },
+      {
+        key: 'ubicacion',
+        header: 'Ubicación Física',
+        render: (caja) => (
+          <div className="flex items-center gap-1.5 text-gray-300">
+            <MapPin className="w-3.5 h-3.5 text-gray-500" />
+            <span>{caja.ubicacion || 'Mostrador Principal'}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'activa',
+        header: 'Estado',
+        render: (caja) => (
+          <Badge variant={caja.activa ? 'success' : 'neutral'}>
+            {caja.activa ? '● Activa (Operativa)' : '○ Inactiva'}
+          </Badge>
+        ),
+      },
+    ],
+    []
+  );
+
+  const rowActions = (caja: Caja): StandardRowAction<Caja>[] => [
+    {
+      label: 'Editar',
+      icon: <Pencil className="w-3 h-3" />,
+      onClick: () => handleAbrirEditar(caja),
+    },
+    {
+      label: caja.activa ? 'Desactivar' : 'Activar',
+      icon: <Power className="w-3 h-3" />,
+      onClick: () => setModalToggleTarget(caja),
+    },
+  ];
+
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-8 text-slate-100">
-      {/* Encabezado Compacto */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-400">
-            Catálogos · Administración de Tesorería
-          </p>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2 mt-0.5">
-            <span>🏧</span> Cajas y Terminales POS
-          </h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Configure las N terminales físicas de caja autorizadas para apertura de turnos, arqueos y recaudo.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+      <ListPageLayout
+        title="Cajas y Terminales POS"
+        eyebrow="Catálogos · Administración de Tesorería"
+        description="Configure las N terminales físicas de caja autorizadas para apertura de turnos, arqueos y recaudo."
+        search={{
+          value: searchQuery,
+          onChange: (val) => {
+            setSearchQuery(val);
+            setPaginaActual(1);
+          },
+          placeholder: 'Buscar por código (ej: CAJA1), nombre o ubicación...',
+          isSearching: loading,
+        }}
+        filters={
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-400 font-medium mr-1">Filtrar:</span>
+            {(['TODAS', 'ACTIVAS', 'INACTIVAS'] as const).map((estado) => (
+              <button
+                key={estado}
+                onClick={() => {
+                  setFiltroEstado(estado);
+                  setPaginaActual(1);
+                }}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                  filtroEstado === estado
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+              >
+                {estado === 'TODAS' ? 'Todas' : estado === 'ACTIVAS' ? 'Activas' : 'Inactivas'}
+              </button>
+            ))}
+          </div>
+        }
+        actions={
           <Button
             variant="primary"
             size="sm"
@@ -308,280 +370,86 @@ export default function AdminCashRegisters({ token }: AdminCashRegistersProps) {
             <Plus className="w-3.5 h-3.5" />
             <span>Nueva Caja de Mostrador</span>
           </Button>
-        </div>
-      </div>
-
-      {/* Tarjetas de Resumen KPI Horizontales y Compactas (Evita Scroll) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-        <div className="p-3 bg-slate-900/70 border border-white/10 rounded-xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center">
-              <Building className="w-4 h-4" />
+        }
+        onRefresh={cargarCajas}
+        isRefreshing={loading}
+      >
+        {/* Tarjetas de Resumen KPI Horizontales y Compactas */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-3">
+          <div className="p-3 bg-slate-900/70 border border-white/10 rounded-xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center">
+                <Building className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-400 font-medium">Cajas en Total</div>
+                <div className="text-xl font-bold text-white leading-tight">{stats.total}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-gray-400 font-medium">Cajas en Total</div>
-              <div className="text-xl font-bold text-white leading-tight">{stats.total}</div>
-            </div>
+            <span className="text-[10px] text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded">
+              Registradas
+            </span>
           </div>
-          <span className="text-[10px] text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded">
-            Registradas
-          </span>
-        </div>
 
-        <div className="p-3 bg-slate-900/70 border border-white/10 rounded-xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
+          <div className="p-3 bg-slate-900/70 border border-white/10 rounded-xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-400 font-medium">Cajas Activas</div>
+                <div className="text-xl font-bold text-emerald-400 leading-tight">{stats.activas}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-gray-400 font-medium">Cajas Activas</div>
-              <div className="text-xl font-bold text-emerald-400 leading-tight">{stats.activas}</div>
-            </div>
+            <span className="text-[10px] text-emerald-400/80 font-mono bg-emerald-500/10 px-2 py-0.5 rounded">
+              Operativas
+            </span>
           </div>
-          <span className="text-[10px] text-emerald-400/80 font-mono bg-emerald-500/10 px-2 py-0.5 rounded">
-            Operativas
-          </span>
-        </div>
 
-        <div className="p-3 bg-slate-900/70 border border-white/10 rounded-xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center">
-              <XCircle className="w-4 h-4" />
+          <div className="p-3 bg-slate-900/70 border border-white/10 rounded-xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                <XCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs text-gray-400 font-medium">Cajas Inactivas</div>
+                <div className="text-xl font-bold text-amber-400 leading-tight">{stats.inactivas}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-gray-400 font-medium">Cajas Inactivas</div>
-              <div className="text-xl font-bold text-amber-400 leading-tight">{stats.inactivas}</div>
-            </div>
+            <span className="text-[10px] text-amber-400/80 font-mono bg-amber-500/10 px-2 py-0.5 rounded">
+              Inhabilitadas
+            </span>
           </div>
-          <span className="text-[10px] text-amber-400/80 font-mono bg-amber-500/10 px-2 py-0.5 rounded">
-            Inhabilitadas
-          </span>
         </div>
-      </div>
 
-      {/* Barra de Filtros y Búsqueda */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-gray-900/60 p-2.5 rounded-xl border border-white/10">
-        <div className="relative flex-1">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por código (ej: CAJA1), nombre o ubicación..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
+        <StandardDataTable
+          columns={columns}
+          data={cajasFiltradas}
+          keyExtractor={(caja) => caja.uuid || caja.codigoCaja}
+          loading={loading}
+          rowActions={rowActions}
+          emptyTitle="No se encontraron cajas registradas"
+          emptyDescription={
+            searchQuery || filtroEstado !== 'TODAS'
+              ? 'No hay cajas que coincidan con los filtros de búsqueda aplicados.'
+              : 'Haga clic en "+ Nueva Caja de Mostrador" para crear una nueva terminal.'
+          }
+          emptyAction={{
+            label: 'Limpiar filtros',
+            onClick: handleLimpiarFiltros,
+          }}
+          pagination={{
+            page: paginaActual,
+            pageSize: tamanoPagina,
+            totalItems: totalRegistros,
+            onPageChange: (newPage) => setPaginaActual(newPage),
+            onPageSizeChange: (newSize) => {
+              setTamanoPagina(newSize);
               setPaginaActual(1);
-            }}
-            className="w-full pl-9 pr-4 py-1.5 bg-gray-950/80 border border-white/10 rounded-lg text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-1.5 self-end sm:self-auto">
-          <span className="text-[11px] text-gray-400 font-medium mr-1">Filtrar:</span>
-          {(['TODAS', 'ACTIVAS', 'INACTIVAS'] as const).map((estado) => (
-            <button
-              key={estado}
-              onClick={() => {
-                setFiltroEstado(estado);
-                setPaginaActual(1);
-              }}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                filtroEstado === estado
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-              }`}
-            >
-              {estado === 'TODAS' ? 'Todas' : estado === 'ACTIVAS' ? 'Activas' : 'Inactivas'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tabla de Cajas con Controles de Paginación */}
-      <div className="bg-gray-900/70 border border-white/10 rounded-xl overflow-hidden shadow-lg flex flex-col">
-        <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-white/10 bg-gray-950/80 text-gray-400 font-semibold text-[11px] uppercase tracking-wider">
-                <th className="py-2.5 px-3.5">Código</th>
-                <th className="py-2.5 px-3.5">Nombre Descriptivo</th>
-                <th className="py-2.5 px-3.5">Ubicación Física</th>
-                <th className="py-2.5 px-3.5">Estado</th>
-                <th className="py-2.5 px-3.5 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-gray-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs">Cargando catálogo de cajas y terminales...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : cajasPaginadas.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-gray-400">
-                    <div className="max-w-sm mx-auto space-y-2 p-4">
-                      <Wallet className="w-9 h-9 mx-auto text-gray-500 opacity-80" />
-                      <p className="font-semibold text-white text-sm">No se encontraron cajas registradas</p>
-                      <p className="text-xs text-gray-400">
-                        {searchQuery || filtroEstado !== 'TODAS'
-                          ? 'No hay cajas que coincidan con los filtros de búsqueda aplicados.'
-                          : 'Haga clic en "+ Nueva Caja de Mostrador" para crear una nueva terminal.'}
-                      </p>
-                      {(searchQuery || filtroEstado !== 'TODAS') && (
-                        <div className="pt-2">
-                          <button
-                            type="button"
-                            onClick={handleLimpiarFiltros}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-800 hover:bg-gray-700 text-blue-300 rounded-lg text-xs font-medium border border-white/10 transition-colors cursor-pointer"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            <span>Limpiar filtros</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                cajasPaginadas.map((caja) => (
-                  <tr
-                    key={caja.uuid || caja.codigoCaja}
-                    className="hover:bg-white/[0.03] transition-colors"
-                  >
-                    <td className="py-2 px-3.5">
-                      <span className="font-mono font-bold text-xs text-blue-300 bg-blue-950/60 border border-blue-800/50 px-2 py-0.5 rounded">
-                        {caja.codigoCaja}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3.5">
-                      <div className="font-semibold text-white">{caja.nombre}</div>
-                    </td>
-                    <td className="py-2 px-3.5">
-                      <div className="flex items-center gap-1.5 text-gray-300">
-                        <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                        <span>{caja.ubicacion || 'Mostrador Principal'}</span>
-                      </div>
-                    </td>
-                    <td className="py-2 px-3.5">
-                      <Badge variant={caja.activa ? 'success' : 'neutral'}>
-                        {caja.activa ? '● Activa (Operativa)' : '○ Inactiva'}
-                      </Badge>
-                    </td>
-                    <td className="py-2 px-3.5 text-right">
-                      {/* Botones de acción mejorados con iconos y hover estilizado */}
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleAbrirEditar(caja)}
-                          title="Editar nombre y ubicación de la terminal"
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-indigo-600 hover:text-white border border-slate-700 hover:border-indigo-500 shadow-sm transition-all duration-150 cursor-pointer active:scale-95"
-                        >
-                          <Pencil className="w-3 h-3 text-slate-400 group-hover:text-white" />
-                          <span>Editar</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setModalToggleTarget(caja)}
-                          title={caja.activa ? 'Inactivar caja para bloquear apertura de turnos' : 'Activar caja para permitir turnos'}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border shadow-sm transition-all duration-150 cursor-pointer active:scale-95 ${
-                            caja.activa
-                              ? 'text-rose-300 bg-rose-950/30 hover:bg-rose-600 hover:text-white border-rose-800/40 hover:border-rose-500'
-                              : 'text-emerald-300 bg-emerald-950/30 hover:bg-emerald-600 hover:text-white border-emerald-800/40 hover:border-emerald-500'
-                          }`}
-                        >
-                          <Power className="w-3 h-3" />
-                          <span>{caja.activa ? 'Desactivar' : 'Activar'}</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Barra de Paginación Estándar */}
-        <div className="px-3.5 py-2.5 bg-gray-950/90 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
-          <div className="flex items-center gap-3">
-            <span>
-              {totalRegistros === 0 ? (
-                '0 registros'
-              ) : (
-                <>
-                  Mostrando <strong className="text-white">{indiceInicio + 1}</strong> -{' '}
-                  <strong className="text-white">{indiceFin}</strong> de{' '}
-                  <strong className="text-white">{totalRegistros}</strong> cajas
-                </>
-              )}
-            </span>
-
-            <div className="flex items-center gap-1.5 pl-3 border-l border-white/10">
-              <span className="text-[11px] text-gray-500">Filas:</span>
-              <select
-                value={tamanoPagina}
-                onChange={(e) => {
-                  setTamanoPagina(Number(e.target.value));
-                  setPaginaActual(1);
-                }}
-                className="bg-gray-900 border border-white/10 rounded px-1.5 py-0.5 text-xs text-white focus:outline-none cursor-pointer"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={paginaActual === 1 || totalRegistros === 0}
-              onClick={() => setPaginaActual(1)}
-              title="Primera página"
-              className="p-1 rounded border border-white/10 bg-gray-900 text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-            >
-              <ChevronsLeft className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              disabled={paginaActual === 1 || totalRegistros === 0}
-              onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
-              title="Página anterior"
-              className="p-1 rounded border border-white/10 bg-gray-900 text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-
-            <span className="px-2 font-mono text-[11px]">
-              Pág. <strong className="text-white">{paginaActual}</strong> / {totalPaginas}
-            </span>
-
-            <button
-              type="button"
-              disabled={paginaActual === totalPaginas || totalRegistros === 0}
-              onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
-              title="Página siguiente"
-              className="p-1 rounded border border-white/10 bg-gray-900 text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              disabled={paginaActual === totalPaginas || totalRegistros === 0}
-              onClick={() => setPaginaActual(totalPaginas)}
-              title="Última página"
-              className="p-1 rounded border border-white/10 bg-gray-900 text-gray-300 hover:bg-gray-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
-            >
-              <ChevronsRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
+            },
+          }}
+        />
+      </ListPageLayout>
 
       {/* Modal: Crear Nueva Caja */}
       <Modal

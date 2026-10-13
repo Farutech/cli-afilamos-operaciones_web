@@ -4,7 +4,6 @@ import {
   Eye,
   Pencil,
   Power,
-  Search,
   Users,
   Mail,
   Phone,
@@ -12,7 +11,8 @@ import {
   Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { ordeonRequest } from '@/lib/api-client';
 
 export type Customer = {
@@ -62,7 +62,6 @@ export default function AdminClients({ token }: { token: string }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   async function loadCustomers() {
     if (!hasInitialLoaded) {
@@ -210,163 +209,137 @@ export default function AdminClients({ token }: { token: string }) {
     [customers, query]
   );
 
-  return (
-    <div className="page-content">
-      {/* Encabezado Estándar Ordeon */}
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ADMINISTRACIÓN · CLIENTES</p>
-          <h1>Directorio de clientes</h1>
-          <p className="heading-copy">
-            Consulta y administra clientes mediante el servicio de Ordeon.
-          </p>
-        </div>
-        <button className="primary-button" onClick={() => setModal('new')}>
-          <Users className="w-4 h-4 mr-2 inline" /> Nuevo cliente
-        </button>
-      </div>
-
-      {/* Panel Principal */}
-      <section className="panel clients-panel">
-        <div className="panel-heading">
-          <div>
-            <div className="panel-title-row">
-              <h2>Directorio</h2>
+  const columns = useMemo<ColumnDef<Customer>[]>(
+    () => [
+      {
+        key: 'cliente',
+        header: 'CLIENTE',
+        sortable: true,
+        render: (customer) => (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-indigo-950 border border-indigo-700/50 text-indigo-300 font-bold flex items-center justify-center text-xs shrink-0">
+              {(customer.name || customer.code || '?')
+                .split(' ')
+                .map((part) => part[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase()}
+            </div>
+            <div>
+              <strong className="text-white block font-medium">{customer.name || 'Sin nombre'}</strong>
+              <span className="text-slate-400 text-xs block font-mono">
+                {customer.phone || customer.code || 'Sin teléfono'}
+              </span>
             </div>
           </div>
-          <div className="client-search">
-            <Search className="w-4 h-4" />
-            <input
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar por nombre, teléfono o correo"
-              aria-label="Buscar clientes"
-            />
-            {isRefreshing && (
-              <span
-                className="spinner-sm"
-                title="Actualizando directorio..."
-                style={{ width: '13px', height: '13px', borderTopColor: '#a78bfa' }}
-              />
-            )}
-          </div>
-        </div>
+        ),
+      },
+      {
+        key: 'contacto',
+        header: 'CONTACTO',
+        render: (customer) => <span className="text-slate-300 text-xs">{customer.email || 'Sin correo'}</span>,
+      },
+      {
+        key: 'ordenes',
+        header: 'ÓRDENES',
+        align: 'center',
+        render: (customer) => <span className="font-mono text-slate-300 text-xs">{customer.ordersCount ?? '—'}</span>,
+      },
+      {
+        key: 'estado',
+        header: 'ESTADO',
+        render: (customer) => (
+          <Badge variant={customer.isActive === false ? 'warning' : 'success'}>
+            {customer.isActive === false ? 'Inactivo' : 'Activo'}
+          </Badge>
+        ),
+      },
+    ],
+    []
+  );
 
+  const rowActions = useMemo<StandardRowAction<Customer>[]>(
+    () => [
+      {
+        label: 'Ver Ficha',
+        icon: <Eye className="w-3.5 h-3.5" />,
+        onClick: (customer) => setViewCustomer(customer),
+      },
+      {
+        label: 'Editar',
+        icon: <Pencil className="w-3.5 h-3.5" />,
+        onClick: (customer) => setModal(customer),
+      },
+      {
+        label: 'Cambiar Estado',
+        icon: <Power className="w-3.5 h-3.5" />,
+        onClick: (customer) => void toggleStatus(customer),
+      },
+    ],
+    []
+  );
+
+  return (
+    <div className="page-content">
+      <ListPageLayout
+        title="Directorio de clientes"
+        eyebrow="ADMINISTRACIÓN · CLIENTES"
+        description="Consulta y administra clientes mediante el servicio de Ordeon."
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
+            setPage(1);
+          },
+          placeholder: 'Buscar por nombre, teléfono o correo',
+          isSearching: isRefreshing,
+        }}
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => setModal('new')}
+            className="flex items-center gap-2"
+          >
+            <Users className="w-4 h-4 mr-2" /> Nuevo cliente
+          </Button>
+        }
+        onRefresh={loadCustomers}
+        isRefreshing={isRefreshing}
+      >
         {error && (
-          <p className="form-error api-feedback" role="alert">
+          <p className="form-error api-feedback mb-3 text-sm text-rose-400" role="alert">
             {error}
           </p>
         )}
         {notice && (
-          <p className="api-notice" role="status">
+          <p className="api-notice mb-3 text-sm text-sky-400" role="status">
             {notice}
           </p>
         )}
 
-        {/* Encabezado de Columnas Básicas y Necesarias (Siempre visible) */}
-        <div className="client-table-head">
-          <span>CLIENTE</span>
-          <span>CONTACTO</span>
-          <span>ÓRDENES</span>
-          <span>ESTADO</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {isInitialLoading ? (
-          <div className="empty-state">
-            <span className="spinner-sm inline-block mr-2" /> Cargando clientes…
-          </div>
-        ) : visible.length === 0 ? (
-          <div className="empty-state">
-            {query.trim()
+        <StandardDataTable
+          columns={columns}
+          data={visible}
+          keyExtractor={(c) => c.id}
+          loading={isInitialLoading}
+          rowActions={rowActions}
+          emptyMessage={
+            query.trim()
               ? 'No se encontraron clientes que coincidan con la búsqueda.'
-              : 'No hay clientes para mostrar.'}
-          </div>
-        ) : (
-          <div
-            className="client-list"
-            style={{
-              opacity: isRefreshing ? 0.65 : 1,
-              transition: 'opacity 0.16s ease',
-              pointerEvents: isRefreshing ? 'none' : 'auto',
-            }}
-          >
-            {visible.map((customer) => (
-              <div className="client-row" key={customer.id}>
-                <div className="client-cell-main">
-                  <div className="client-avatar">
-                    {(customer.name || customer.code || '?')
-                      .split(' ')
-                      .map((part) => part[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </div>
-                  <div className="client-main">
-                    <strong>{customer.name || 'Sin nombre'}</strong>
-                    <span>{customer.phone || customer.code || 'Sin teléfono'}</span>
-                  </div>
-                </div>
-                <span className="client-contact">{customer.email || 'Sin correo'}</span>
-                <span className="client-orders">{customer.ordersCount ?? '—'}</span>
-                <span
-                  className={`client-status ${
-                    customer.isActive === false ? 'is-pending' : ''
-                  }`}
-                >
-                  {customer.isActive === false ? 'Inactivo' : 'Activo'}
-                </span>
-                <div className="client-actions">
-                  {/* Opción "Ver": Abre modal de detalle completo */}
-                  <button
-                    className="icon-action"
-                    onClick={() => setViewCustomer(customer)}
-                    aria-label={`Ver detalle de ${customer.name}`}
-                    title="Ver detalle completo"
-                  >
-                    <Eye className="w-4 h-4 text-violet-400" />
-                  </button>
-                  {/* Opción "Editar": Abre modal de edición */}
-                  <button
-                    className="icon-action"
-                    onClick={() => setModal(customer)}
-                    aria-label={`Editar ${customer.name}`}
-                    title="Editar cliente"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  {/* Opción "Activar / Desactivar" */}
-                  <button
-                    className="icon-action"
-                    onClick={() => void toggleStatus(customer)}
-                    aria-label={`Cambiar estado de ${customer.name}`}
-                    title="Activar o desactivar"
-                  >
-                    <Power className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
-        <CrudPagination
-          currentPage={page}
-          totalPages={totalPages}
-          perPage={pageSize}
-          total={totalItems}
-          onPageChange={(newPage) => setPage(newPage)}
-          onPerPageChange={(newSize) => {
-            setPageSize(newSize);
-            setPage(1);
+              : 'No hay clientes para mostrar.'
+          }
+          pagination={{
+            page,
+            pageSize,
+            totalItems: query.trim() ? visible.length : (totalItems || visible.length),
+            onPageChange: (newPage) => setPage(newPage),
+            onPageSizeChange: (newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            },
           }}
-          variant="dark"
         />
-      </section>
+      </ListPageLayout>
 
       {/* Modal 1: VER DETALLE COMPLETO (Usando Modal del Design System) */}
       <Modal
