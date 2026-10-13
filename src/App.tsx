@@ -658,13 +658,6 @@ export function App() {
   } else if (activeSection === 'Entregas') {
     content = (
       <div className="page-content">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">OPERACIÓN · ENTREGAS</p>
-            <h1>Módulo de Entregas</h1>
-            <p className="heading-copy">Despacho de pedidos, liquidación de saldos y remisiones de entrega.</p>
-          </div>
-        </div>
         <ModuloEntregas
           token={session.token || ''}
           usuarioActual={{
@@ -713,7 +706,19 @@ export function App() {
     content = <AdminUnitsCategories token={session.token} />;
   } else if (activeSection === 'Impuestos y descuentos') {
     content = <AdminTaxDiscount token={session.token} />;
-  } else if (activeSection === 'Reportes' || activeSection === 'Reportes y Estadísticas' || activeSection === 'Reporte Z' || activeSection === 'Reportes de Ventas' || activeSection === 'Reportes de Inventario') {
+  } else if (
+    activeSection === 'Reportes' ||
+    activeSection === 'Reportes y Estadísticas' ||
+    activeSection === 'Reporte Z' ||
+    activeSection === 'Reportes de Ventas' ||
+    activeSection === 'Reportes de Inventario' ||
+    activeSection === 'Reporte de operación' ||
+    activeSection === 'Ventas y cobros' ||
+    activeSection === 'Inventario' ||
+    activeSection === 'Reporte de caja' ||
+    activeSection === 'Reporte de clientes' ||
+    activeSection === 'Reporte de auditoría'
+  ) {
     content = (
       <div className="page-content">
         <div className="page-heading">
