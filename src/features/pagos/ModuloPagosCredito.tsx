@@ -98,30 +98,29 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
     let activo = true;
     const fetchMedios = async () => {
       try {
-        const arbol = await catalogosApi.getMediosPagoArbol();
+        const arbol = await catalogosApi.getMediosPagoArbol(token);
         if (activo) {
-          const list = arbol.categorias.flatMap((c) => c.instrumentos);
+          const list = arbol.categorias.flatMap((c) => c.instrumentos).filter((m) => m.activo);
           if (list.length > 0) {
             setMediosPago(list);
-            setMetodoPagoId(list[0].uuid);
+            const defaultMethod = list.find((m) => m.isDefault || m.esPorDefecto) ?? list[0];
+            setMetodoPagoId(defaultMethod.uuid);
+          } else {
+            setMediosPago([]);
+            setMetodoPagoId('');
           }
         }
       } catch {
-        const fallback: MedioPagoInstrumento[] = [
-          { uuid: 'ins-01', codigo: 'EFECTIVO', nombre: 'Efectivo Mostrador', categoria: 'EFECTIVO', esHoja: true, requiereReferencia: false, activo: true },
-          { uuid: 'ins-02', codigo: 'TRANSFERENCIA', nombre: 'Transferencia Bancaria', categoria: 'TRANSFERENCIA', esHoja: true, requiereReferencia: true, activo: true },
-          { uuid: 'ins-03', codigo: 'NEQUI', nombre: 'Nequi / Daviplata', categoria: 'TRANSFERENCIA', esHoja: true, requiereReferencia: true, activo: true },
-          { uuid: 'ins-04', codigo: 'DATAFONO_TD', nombre: 'Tarjeta Débito / Datáfono', categoria: 'DATAFONO', esHoja: true, requiereReferencia: true, activo: true },
-        ];
         if (activo) {
-          setMediosPago(fallback);
-          setMetodoPagoId(fallback[0].uuid);
+          setMediosPago([]);
+          setMetodoPagoId('');
+          setErrorMsg('No fue posible cargar las formas de pago configuradas en el sistema.');
         }
       }
     };
     fetchMedios();
     return () => { activo = false; };
-  }, []);
+  }, [token]);
 
   // Cargar Solicitudes
   const cargarSolicitudes = useCallback(async () => {

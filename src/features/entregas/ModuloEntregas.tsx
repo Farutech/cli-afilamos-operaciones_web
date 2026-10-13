@@ -87,24 +87,24 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       try {
         const arbol = await catalogosApi.getMediosPagoArbol();
         if (activo) {
-          const list = arbol.categorias.flatMap((c) => c.instrumentos);
+          const list = arbol.categorias.flatMap((c) => c.instrumentos).filter((m) => m.activo);
           if (list.length > 0) {
             setMediosPago(list);
-            setMetodoPagoConsolidado(list[0].uuid);
-            setInstrumentoSeleccionado(list[0].uuid);
+            const defaultMethod = list.find((m) => m.isDefault || m.esPorDefecto) ?? list[0];
+            setMetodoPagoConsolidado(defaultMethod.uuid);
+            setInstrumentoSeleccionado(defaultMethod.uuid);
+          } else {
+            setMediosPago([]);
+            setMetodoPagoConsolidado('');
+            setInstrumentoSeleccionado('');
           }
         }
       } catch {
-        const fallback: MedioPagoInstrumento[] = [
-          { uuid: 'ins-01', codigo: 'EFECTIVO', nombre: 'Efectivo Mostrador', categoria: 'EFECTIVO', esHoja: true, requiereReferencia: false, activo: true },
-          { uuid: 'ins-02', codigo: 'TRANSFERENCIA', nombre: 'Transferencia Bancaria', categoria: 'TRANSFERENCIA', esHoja: true, requiereReferencia: true, activo: true },
-          { uuid: 'ins-03', codigo: 'NEQUI', nombre: 'Nequi / Daviplata', categoria: 'TRANSFERENCIA', esHoja: true, requiereReferencia: true, activo: true },
-          { uuid: 'ins-04', codigo: 'DATAFONO_TD', nombre: 'Tarjeta Débito / Datáfono', categoria: 'DATAFONO', esHoja: true, requiereReferencia: true, activo: true },
-        ];
         if (activo) {
-          setMediosPago(fallback);
-          setMetodoPagoConsolidado(fallback[0].uuid);
-          setInstrumentoSeleccionado(fallback[0].uuid);
+          setMediosPago([]);
+          setMetodoPagoConsolidado('');
+          setInstrumentoSeleccionado('');
+          setErrorMsg('No fue posible cargar las formas de pago configuradas en el sistema.');
         }
       }
     };
@@ -966,8 +966,13 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <div className="font-bold text-white text-sm">👤 {c.clienteNombre}</div>
-                              <div className="text-xs text-slate-400 font-mono mt-0.5">Doc: {c.clienteDocumento}</div>
+                              <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                                <span className="text-indigo-400">👤</span>
+                                <span>{c.clienteNombre && c.clienteNombre !== 'Cliente' ? c.clienteNombre : 'Cliente Registrado'}</span>
+                              </div>
+                              <div className="text-xs text-slate-400 font-mono mt-0.5">
+                                Doc: {c.clienteDocumento && c.clienteDocumento !== '0000000' && c.clienteDocumento !== '—' ? c.clienteDocumento : 'Consumidor Final'}
+                              </div>
                             </div>
                             <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/5">
                               {c.items.length} {c.items.length === 1 ? 'ítem' : 'ítems'}
@@ -1037,9 +1042,11 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h2 className="text-lg font-black text-white">Cliente: {clienteActivo.clienteNombre}</h2>
+                          <h2 className="text-lg font-black text-white">
+                            Cliente: {clienteActivo.clienteNombre && clienteActivo.clienteNombre !== 'Cliente' ? clienteActivo.clienteNombre : 'Cliente Registrado'}
+                          </h2>
                           <span className="text-xs font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-white/5">
-                            Doc: {clienteActivo.clienteDocumento}
+                            Doc: {clienteActivo.clienteDocumento && clienteActivo.clienteDocumento !== '0000000' && clienteActivo.clienteDocumento !== '—' ? clienteActivo.clienteDocumento : 'Consumidor Final'}
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 mt-1">

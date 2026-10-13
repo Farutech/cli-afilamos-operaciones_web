@@ -569,12 +569,14 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
     nombre: string;
     requiereReferencia: boolean;
     diasCredito?: number;
+    isDefault?: boolean;
   }>({
     codigoCategoria: 'EFECTIVO',
     codigo: '',
     nombre: '',
     requiereReferencia: false,
     diasCredito: 30,
+    isDefault: false,
   });
 
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Record<string, boolean>>({
@@ -1416,10 +1418,12 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         nombre: nuevoInstrumento.nombre,
         requiereReferencia: nuevoInstrumento.requiereReferencia,
         diasCredito: nuevoInstrumento.codigoCategoria === 'CREDITO' ? (nuevoInstrumento.diasCredito || 30) : undefined,
+        isDefault: nuevoInstrumento.isDefault,
+        esPorDefecto: nuevoInstrumento.isDefault,
       } as any);
       setSuccessMsg(`Medio de pago '${nuevoInstrumento.nombre}' creado exitosamente.`);
       setMostrarModalInstrumento(false);
-      setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false, diasCredito: 30 });
+      setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false, diasCredito: 30, isDefault: false });
       cargarSubCatalogo('medios_pago');
     } catch (err: unknown) {
       setErrorMsg((err as Error).message || 'Error al crear instrumento de pago');
@@ -2768,7 +2772,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                 variant="primary"
                 size="sm"
                 onClick={() => {
-                  setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false, diasCredito: 30 });
+                  setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false, diasCredito: 30, isDefault: false });
                   setMostrarModalInstrumento(true);
                 }}
               >
@@ -2852,6 +2856,7 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                               nombre: '',
                               requiereReferencia: catDef.codigo !== 'EFECTIVO',
                               diasCredito: catDef.codigo === 'CREDITO' ? 30 : undefined,
+                              isDefault: false,
                             });
                             setMostrarModalInstrumento(true);
                           }}
@@ -2895,6 +2900,12 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                                       </span>
                                     )}
 
+                                    {(inst.isDefault || inst.esPorDefecto) && (
+                                      <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/50 flex items-center gap-1">
+                                        ★ Por Defecto
+                                      </span>
+                                    )}
+
                                     {inst.requiereReferencia ? (
                                       <span className="text-[10px] text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-700/40">
                                         Exige Referencia / Voucher
@@ -2907,6 +2918,24 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
                                   </div>
 
                                   <div className="flex items-center gap-2">
+                                    {!(inst.isDefault || inst.esPorDefecto) && inst.activo && (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            await catalogosApi.setMedioPagoDefault(inst.uuid, token);
+                                            setSuccessMsg(`"${inst.nombre}" establecido como medio de pago por defecto.`);
+                                            cargarSubCatalogo('medios_pago');
+                                          } catch (err: unknown) {
+                                            setErrorMsg((err as Error).message || 'Error al cambiar medio por defecto');
+                                          }
+                                        }}
+                                        className="text-[11px] text-slate-400 hover:text-emerald-300 px-2 py-0.5 rounded hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors cursor-pointer"
+                                        title="Establecer como medio de pago por defecto"
+                                      >
+                                        Hacer por defecto
+                                      </button>
+                                    )}
                                     <Badge variant={inst.activo ? 'success' : 'neutral'}>
                                       {inst.activo ? 'Activo' : 'Inactivo'}
                                     </Badge>
@@ -3776,6 +3805,19 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
             />
             <label htmlFor="reqRef" className="text-xs text-gray-300 cursor-pointer">
               Exige comprobante o referencia de transacción
+            </label>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="isDefaultPm"
+              checked={nuevoInstrumento.isDefault}
+              onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, isDefault: e.target.checked })}
+              className="rounded border-gray-700 text-emerald-500 focus:ring-0 cursor-pointer"
+            />
+            <label htmlFor="isDefaultPm" className="text-xs text-emerald-300 font-semibold cursor-pointer">
+              Establecer como forma de pago por defecto (única y predeterminada)
             </label>
           </div>
           <div className="pt-3 flex justify-end gap-2">

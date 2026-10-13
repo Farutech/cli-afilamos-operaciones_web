@@ -515,7 +515,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
           const activas = res.instrumentos.filter((i) => i.activo);
           setMediosPago(activas);
           if (activas.length > 0) {
-            const preferido = activas.find((i) => i.codigo === 'EFECTIVO') || activas[0];
+            const preferido = activas.find((i) => i.isDefault || i.esPorDefecto) || activas[0];
             setMedioSeleccionadoUuid(preferido.uuid);
           }
         }

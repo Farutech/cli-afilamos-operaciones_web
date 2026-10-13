@@ -592,9 +592,9 @@ export const catalogosApi = {
     await api.patch<void>(`/configuration/cash-registers/${uuid}/active`, { activo, active: activo }, token);
   },
 
-  async getMediosPagoArbol(): Promise<{ categorias: MedioPagoCategoria[] }> {
+  async getMediosPagoArbol(token?: string): Promise<{ categorias: MedioPagoCategoria[] }> {
     try {
-      const res = await api.get<any>('/catalogs/payment-methods');
+      const res = await api.get<any>('/catalogs/payment-methods', token);
       const raw = Array.isArray(res) ? res : (res?.paymentMethods || res?.items || []);
       const instrumentos: MedioPagoInstrumento[] = raw.map((m: any) => ({
         uuid: m.id || m.uuid,
@@ -603,6 +603,8 @@ export const catalogosApi = {
         categoria: m.type || 'EFECTIVO',
         esHoja: true,
         requiereReferencia: (m.code || m.codigo) !== 'EFECTIVO',
+        isDefault: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
+        esPorDefecto: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
         activo: m.active ?? true,
       }));
 
@@ -631,9 +633,9 @@ export const catalogosApi = {
     }
   },
 
-  async getMediosPagoInstrumentos(): Promise<{ instrumentos: MedioPagoInstrumento[] }> {
+  async getMediosPagoInstrumentos(token?: string): Promise<{ instrumentos: MedioPagoInstrumento[] }> {
     try {
-      const res = await api.get<any>('/catalogs/payment-methods');
+      const res = await api.get<any>('/catalogs/payment-methods', token);
       const raw = Array.isArray(res) ? res : (res?.paymentMethods || res?.instrumentos || res?.items || []);
       return {
         instrumentos: raw.map((m: any) => ({
@@ -643,6 +645,8 @@ export const catalogosApi = {
           categoria: m.type || 'EFECTIVO',
           esHoja: true,
           requiereReferencia: (m.code || m.codigo) !== 'EFECTIVO',
+          isDefault: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
+          esPorDefecto: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
           activo: m.active ?? true,
         })),
       };
@@ -656,8 +660,14 @@ export const catalogosApi = {
     codigo: string;
     nombre: string;
     requiereReferencia: boolean;
+    isDefault?: boolean;
+    esPorDefecto?: boolean;
   }): Promise<MedioPagoInstrumento> {
     return api.post<MedioPagoInstrumento>('/catalogs/payment-methods', dto);
+  },
+
+  async setMedioPagoDefault(uuid: string, token?: string): Promise<MedioPagoInstrumento> {
+    return api.patch<MedioPagoInstrumento>(`/catalogs/payment-methods/${uuid}/default`, {}, token);
   },
 
   async getClientes(q?: string, pageSize?: number, token?: string): Promise<{ clientes: Cliente[]; total: number }> {

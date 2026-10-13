@@ -520,6 +520,26 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
             </div>
           </div>
 
+          {/* Tarjetas de Ingresos por Formas de Pago */}
+          {turno.totalesPorMetodoPago && turno.totalesPorMetodoPago.length > 0 && (
+            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm space-y-3">
+              <span className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                <span>💳</span> Recaudos por Forma de Pago en el Turno
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {turno.totalesPorMetodoPago.map((tp) => (
+                  <div key={tp.metodoPagoId || tp.codigo} className="bg-gray-950/70 p-3 rounded-lg border border-white/5">
+                    <span className="text-[11px] font-semibold text-gray-400 block truncate">{tp.nombre}</span>
+                    <p className="text-lg font-bold text-emerald-400 mt-0.5">
+                      ${tp.total.toLocaleString('es-CO')}
+                    </p>
+                    <span className="text-[10px] text-gray-500 font-mono">{tp.cantidad} recaudo(s)</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Acciones Rápidas */}
           <div className="flex flex-wrap gap-3">
             <Button
@@ -567,9 +587,15 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                     </tr>
                   ) : (
                     turno.movimientos.map((m) => {
-                      const esEgreso = m.tipoMovimiento === 'EGRESO_CAJA_MENOR';
+                      const esEgreso =
+                        m.tipoMovimiento === 'EGRESO_CAJA_MENOR' ||
+                        m.tipoMovimiento === 'OUT' ||
+                        m.monto < 0;
+                      const esBase = m.tipoMovimiento === 'BASE_INICIAL';
+                      const absMonto = Math.abs(m.monto);
+
                       return (
-                        <tr key={m.id} className="hover:bg-white/[0.03] transition-colors">
+                        <tr key={m.publicId || m.id} className="hover:bg-white/[0.03] transition-colors">
                           <td className="px-6 py-3 text-xs text-gray-400">
                             {new Date(m.fechaUtc).toLocaleTimeString('es-CO')}
                           </td>
@@ -577,7 +603,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                           <td className="px-6 py-3">
                             <Badge
                               variant={
-                                m.tipoMovimiento === 'BASE_INICIAL'
+                                esBase
                                   ? 'info'
                                   : esEgreso
                                   ? 'danger'
@@ -585,7 +611,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                               }
                               size="sm"
                             >
-                              {m.tipoMovimiento}
+                              {esBase ? 'BASE_INICIAL' : (esEgreso ? 'EGRESO' : 'RECAUDO')}
                             </Badge>
                           </td>
                           <td className="px-6 py-3 font-medium text-white">{m.concepto}</td>
@@ -594,7 +620,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                               esEgreso ? 'text-rose-400' : 'text-emerald-400'
                             }`}
                           >
-                            {esEgreso ? '-' : '+'}${m.monto.toLocaleString('es-CO')}
+                            {esEgreso ? '-' : '+'}${absMonto.toLocaleString('es-CO')}
                           </td>
                         </tr>
                       );

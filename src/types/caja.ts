@@ -27,6 +27,13 @@ export interface TurnoDto {
   diferenciaTotal?: number | null;
   observacionVoBo?: string | null;
   movimientos: MovimientoDto[];
+  totalesPorMetodoPago?: {
+    metodoPagoId: string;
+    codigo: string;
+    nombre: string;
+    total: number;
+    cantidad: number;
+  }[];
 }
 
 export interface AperturaTurnoRequest {

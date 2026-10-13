@@ -147,6 +147,8 @@ export interface MedioPagoInstrumento {
   requiereReferencia: boolean;
   activo: boolean;
   diasCredito?: number;
+  isDefault?: boolean;
+  esPorDefecto?: boolean;
 }
 
 export interface MedioPagoCategoria {

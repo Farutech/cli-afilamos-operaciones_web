@@ -124,4 +124,54 @@ describe('ModuloPagosCredito Component', () => {
       );
     });
   });
+
+  it('selecciona por defecto la forma de pago marcada con isDefault: true sin valores quemados', async () => {
+    const mockCatalogosApi = await import('@/services/catalogosApi');
+    vi.mocked(mockCatalogosApi.catalogosApi.getMediosPagoArbol).mockResolvedValueOnce({
+      categorias: [
+        {
+          codigo: 'ELECTRONICO',
+          nombre: 'Electrónico',
+          uuid: 'cat-elec',
+          orden: 1,
+          activo: true,
+          instrumentos: [
+            {
+              uuid: 'pm-transferencia',
+              codigo: 'TRANSFERENCIA',
+              nombre: 'Transferencia Bancaria',
+              categoria: 'TRANSFERENCIA',
+              esHoja: true,
+              requiereReferencia: true,
+              activo: true,
+              isDefault: false,
+            },
+            {
+              uuid: 'pm-nequi-default',
+              codigo: 'NEQUI',
+              nombre: 'Nequi',
+              categoria: 'TRANSFERENCIA',
+              esHoja: true,
+              requiereReferencia: true,
+              activo: true,
+              isDefault: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<ModuloPagosCredito />);
+
+    await waitFor(() => {
+      expect(screen.getByText('💰 Abonar')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('💰 Abonar'));
+
+    await waitFor(() => {
+      const select = screen.getByRole('combobox') as HTMLSelectElement;
+      expect(select.value).toBe('pm-nequi-default');
+    });
+  });
 });

@@ -84,6 +84,24 @@ export async function obtenerTurnoActivo(codigoCaja: string = 'CAJA-01', token?:
       token ?? getToken(),
     );
 
+    const movsRaw = Array.isArray(res.movimientos) ? res.movimientos : (Array.isArray(res.movements) ? res.movements : []);
+    const movimientos = movsRaw.map((m: any, idx: number) => {
+      const esOut = m.tipo === 'OUT' || m.kind === 'OUT' || m.tipoMovimiento === 'EGRESO_CAJA_MENOR';
+      const esBase = m.tipo === 'BASE_INICIAL' || m.tipoMovimiento === 'BASE_INICIAL';
+      const tipo = esBase ? 'BASE_INICIAL' : (esOut ? 'EGRESO_CAJA_MENOR' : (m.tipoMovimiento === 'PAGO' ? 'PAGO' : 'INGRESO'));
+
+      return {
+        id: idx + 1,
+        publicId: m.uuid || m.publicId || String(idx + 1),
+        codigo: m.codigo || (esOut ? 'EGR-0001' : (esBase ? 'BASE-01' : 'REC-0001')),
+        tipoMovimiento: tipo,
+        monto: typeof m.monto === 'number' ? m.monto : (m.amount ?? 0),
+        concepto: m.concepto || m.motivo || m.reason || (esOut ? 'Egreso menor' : 'Movimiento de caja'),
+        fechaUtc: m.fechaUtc || m.createdAt || new Date().toISOString(),
+        nombreInstrumento: m.nombreInstrumento || null,
+      };
+    });
+
     return {
       id: 1,
       publicId: res.uuid || res.shiftId || '',
@@ -97,7 +115,8 @@ export async function obtenerTurnoActivo(codigoCaja: string = 'CAJA-01', token?:
       teoricoTotal: res.saldoTeorico ?? res.theoreticalBalance ?? 0,
       diferenciaTotal: 0,
       estado: res.estado || res.status || 'ABIERTO',
-      movimientos: [],
+      movimientos,
+      totalesPorMetodoPago: res.totalesPorMetodoPago || res.totalesPorMetodo || res.ingresosPorFormaPago || [],
     };
   } catch (err: unknown) {
     const e = err as Error;
@@ -165,37 +184,31 @@ export async function obtenerTurnoPorId(id: number, token?: string): Promise<Tur
   }
 }
 
-export async function registrarEgreso(turnoId: number, req: RegistrarEgresoRequest, token?: string): Promise<EgresoDto> {
-  try {
-    const res = await apiClient<any>(
-      `/cash/shifts/${turnoId}/movements`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          kind: 'OUT',
-          amount: req.monto,
-          reason: req.motivo,
-        }),
-      },
-      token ?? getToken(),
-    );
+export async function registrarEgreso(
+  turnoId: number | string,
+  req: RegistrarEgresoRequest,
+  token?: string,
+): Promise<EgresoDto> {
+  const res = await apiClient<any>(
+    `/cash/shifts/${turnoId}/movements`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        kind: 'OUT',
+        amount: req.monto,
+        reason: req.motivo,
+      }),
+    },
+    token ?? getToken(),
+  );
 
-    return {
-      idDocumento: 1,
-      consecutivo: 'EGR-0001',
-      monto: res?.amount ?? req.monto,
-      motivo: res?.reason ?? req.motivo,
-      fechaUtc: res?.createdAt ?? new Date().toISOString(),
-    };
-  } catch {
-    return {
-      idDocumento: Date.now(),
-      consecutivo: `EGR-${Math.floor(Math.random() * 1000).toString().padStart(4, '0')}`,
-      monto: req.monto,
-      motivo: req.motivo,
-      fechaUtc: new Date().toISOString(),
-    };
-  }
+  return {
+    idDocumento: 1,
+    consecutivo: res?.consecutivo ?? 'EGR-0001',
+    monto: res?.amount ?? res?.monto ?? req.monto,
+    motivo: res?.reason ?? res?.motivo ?? req.motivo,
+    fechaUtc: res?.createdAt ?? res?.fechaUtc ?? new Date().toISOString(),
+  };
 }
 
 export async function declararArqueoCiego(turnoId: number, req: DeclararArqueoCiegoRequest, token?: string): Promise<DeclaracionCierreResponse> {
