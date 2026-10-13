@@ -66,13 +66,13 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
 
   // Paginación para vista Por Solicitud
   const [paginaSolicitudes, setPaginaSolicitudes] = useState(1);
-  const [itemsPorPaginaSolicitudes, setItemsPorPaginaSolicitudes] = useState(10);
+  const itemsPorPaginaSolicitudes = 10;
   const [busquedaSolicitudes, setBusquedaSolicitudes] = useState('');
   const [solicitudSeleccionadaId, setSolicitudSeleccionadaId] = useState<string>('');
 
   // Paginación para vista Por Cliente
   const [paginaClientes, setPaginaClientes] = useState(1);
-  const [itemsPorPaginaClientes, setItemsPorPaginaClientes] = useState(8);
+  const itemsPorPaginaClientes = 8;
 
   // Medios de pago cargados (con fallback inicial por defecto a Efectivo)
   const [mediosPago, setMediosPago] = useState<MedioPagoInstrumento[]>(
