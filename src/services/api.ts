@@ -12,7 +12,7 @@ const API_URLS = {
   qa: 'https://api-ops.qa.afilamoshermanos.com/api/v1',
   staging: 'https://api-ops.staging.afilamoshermanos.com/api/v1',
   prod: 'https://api-ops.afilamoshermanos.com/api/v1',
-  local: 'http://localhost:5000/api/v1',
+  local: 'http://api-ops.afilamoshermanos.local/api/v1',
 } as const
 
 type ApiEnvironment = keyof typeof API_URLS

@@ -2,6 +2,8 @@ export type NaturalezaItem = 'INVENTARIO' | 'SERVICIO';
 
 export interface ItemOperacionDto {
   publicId: string;
+  lineaId?: string;
+  itemCatalogoId?: string;
   codigo: string;
   naturaleza: NaturalezaItem;
   descripcion: string;

@@ -49,6 +49,8 @@ export const ModalComprobanteSolicitud: React.FC<ModalComprobanteSolicitudProps>
   solicitud,
   esConfirmacionAsentada = false,
 }) => {
+  const [formato, setFormato] = React.useState<'half-letter' | 'pos-80mm'>('half-letter');
+
   if (!isOpen || !solicitud) return null;
 
   const handleImprimir = () => {
@@ -69,6 +71,35 @@ export const ModalComprobanteSolicitud: React.FC<ModalComprobanteSolicitudProps>
       size="lg"
     >
       <div className="space-y-4">
+        {/* Selector de formato Tirilla 80mm vs Media Carta */}
+        <div className="flex items-center justify-between pb-1 text-xs">
+          <span className="text-slate-400">Formato de Impresión:</span>
+          <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+            <button
+              type="button"
+              onClick={() => setFormato('half-letter')}
+              className={`px-2.5 py-1 text-xs rounded-md transition-all font-medium ${
+                formato === 'half-letter'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              📄 Media Carta (140×216mm)
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormato('pos-80mm')}
+              className={`px-2.5 py-1 text-xs rounded-md transition-all font-medium ${
+                formato === 'pos-80mm'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              🧾 Tirilla Térmica (80mm)
+            </button>
+          </div>
+        </div>
+
         {/* Banner de Pregunta / Notificación si viene de recién Asentar */}
         {esConfirmacionAsentada && (
           <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/40 rounded-xl flex items-center justify-between gap-3 text-xs">
@@ -100,7 +131,9 @@ export const ModalComprobanteSolicitud: React.FC<ModalComprobanteSolicitudProps>
         <div className="border border-slate-700/80 rounded-xl bg-slate-900/60 p-4 max-h-[60vh] overflow-y-auto">
           <div
             id="printable-document"
-            className="printable-document bg-white text-slate-900 rounded-lg p-6 max-w-[650px] mx-auto shadow-md font-sans text-xs"
+            className={`printable-document bg-white text-slate-900 rounded-lg p-6 mx-auto shadow-md font-sans ${
+              formato === 'pos-80mm' ? 'max-w-[340px] text-[11px]' : 'max-w-[650px] text-xs'
+            }`}
           >
             {/* Cabecera del Documento */}
             <div className="flex justify-between items-start border-b border-slate-200 pb-4 mb-4">

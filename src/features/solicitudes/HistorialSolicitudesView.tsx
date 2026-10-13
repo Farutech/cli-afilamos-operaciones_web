@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { CRUDTable, Badge, Button, Modal } from '@farutech/design-system';
+import { Badge, Button, Modal } from '@farutech/design-system';
 import { Eye, Printer, Pencil } from 'lucide-react';
+import { ListPageLayout, StandardDataTable, type ColumnDef } from '@/components/ui';
 import { solicitudesApi } from '@/services/solicitudesApi';
 import { ModalComprobanteSolicitud } from './ModalComprobanteSolicitud';
 
@@ -58,6 +59,23 @@ export function HistorialSolicitudesView({
           clienteUuid: dto.clientePublicId,
           canalUuid: dto.canalPublicId,
           observaciones: dto.notas,
+          lineas: (dto.items || []).map((it) => ({
+            idTemp: it.publicId,
+            lineaId: it.lineaId || it.publicId,
+            itemCatalogoId: it.itemCatalogoId,
+            naturaleza: it.naturaleza,
+            descripcion: it.descripcion,
+            cantidad: it.cantidad,
+            precioUnitario: it.precioUnitario,
+            subtotal: it.subtotal,
+            stockReferencial: it.stockReferencialDisponible,
+            exigeAnticipo: it.exigeAnticipoObligatorio,
+            porcentajeAnticipoMinimo: it.porcentajeAnticipoMinimo,
+            anticipoMinimo: it.anticipoMinimoRequerido,
+            anticipoImputado: it.anticipoDirectoImputado,
+            franjaCompromiso: it.franjaCompromiso,
+            observaciones: '',
+          })),
           totalItems: dto.items?.length || 0,
           totalNetoCop: dto.totalNeto || 0,
           anticipoCop: dto.totalAnticiposImputados || 0,
@@ -94,155 +112,207 @@ export function HistorialSolicitudesView({
     return `$ ${val.toLocaleString('es-CO')}`;
   };
 
-  return (
-    <div className="space-y-5">
-      {/* Contenedor Principal con Loading Centrado o Tabla CRUD */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center p-16 border border-slate-800 rounded-xl bg-slate-950/60 min-h-[340px] gap-2.5 text-slate-400">
-          <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-semibold tracking-wide text-slate-300">Cargando solicitudes...</span>
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [filtroEstado, setFiltroEstado] = useState<string>('TODOS');
+
+  const filteredSolicitudes = useMemo(() => {
+    let result = todasSolicitudes;
+    if (filtroEstado !== 'TODOS') {
+      result = result.filter((s) => s.estado === filtroEstado);
+    }
+    const q = query.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        (s) =>
+          s.numeroSolicitud.toLowerCase().includes(q) ||
+          s.clienteNombre.toLowerCase().includes(q) ||
+          s.clienteDocumento.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [todasSolicitudes, filtroEstado, query]);
+
+  const pagedSolicitudes = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredSolicitudes.slice(start, start + pageSize);
+  }, [filteredSolicitudes, page, pageSize]);
+
+  const columns: ColumnDef<SolicitudHistorialItem>[] = [
+    {
+      key: 'numeroSolicitud',
+      header: 'CONSECUTIVO',
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          <span className="font-mono font-bold text-indigo-400">{r.numeroSolicitud}</span>
+          <Badge variant={r.subtipo === 'SOL-PREF' ? 'warning' : 'neutral'} size="sm">
+            {r.subtipo}
+          </Badge>
         </div>
-      ) : (
-        <CRUDTable<SolicitudHistorialItem>
-          data={todasSolicitudes}
-          columns={[
-            {
-              key: 'numeroSolicitud',
-              label: 'Consecutivo',
-              sortable: true,
-              render: (v: any, r: SolicitudHistorialItem) => (
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-indigo-400">{String(v)}</span>
-                  <Badge variant={r.subtipo === 'SOL-PREF' ? 'warning' : 'neutral'} size="sm">
-                    {r.subtipo}
-                  </Badge>
-                </div>
-              ),
+      ),
+    },
+    {
+      key: 'fecha',
+      header: 'FECHA EMISIÓN',
+      render: (r) => <span className="text-slate-300 font-mono text-xs">{r.fecha}</span>,
+    },
+    {
+      key: 'clienteNombre',
+      header: 'CLIENTE',
+      render: (r) => (
+        <div>
+          <div className="font-semibold text-white text-xs">{r.clienteNombre}</div>
+          <div className="text-[11px] text-slate-500 font-mono">{r.clienteDocumento}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'totalItems',
+      header: 'ÍTEMS',
+      align: 'center',
+      render: (r) => <span className="font-bold text-slate-200 text-xs">{r.totalItems}</span>,
+    },
+    {
+      key: 'totalNetoCop',
+      header: 'TOTAL NETO',
+      align: 'right',
+      render: (r) => (
+        <span className="font-mono font-bold text-white text-xs">{formatCOP(r.totalNetoCop)}</span>
+      ),
+    },
+    {
+      key: 'anticipoCop',
+      header: 'ANTICIPO',
+      align: 'right',
+      render: (r) => (
+        <span className="font-mono text-emerald-400 text-xs">{formatCOP(r.anticipoCop)}</span>
+      ),
+    },
+    {
+      key: 'saldoCop',
+      header: 'SALDO',
+      align: 'right',
+      render: (r) => (
+        <span
+          className={`font-mono font-bold text-xs ${
+            r.saldoCop > 0 ? 'text-amber-400' : 'text-slate-500'
+          }`}
+        >
+          {r.saldoCop > 0 ? formatCOP(r.saldoCop) : 'Pagado'}
+        </span>
+      ),
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (r) => {
+        const est = r.estado;
+        const variant =
+          est === 'ENTREGADA' || est === 'FINALIZADA'
+            ? 'success'
+            : est === 'EN_TALLER' || est === 'ASENTADA'
+            ? 'info'
+            : est === 'BORRADOR'
+            ? 'warning'
+            : 'neutral';
+        return <Badge variant={variant}>{est.replace('_', ' ')}</Badge>;
+      },
+    },
+    {
+      key: 'acciones',
+      header: 'ACCIONES',
+      align: 'right',
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => setSolicitudDetalle(r)}
+            className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
+            title="Ver resumen y detalle de la solicitud"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>Ver</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSolicitudParaImprimir(r)}
+            className="p-1.5 rounded-lg border border-indigo-500/30 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
+            title="Imprimir comprobante o reporte de la solicitud"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Imprimir</span>
+          </button>
+          {r.estado === 'BORRADOR' && onEditarSolicitud && (
+            <button
+              type="button"
+              onClick={() => onEditarSolicitud(r)}
+              className="p-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 hover:bg-amber-600/60 text-amber-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
+              title="Continuar captura y asentar solicitud"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Editar</span>
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <ListPageLayout
+        title="Historial de Solicitudes"
+        eyebrow="OPERACIÓN · SOLICITUDES"
+        description="Consulta y seguimiento integral de solicitudes de servicio, borradores y órdenes asentadas."
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
+            setPage(1);
+          },
+          placeholder: 'Buscar por consecutivo, cliente o documento...',
+          isSearching: loading,
+        }}
+        filters={
+          <div className="flex items-center gap-1.5">
+            <select
+              value={filtroEstado}
+              onChange={(e) => {
+                setFiltroEstado(e.target.value);
+                setPage(1);
+              }}
+              className="h-8 px-2.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+            >
+              <option value="TODOS">Todos los estados</option>
+              <option value="BORRADOR">Borradores</option>
+              <option value="ASENTADA">Asentadas</option>
+              <option value="EN_TALLER">En Taller</option>
+              <option value="FINALIZADA">Finalizadas</option>
+              <option value="ENTREGADA">Entregadas</option>
+            </select>
+          </div>
+        }
+      >
+        <StandardDataTable<SolicitudHistorialItem>
+          columns={columns}
+          data={pagedSolicitudes}
+          keyExtractor={(s) => s.numeroSolicitud}
+          loading={loading && todasSolicitudes.length === 0}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalItems: filteredSolicitudes.length,
+            onPageChange: (p) => setPage(p),
+            onPageSizeChange: (s) => {
+              setPageSize(s);
+              setPage(1);
             },
-            {
-              key: 'fecha',
-              label: 'Fecha Emisión',
-              sortable: true,
-              render: (v: any) => <span className="text-slate-300 font-mono text-xs">{String(v)}</span>,
-            },
-            {
-              key: 'clienteNombre',
-              label: 'Cliente',
-              sortable: true,
-              render: (v: any, r: SolicitudHistorialItem) => (
-                <div>
-                  <div className="font-semibold text-white text-xs">{String(v)}</div>
-                  <div className="text-[11px] text-slate-500 font-mono">{r.clienteDocumento}</div>
-                </div>
-              ),
-            },
-            {
-              key: 'totalItems',
-              label: 'Ítems',
-              align: 'center',
-              render: (v: any) => <span className="font-bold text-slate-200">{Number(v)}</span>,
-            },
-            {
-              key: 'totalNetoCop',
-              label: 'Total Neto',
-              align: 'right',
-              sortable: true,
-              render: (v: any) => <span className="font-mono font-bold text-white">{formatCOP(Number(v))}</span>,
-            },
-            {
-              key: 'anticipoCop',
-              label: 'Anticipo',
-              align: 'right',
-              render: (v: any) => <span className="font-mono text-emerald-400">{formatCOP(Number(v))}</span>,
-            },
-            {
-              key: 'saldoCop',
-              label: 'Saldo Pendiente',
-              align: 'right',
-              render: (v: any) => {
-                const num = Number(v);
-                return (
-                  <span className={`font-mono font-bold ${num > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                    {num > 0 ? formatCOP(num) : 'Pagado'}
-                  </span>
-                );
-              },
-            },
-            {
-              key: 'estado',
-              label: 'Estado',
-              sortable: true,
-              render: (v: any) => {
-                const est = String(v);
-                const variant =
-                  est === 'ENTREGADA'
-                    ? 'success'
-                    : est === 'EN_TALLER'
-                    ? 'info'
-                    : est === 'ASENTADA'
-                    ? 'info'
-                    : est === 'BORRADOR'
-                    ? 'warning'
-                    : 'neutral';
-                return <Badge variant={variant}>{est.replace('_', ' ')}</Badge>;
-              },
-            },
-            {
-              key: 'acciones',
-              label: 'Acciones',
-              align: 'right',
-              render: (_: any, r: SolicitudHistorialItem) => (
-                <div className="flex items-center justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setSolicitudDetalle(r)}
-                    className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs"
-                    title="Ver resumen y detalle de la solicitud"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span className="sr-only sm:not-sr-only">Ver</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSolicitudParaImprimir(r)}
-                    className="p-1.5 rounded-lg border border-indigo-500/30 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs"
-                    title="Imprimir comprobante o reporte de la solicitud"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span className="sr-only sm:not-sr-only">Imprimir</span>
-                  </button>
-                  {r.estado === 'BORRADOR' && onEditarSolicitud && (
-                    <button
-                      type="button"
-                      onClick={() => onEditarSolicitud(r)}
-                      className="p-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 hover:bg-amber-600/60 text-amber-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs"
-                      title="Continuar captura y asentar solicitud"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                      <span className="sr-only sm:not-sr-only">Editar</span>
-                    </button>
-                  )}
-                </div>
-              ),
-            },
-          ]}
-          searchable={true}
-          searchPlaceholder="Buscar por consecutivo, cliente o documento..."
-          pagination={true}
-          pageSize={10}
+          }}
           emptyMessage="No hay registros en el historial de solicitudes."
-          footerSlot={
-            <div className="px-4 py-2.5 bg-slate-950/70 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-2">
-              <span className="font-semibold text-slate-300">Leyenda de Acciones:</span>
-              <div className="flex flex-wrap items-center gap-4">
-                <span>👁️ <strong className="text-slate-300">Ver:</strong> Consultar resumen</span>
-                <span>🖨️ <strong className="text-slate-300">Comprobante:</strong> Recibo térmico / PDF</span>
-                <span>✏️ <strong className="text-slate-300">Editar:</strong> Continuar borrador</span>
-              </div>
-            </div>
-          }
         />
-      )}
+      </ListPageLayout>
 
       {/* Modal de Detalle */}
       {solicitudDetalle && (

@@ -10,6 +10,7 @@ import {
   EmptyState,
 } from '@farutech/design-system';
 import { FileText, Printer, CheckCircle } from 'lucide-react';
+import { DocumentPrintPreviewModal, type DocumentPrintData } from '../../components/ui';
 import { entregasApi } from '../../services/entregasApi';
 import { catalogosApi } from '../../services/catalogosApi';
 import type {
@@ -43,6 +44,8 @@ const DEFAULT_EFECTIVO: MedioPagoInstrumento = {
   requiereReferencia: false,
   isDefault: true,
   esPorDefecto: true,
+  validaEnCierre: true,
+  permiteEnCierre: true,
   activo: true,
 };
 
@@ -356,6 +359,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const [ordenesAvanceAplicado, setOrdenesAvanceAplicado] = useState<Record<string, number>>({});
   const [anticipoClienteAplicado, setAnticipoClienteAplicado] = useState<number>(0);
   const [loadingPreview, setLoadingPreview] = useState<boolean>(false);
+  const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState<boolean>(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -432,19 +436,42 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     };
   }, [previewData, ordenesAvanceAplicado, anticipoClienteAplicado, totalesSeleccion]);
 
-  const handleCambiarAnticipoOrden = (documentId: string, nuevoMonto: number, min: number, max: number) => {
-    const valorClamp = Math.max(min, Math.min(max, isNaN(nuevoMonto) ? min : nuevoMonto));
-    setOrdenesAvanceAplicado((prev) => {
-      const next = { ...prev, [documentId]: valorClamp };
-      const suma = Object.values(next).reduce((a, b) => a + b, 0);
-      const subtotal = previewData?.totalDeliveredAmount ?? totalesSeleccion.totalNeto;
-      const saldoTrasOrdenes = Math.max(0, subtotal - suma);
-      const clienteUsar = Math.min(anticipoClienteAplicado, saldoTrasOrdenes);
-      setAnticipoClienteAplicado(clienteUsar);
-      setMontoPagoConsolidado(Math.max(0, saldoTrasOrdenes - clienteUsar));
-      return next;
-    });
-  };
+  const comprobanteEntregaData = useMemo<DocumentPrintData | null>(() => {
+    if (!despachoExitoso) return null;
+    return {
+      tipoDocumento: 'COMPROBANTE DE ENTREGA Y REMISIÓN',
+      numeroDocumento: despachoExitoso.numeroDocumento,
+      fechaEmision: new Date(despachoExitoso.fechaEmision || Date.now()).toLocaleDateString('es-CO'),
+      cliente: {
+        nombre: despachoExitoso.cliente.nombreRazonSocial,
+        documento: despachoExitoso.cliente.numeroDocumento,
+        telefono: despachoExitoso.cliente.telefono,
+      },
+      observaciones: despachoExitoso.notas,
+      items: (despachoExitoso.items || []).map((it) => ({
+        codigo: it.codigo,
+        descripcion: it.descripcion,
+        cantidad: it.cantidad,
+        precioUnitario: it.precioUnitario,
+        subtotal: it.subtotal,
+        franjaCompromiso: it.franjaCompromiso,
+      })),
+      totales: {
+        subtotalNeto: despachoExitoso.totalNeto,
+        totalDocumento: despachoExitoso.totalNeto,
+        totalAbonado: (despachoExitoso.totalAnticiposPrevios || 0) + (despachoExitoso.totalPagosEntrega || 0),
+        saldoPendiente: despachoExitoso.saldoPendiente,
+      },
+      pagos: (despachoExitoso.recaudos || []).flatMap((r) =>
+        (r.desgloses || []).map((d) => ({
+          medio: r.tipoRecaudo || 'Pago Entrega',
+          monto: d.monto,
+          referencia: d.referenciaTransaccion,
+        }))
+      ),
+    };
+  }, [despachoExitoso]);
+
 
   const toggleSeleccionItem = (itemPublicId: string) => {
     setErrorMsg(null);
@@ -1214,18 +1241,18 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                   </div>
                 </Card>
 
-                {/* DISTRIBUCIÓN MATEMÁTICA DE ANTICIPOS [m, M] */}
+                {/* ANTICIPOS PREVIOS IMPUTADOS AUTOMÁTICAMENTE */}
                 {previewData && previewData.requestAdvances && previewData.requestAdvances.length > 0 && (
-                  <Card className="p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-indigo-500/30 shadow-xl space-y-3">
+                  <Card className="p-4 sm:p-5 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-indigo-500/30 shadow-xl space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">⚖️</span>
                         <div>
                           <h3 className="text-sm font-bold text-white">
-                            Distribución de Anticipos y Límites Matemáticos [m, M]
+                            Anticipos de Órdenes Imputados Automáticamente
                           </h3>
                           <p className="text-xs text-slate-400">
-                            Límites legales calculados para proteger ítems pendientes en taller.
+                            Cálculo automático de anticipos aplicables según las órdenes seleccionadas.
                           </p>
                         </div>
                       </div>
@@ -1234,88 +1261,43 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                       )}
                     </div>
 
-                    <div className="space-y-3 pt-1">
-                      {previewData.requestAdvances.map((req) => {
-                        const aplicado = ordenesAvanceAplicado[req.documentId] ?? req.suggestedAdvanceToApply;
-                        const min = req.minAdvanceToApply;
-                        const max = req.maxAdvanceToApply;
-
-                        return (
-                          <div
-                            key={req.documentId}
-                            className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/10 space-y-2"
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/40">
-                                  {req.documentNumber}
-                                </span>
-                                <span className="text-xs text-slate-400">
-                                  Pendiente Entregar: <strong className="text-white font-mono">{formatMoneyCOP(req.deliveringItemsPending)}</strong>
-                                </span>
-                              </div>
-                              <div className="text-xs font-mono font-bold text-emerald-400">
-                                Rango [{formatMoneyCOP(min)} - {formatMoneyCOP(max)}]
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="range"
-                                min={min}
-                                max={max}
-                                step={100}
-                                value={aplicado}
-                                disabled={min === max}
-                                onChange={(e) =>
-                                  handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
-                                }
-                                className="flex-1 accent-indigo-500 h-2 bg-slate-800 rounded-lg cursor-pointer"
-                              />
-                              <div className="w-36">
-                                <Input
-                                  type="number"
-                                  min={min}
-                                  max={max}
-                                  value={aplicado}
-                                  onChange={(e) =>
-                                    handleCambiarAnticipoOrden(req.documentId, Number(e.target.value), min, max)
-                                  }
-                                  fullWidth
-                                />
-                              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {previewData.requestAdvances.map((req) => (
+                        <div
+                          key={req.documentId}
+                          className="p-3 rounded-2xl bg-slate-950/70 border border-white/10 flex items-center justify-between text-xs"
+                        >
+                          <div>
+                            <span className="font-mono font-bold px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/40">
+                              {req.documentNumber}
+                            </span>
+                            <div className="text-slate-400 text-[11px] mt-1">
+                              Pendiente: {formatMoneyCOP(req.deliveringItemsPending)}
                             </div>
                           </div>
-                        );
-                      })}
-
-                      {previewData.customerAdvance?.availableAdvance > 0 && (
-                        <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                          <span className="text-indigo-200">
-                            🌟 Anticipo a favor global: <strong>{formatMoneyCOP(previewData.customerAdvance.availableAdvance)}</strong>
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span>Aplicar:</span>
-                            <div className="w-32">
-                              <Input
-                                type="number"
-                                min={0}
-                                max={previewData.customerAdvance.maxApplicableAdvance}
-                                value={anticipoClienteAplicado}
-                                onChange={(e) =>
-                                  setAnticipoClienteAplicado(
-                                    Math.min(
-                                      previewData.customerAdvance.maxApplicableAdvance,
-                                      Math.max(0, Number(e.target.value))
-                                    )
-                                  )
-                                }
-                              />
-                            </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-500 uppercase block">Anticipo Aplicado</span>
+                            <span className="font-mono font-bold text-emerald-400 text-sm">
+                              {formatMoneyCOP(ordenesAvanceAplicado[req.documentId] ?? req.suggestedAdvanceToApply)}
+                            </span>
                           </div>
                         </div>
-                      )}
+                      ))}
                     </div>
+
+                    {previewData.customerAdvance?.availableAdvance > 0 && (
+                      <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <span className="text-indigo-200">
+                          🌟 Anticipo a favor global del cliente: <strong>{formatMoneyCOP(previewData.customerAdvance.availableAdvance)}</strong>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-400">Aplicado:</span>
+                          <span className="font-mono font-bold text-emerald-400">
+                            {formatMoneyCOP(anticipoClienteAplicado)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 )}
 
@@ -1601,7 +1583,10 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
               <Button
                 variant="secondary"
                 size="lg"
-                onClick={() => window.print()}
+                onClick={() => {
+                  setIsPrintPreviewOpen(true);
+                  window.print();
+                }}
                 className="min-h-[44px] flex items-center gap-2"
               >
                 <Printer className="w-4 h-4" />
@@ -1695,6 +1680,15 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           </div>
         )}
       </Modal>
+      {/* MODAL UNIVERSAL DE IMPRESIÓN Y DESCARGA (TIRILLA 80MM / MEDIA CARTA) */}
+      {comprobanteEntregaData && (
+        <DocumentPrintPreviewModal
+          isOpen={isPrintPreviewOpen}
+          onClose={() => setIsPrintPreviewOpen(false)}
+          documentData={comprobanteEntregaData}
+          defaultFormat="pos-80mm"
+        />
+      )}
     </div>
   );
 };

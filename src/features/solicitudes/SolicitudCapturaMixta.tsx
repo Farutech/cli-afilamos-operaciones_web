@@ -22,6 +22,7 @@ import type { NaturalezaItem } from '../../types/solicitudes';
 
 export interface LineaDetalleLocal {
   idTemp: string;
+  lineaId?: string;
   itemCatalogoId?: string;
   naturaleza: NaturalezaItem;
   descripcion: string;
@@ -773,8 +774,10 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       fechaCompromisoFinal = programarEntregaInventario ? fechaCompromisoLinea : 'Inmediata';
     }
 
+    const lineaExistente = lineaEditandoIdTemp ? lineas.find((l) => l.idTemp === lineaEditandoIdTemp) : undefined;
     const nuevaLinea: LineaDetalleLocal = {
       idTemp: lineaEditandoIdTemp || `linea-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      lineaId: lineaExistente?.lineaId,
       itemCatalogoId: itemCatIdActual,
       naturaleza: naturalezaManual,
       descripcion: descripcionManual.trim(),

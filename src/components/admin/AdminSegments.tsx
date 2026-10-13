@@ -4,14 +4,14 @@ import {
   Eye,
   Pencil,
   Power,
-  Search,
   Users2,
   Percent,
   Calendar,
   Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 
 export interface CustomerSegment {
   id: string;
@@ -40,8 +40,6 @@ export default function AdminSegments({ token: _token }: { token?: string }) {
   const [modal, setModal] = useState<CustomerSegment | 'new' | null>(null);
   const [viewSegment, setViewSegment] = useState<CustomerSegment | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const totalPages = Math.max(1, Math.ceil(segments.length / pageSize));
 
   function saveSegment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,118 +91,120 @@ export default function AdminSegments({ token: _token }: { token?: string }) {
     [segments, query]
   );
 
+  const columns: ColumnDef<CustomerSegment>[] = [
+    {
+      key: 'nombre',
+      header: 'SEGMENTO',
+      render: (seg) => (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center shrink-0">
+            <Users2 className="w-4 h-4 text-violet-400" />
+          </div>
+          <div>
+            <strong className="text-white font-medium block">{seg.nombre}</strong>
+            <span className="text-[11px] text-slate-400 block truncate max-w-[280px]">
+              {seg.descripcion}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'codigo',
+      header: 'CÓDIGO',
+      render: (seg) => <span className="font-mono text-xs text-amber-300">{seg.codigo}</span>,
+    },
+    {
+      key: 'condiciones',
+      header: 'CONDICIONES',
+      render: (seg) => (
+        <span className="font-mono text-xs font-bold text-violet-300">
+          {seg.descuentoPorcentaje}% desc · {seg.plazoDias} días
+        </span>
+      ),
+    },
+    {
+      key: 'clientes',
+      header: 'CLIENTES',
+      align: 'center',
+      render: (seg) => (
+        <span className="font-mono text-xs text-slate-300 font-semibold">
+          {seg.clientesCount ?? 0}
+        </span>
+      ),
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (seg) => (
+        <Badge variant={seg.activo ? 'success' : 'neutral'}>
+          {seg.activo ? 'Activo' : 'Inactivo'}
+        </Badge>
+      ),
+    },
+  ];
+
+  const rowActions: StandardRowAction<CustomerSegment>[] = [
+    {
+      label: 'Ver detalle',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (seg) => setViewSegment(seg),
+    },
+    {
+      label: 'Editar segmento',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: (seg) => setModal(seg),
+    },
+    {
+      label: 'Activar/Desactivar',
+      icon: <Power className="w-3.5 h-3.5" />,
+      onClick: (seg) => toggleStatus(seg),
+      variant: 'ghost',
+    },
+  ];
+
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ADMINISTRACIÓN · CLIENTES</p>
-          <h1>Segmentos de clientes</h1>
-          <p className="heading-copy">
-            Estratificación comercial, condiciones de crédito y descuentos por perfil de cliente.
-          </p>
-        </div>
-        <button className="primary-button" onClick={() => setModal('new')}>
-          <Users2 className="w-4 h-4 mr-2 inline" /> Nuevo segmento
-        </button>
-      </div>
-
-      <section className="panel clients-panel">
-        <div className="panel-heading">
-          <div className="panel-title-row">
-            <h2>Segmentos Comerciales</h2>
-          </div>
-          <div className="client-search">
-            <Search className="w-4 h-4" />
-            <input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar segmento por código o nombre"
-              aria-label="Buscar segmentos"
-            />
-          </div>
-        </div>
-
-        <div className="client-table-head">
-          <span>SEGMENTO</span>
-          <span>CÓDIGO</span>
-          <span>DESCUENTO / PLAZO</span>
-          <span>ESTADO</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {visible.length === 0 ? (
-          <div className="empty-state">No hay segmentos registrados.</div>
-        ) : (
-          <div className="client-list">
-            {visible.map((seg) => (
-              <div className="client-row" key={seg.id}>
-                <div className="client-cell-main">
-
-                  <div className="client-avatar">
-                  <Users2 className="w-4 h-4" />
-                </div>
-
-                  <div className="client-main">
-                  <strong>{seg.nombre}</strong>
-                  <span>{seg.descripcion}</span>
-                </div>
-
-                </div>
-                <span className="client-contact font-mono text-xs">{seg.codigo}</span>
-                <span className="client-orders text-violet-300 font-bold">
-                  {seg.descuentoPorcentaje}% desc · {seg.plazoDias} días
-                </span>
-                <span className={`client-status ${!seg.activo ? 'is-pending' : ''}`}>
-                  {seg.activo ? 'Activo' : 'Inactivo'}
-                </span>
-                <div className="client-actions">
-                  <button
-                    className="icon-action"
-                    onClick={() => setViewSegment(seg)}
-                    aria-label={`Ver detalle de ${seg.nombre}`}
-                    title="Ver detalle completo"
-                  >
-                    <Eye className="w-4 h-4 text-violet-400" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => setModal(seg)}
-                    aria-label={`Editar ${seg.nombre}`}
-                    title="Editar segmento"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => toggleStatus(seg)}
-                    aria-label={`Cambiar estado de ${seg.nombre}`}
-                    title="Activar o desactivar"
-                  >
-                    <Power className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
-        <CrudPagination
-          currentPage={page}
-          totalPages={totalPages}
-          perPage={pageSize}
-          total={segments.length}
-          onPageChange={(newPage) => setPage(newPage)}
-          onPerPageChange={(newSize) => {
-            setPageSize(newSize);
+      <ListPageLayout
+        title="Segmentos de clientes"
+        eyebrow="ADMINISTRACIÓN · CLIENTES"
+        description="Estratificación comercial, condiciones de crédito y descuentos por perfil de cliente."
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => setModal('new')}
+          >
+            <Users2 className="w-4 h-4 mr-2 inline" /> Nuevo segmento
+          </Button>
+        }
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
             setPage(1);
+          },
+          placeholder: 'Buscar segmento por código o nombre...',
+        }}
+      >
+        <StandardDataTable<CustomerSegment>
+          columns={columns}
+          data={visible.slice((page - 1) * pageSize, page * pageSize)}
+          keyExtractor={(seg) => seg.id}
+          rowActions={rowActions}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalItems: visible.length,
+            onPageChange: (p) => setPage(p),
+            onPageSizeChange: (s) => {
+              setPageSize(s);
+              setPage(1);
+            },
           }}
-          variant="dark"
+          emptyMessage="No se encontraron segmentos comerciales registrados."
         />
-      </section>
+      </ListPageLayout>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal

@@ -116,4 +116,81 @@ describe('HistorialSolicitudesView Component', () => {
     expect(printSpy).toHaveBeenCalled();
     printSpy.mockRestore();
   });
+
+  it('preserva las líneas con itemCatalogoId y lineaId de inventario al editar desde el API', async () => {
+    vi.mocked(solicitudesApi.getSolicitudes).mockResolvedValue({
+      items: [
+        {
+          publicId: 'req-inv-draft',
+          codigo: 'SOL-9999',
+          numeroDocumentoVisible: 'SOL-9999',
+          subtipoCodigo: 'SOL',
+          subtipoNombre: 'Solicitud Estándar',
+          clientePublicId: 'cli-99',
+          clienteNombre: 'Cliente Con Inventario',
+          clienteNumeroDocumento: '12345678',
+          canalPublicId: 'can-1',
+          canalNombre: 'Mostrador',
+          totalNeto: 120000,
+          totalInventario: 80000,
+          totalServicios: 40000,
+          totalAnticiposImputados: 0,
+          totalPagadoInventario: 0,
+          saldoPendiente: 120000,
+          estado: 'BORRADOR',
+          fechaEmision: '2026-10-13T10:00:00Z',
+          notas: 'Borrador mixto con inventario',
+          exigeAnticipoPendienteVoBo: false,
+          inventarioPendientePago100: true,
+          items: [
+            {
+              publicId: 'doc-item-01',
+              lineaId: 'doc-item-01',
+              itemCatalogoId: 'cat-disco-10',
+              codigo: 'DISCO-10',
+              naturaleza: 'INVENTARIO',
+              descripcion: 'Disco Sierra Widia 10 pulg',
+              cantidad: 1,
+              precioUnitario: 80000,
+              subtotal: 80000,
+              exigeAnticipoObligatorio: false,
+              porcentajeAnticipoMinimo: 0,
+              anticipoMinimoRequerido: 0,
+              anticipoDirectoImputado: 0,
+              saldoPendienteItem: 80000,
+              franjaCompromiso: 'Inmediata',
+              permiteCancelacion: true,
+              stockReferencialDisponible: 15,
+              advertenciaStockInsuficiente: false,
+            },
+          ],
+          recaudos: [],
+        },
+      ],
+      total: 1,
+    });
+
+    const handleEditar = vi.fn();
+    render(
+      <HistorialSolicitudesView
+        onNuevaSolicitud={vi.fn()}
+        onEditarSolicitud={handleEditar}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('SOL-9999')).toBeDefined();
+    });
+
+    const editButtons = screen.getAllByText(/Editar/i);
+    fireEvent.click(editButtons[0]);
+
+    expect(handleEditar).toHaveBeenCalledTimes(1);
+    const passedSol = handleEditar.mock.calls[0][0];
+    expect(passedSol.lineas).toBeDefined();
+    expect(passedSol.lineas?.length).toBe(1);
+    expect(passedSol.lineas?.[0].itemCatalogoId).toBe('cat-disco-10');
+    expect(passedSol.lineas?.[0].lineaId).toBe('doc-item-01');
+    expect(passedSol.lineas?.[0].naturaleza).toBe('INVENTARIO');
+  });
 });

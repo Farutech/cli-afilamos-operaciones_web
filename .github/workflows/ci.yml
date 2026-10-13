@@ -78,29 +78,56 @@ jobs:
 
   # Las imagenes se construyen con el ARG que espera el Dockerfile. El valor por
   # defecto apunta a la API local, que es lo que se usa en desarrollo.
+  # Publica la imagen solo en las ramas permanentes tras merge de PR aprobado.
   publish-image:
-    name: Publicar imagen
+    name: Publicar imagen GHCR
     needs: build-test
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/qa' || github.ref == 'refs/heads/dev')
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      stage_env: ${{ steps.meta.outputs.stage_env }}
+      tags: ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@v4
-      - name: Calcular etiquetas
+
+      - name: Calcular etiquetas por ambiente
         id: meta
         run: |
           sha="${GITHUB_SHA::7}"
           branch="${GITHUB_REF#refs/heads/}"
-          # ghcr exige minusculas en el nombre de repositorio y la org
-          # Farutech lleva F mayuscula. ${GITHUB_REPOSITORY,,} la pasa a minuscula.
           repo="${GITHUB_REPOSITORY,,}"
-          echo "tags=ghcr.io/$repo:$branch-$sha,ghcr.io/$repo:$branch" >> "$GITHUB_OUTPUT"
-      # El driver docker por defecto no soporta exportar la cache de GHA y
-      # falla con "Cache export is not supported for the docker driver".
-      # Autenticacion en GHCR. Sin esto el push falla con 403 al pedir el
-      # token: el builder intenta hacerlo de forma anonima.
+
+          TAGS="ghcr.io/$repo:$branch-$sha,ghcr.io/$repo:$branch"
+          case "$branch" in
+            dev)
+              STAGE="dev"
+              TAGS="$TAGS,ghcr.io/$repo:alpha,ghcr.io/$repo:dev-latest"
+              ;;
+            qa)
+              STAGE="qa"
+              TAGS="$TAGS,ghcr.io/$repo:beta,ghcr.io/$repo:qa-latest"
+              ;;
+            staging)
+              STAGE="staging"
+              TAGS="$TAGS,ghcr.io/$repo:rc,ghcr.io/$repo:staging-latest"
+              ;;
+            main)
+              STAGE="prod"
+              TAGS="$TAGS,ghcr.io/$repo:prod,ghcr.io/$repo:latest"
+              ;;
+            *)
+              STAGE="$branch"
+              ;;
+          esac
+
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$branch-$sha" >> "$GITHUB_OUTPUT"
+          echo "stage_env=$STAGE" >> "$GITHUB_OUTPUT"
+
       - name: Login en GHCR
         uses: docker/login-action@v3
         with:
@@ -110,6 +137,7 @@ jobs:
 
       - name: Crear builder
         uses: docker/setup-buildx-action@v3
+
       - name: Build y push a GHCR
         uses: docker/build-push-action@v6
         with:
@@ -124,3 +152,88 @@ jobs:
             npmrc=//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Despliegue de Contenedor según Ambiente
+  #   - dev & qa: Servidor / Clúster actual (host: ops.<env>.afilamoshermanos.com)
+  #   - staging & prod: Segundo VPS dedicado (falla con aviso de credenciales si no existen)
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Desplegar contenedor Web
+    needs: publish-image
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/qa' || github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Identificar host objetivo
+        id: target
+        run: |
+          stage="${{ needs.publish-image.outputs.stage_env }}"
+          case "$stage" in
+            dev)
+              echo "host=ops.dev.afilamoshermanos.com" >> "$GITHUB_OUTPUT"
+              echo "server=dev_qa" >> "$GITHUB_OUTPUT"
+              ;;
+            qa)
+              echo "host=ops.qa.afilamoshermanos.com" >> "$GITHUB_OUTPUT"
+              echo "server=dev_qa" >> "$GITHUB_OUTPUT"
+              ;;
+            staging)
+              echo "host=ops.staging.afilamoshermanos.com" >> "$GITHUB_OUTPUT"
+              echo "server=prod_vps" >> "$GITHUB_OUTPUT"
+              ;;
+            prod)
+              echo "host=ops.afilamoshermanos.com" >> "$GITHUB_OUTPUT"
+              echo "server=prod_vps" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Desplegar en servidor DEV / QA
+        if: steps.target.outputs.server == 'dev_qa'
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DEV_QA || secrets.KUBECONFIG }}
+          SSH_HOST: ${{ secrets.VPS_HOST }}
+          SSH_USER: ${{ secrets.VPS_SSH_USER }}
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          IMAGE_TAG: ${{ needs.publish-image.outputs.image_tag }}
+          STAGE_ENV: ${{ needs.publish-image.outputs.stage_env }}
+        run: |
+          echo "Ejecutando despliegue de Web en ambiente $STAGE_ENV ($IMAGE_TAG)..."
+          if [ -n "$KUBECONFIG_DATA" ]; then
+            mkdir -p ~/.kube
+            echo "$KUBECONFIG_DATA" > ~/.kube/config
+            kubectl -n "afilamoshermanos-$STAGE_ENV" rollout restart deployment/web || true
+            echo "Despliegue ordenado vía Kubeconfig en afilamoshermanos-$STAGE_ENV"
+          elif [ -n "$SSH_HOST" ] && [ -n "$SSH_KEY" ]; then
+            mkdir -p ~/.ssh
+            echo "$SSH_KEY" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+            ssh -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" "deploy-branch.sh afilamoshermanos web $STAGE_ENV $IMAGE_TAG" || true
+          else
+            echo "::notice::Ambiente $STAGE_ENV: Imagen $IMAGE_TAG lista en GHCR para despliegue automático por Jenkins/webhook."
+          fi
+
+      - name: Desplegar en servidor STAGING / PROD (Segundo VPS)
+        if: steps.target.outputs.server == 'prod_vps'
+        env:
+          PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
+          PROD_VPS_HOST: ${{ secrets.PROD_VPS_HOST }}
+          PROD_VPS_KEY: ${{ secrets.PROD_VPS_SSH_KEY }}
+          PROD_VPS_USER: ${{ secrets.PROD_VPS_SSH_USER || 'deploy' }}
+          IMAGE_TAG: ${{ needs.publish-image.outputs.image_tag }}
+          STAGE_ENV: ${{ needs.publish-image.outputs.stage_env }}
+        run: |
+          echo "Iniciando despliegue de Web hacia ambiente productivo ($STAGE_ENV) en Segundo VPS..."
+          if [ -z "$PROD_KUBECONFIG" ] && [ -z "$PROD_VPS_HOST" ]; then
+            echo "::error::Credenciales para STAGING/PROD no configuradas en Secrets (requiere PROD_KUBECONFIG o PROD_VPS_HOST / PROD_VPS_SSH_KEY)."
+            echo "::notice::La imagen $IMAGE_TAG quedó publicada exitosamente en GHCR. Se desplegará automáticamente al nuevo VPS en cuanto se suministren los secretos."
+            exit 1
+          fi
+
+          if [ -n "$PROD_KUBECONFIG" ]; then
+            mkdir -p ~/.kube
+            echo "$PROD_KUBECONFIG" > ~/.kube/config
+            kubectl -n "afilamoshermanos-$STAGE_ENV" rollout restart deployment/web
+          elif [ -n "$PROD_VPS_HOST" ]; then
+            mkdir -p ~/.ssh
+            echo "$PROD_VPS_KEY" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+            ssh -o StrictHostKeyChecking=no "$PROD_VPS_USER@$PROD_VPS_HOST" "deploy-branch.sh afilamoshermanos web $STAGE_ENV $IMAGE_TAG"
+          fi

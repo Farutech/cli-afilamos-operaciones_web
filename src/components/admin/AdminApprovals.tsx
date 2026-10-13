@@ -4,7 +4,6 @@ import {
   Eye,
   Check,
   X,
-  Search,
   ShieldAlert,
   User,
   DollarSign,
@@ -12,7 +11,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { aprobacionesApi, type AprobacionDto } from '@/services/aprobacionesApi';
 
 const FALLBACK_APPROVALS: AprobacionDto[] = [
@@ -30,8 +30,6 @@ export default function AdminApprovals({ token }: { token?: string }) {
   const [actionModal, setActionModal] = useState<{ item: AprobacionDto; type: 'APROBAR' | 'RECHAZAR' } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const totalPages = Math.max(1, Math.ceil(approvals.length / pageSize));
 
   async function loadApprovals() {
     setLoading(true);
@@ -92,120 +90,109 @@ export default function AdminApprovals({ token }: { token?: string }) {
     [approvals, query]
   );
 
+  const columns: ColumnDef<AprobacionDto>[] = [
+    {
+      key: 'documento',
+      header: 'DOCUMENTO / CLIENTE',
+      render: (a) => (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center shrink-0">
+            <ShieldAlert className="w-4 h-4 text-amber-400" />
+          </div>
+          <div>
+            <strong className="text-white font-medium block">{a.documentNumber}</strong>
+            <span className="text-[11px] text-slate-400">{a.customerName || 'Cliente mostrador'}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'solicitante',
+      header: 'SOLICITANTE',
+      render: (a) => <span className="font-medium text-slate-200">{a.requestedByName}</span>,
+    },
+    {
+      key: 'tipoExcepcion',
+      header: 'TIPO EXCEPCIÓN',
+      render: (a) => (
+        <span className="text-xs text-amber-300 font-semibold">{a.tipoAprobacion}</span>
+      ),
+    },
+    {
+      key: 'totalAmount',
+      header: 'MONTO TOTAL',
+      align: 'right',
+      render: (a) => (
+        <span className="font-mono font-bold text-xs text-slate-100">
+          ${(a.totalAmount || 0).toLocaleString('es-CO')} COP
+        </span>
+      ),
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (a) => (
+        <Badge variant="warning">{a.status || 'PENDIENTE'}</Badge>
+      ),
+    },
+  ];
+
+  const rowActions: StandardRowAction<AprobacionDto>[] = [
+    {
+      label: 'Ver detalle',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (a) => setViewApproval(a),
+    },
+    {
+      label: 'Aprobar',
+      icon: <Check className="w-3.5 h-3.5" />,
+      onClick: (a) => setActionModal({ item: a, type: 'APROBAR' }),
+      variant: 'success',
+    },
+    {
+      label: 'Rechazar',
+      icon: <X className="w-3.5 h-3.5" />,
+      onClick: (a) => setActionModal({ item: a, type: 'RECHAZAR' }),
+      variant: 'danger',
+    },
+  ];
+
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ADMINISTRACIÓN · AUDITORÍA</p>
-          <h1>Aprobaciones y excepciones</h1>
-          <p className="heading-copy">
-            Autorización de dispensas de anticipo, descuentos extraordinarios y excepciones de despacho.
-          </p>
-        </div>
-      </div>
-
-      <section className="panel clients-panel">
-        <div className="panel-heading">
-          <div className="panel-title-row">
-            <h2>Bandeja de Autorizaciones Pendientes</h2>
-          </div>
-          <div className="client-search">
-            <Search className="w-4 h-4" />
-            <input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar por documento o cliente..."
-              aria-label="Buscar aprobaciones"
-            />
-          </div>
-        </div>
-
-        <div className="client-table-head">
-          <span>DOCUMENTO</span>
-          <span>SOLICITANTE</span>
-          <span>TIPO EXCEPCIÓN</span>
-          <span>MONTO TOTAL</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {loading && approvals.length === 0 ? (
-          <div className="empty-state">Consultando autorizaciones pendientes…</div>
-        ) : visible.length === 0 ? (
-          <div className="empty-state">No hay aprobaciones pendientes en este momento.</div>
-        ) : (
-          <div className="client-list">
-            {visible.map((a) => (
-              <div className="client-row" key={a.id}>
-                <div className="client-cell-main">
-
-                  <div className="client-avatar">
-                  <ShieldAlert className="w-4 h-4 text-amber-400" />
-                </div>
-
-                  <div className="client-main">
-                  <strong>{a.documentNumber}</strong>
-                  <span>{a.customerName || 'Cliente mostrador'}</span>
-                </div>
-
-                </div>
-                <span className="client-contact font-medium text-slate-200">
-                  {a.requestedByName}
-                </span>
-                <span className="client-orders text-violet-300 font-bold">
-                  ${(a.totalAmount || 0).toLocaleString('es-CO')}
-                </span>
-                <span className="client-status is-pending">
-                  {a.tipoAprobacion.split(' ')[0]}
-                </span>
-                <div className="client-actions">
-                  <button
-                    className="icon-action"
-                    onClick={() => setViewApproval(a)}
-                    aria-label={`Ver solicitud ${a.documentNumber}`}
-                    title="Ver detalle completo"
-                  >
-                    <Eye className="w-4 h-4 text-violet-400" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    style={{ color: '#4ade80' }}
-                    onClick={() => setActionModal({ item: a, type: 'APROBAR' })}
-                    aria-label={`Aprobar ${a.documentNumber}`}
-                    title="Aprobar solicitud"
-                  >
-                    <Check className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="icon-action danger"
-                    style={{ color: '#f87171' }}
-                    onClick={() => setActionModal({ item: a, type: 'RECHAZAR' })}
-                    aria-label={`Rechazar ${a.documentNumber}`}
-                    title="Rechazar solicitud"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <CrudPagination
-          currentPage={page}
-          totalPages={totalPages}
-          perPage={pageSize}
-          total={approvals.length}
-          onPageChange={(newPage) => setPage(newPage)}
-          perPageOptions={[10, 25, 50, 100]}
-          onPerPageChange={(newSize) => {
-            setPageSize(newSize);
+      <ListPageLayout
+        title="Aprobaciones y excepciones"
+        eyebrow="ADMINISTRACIÓN · AUDITORÍA"
+        description="Autorización de dispensas de anticipo, descuentos extraordinarios y excepciones de despacho."
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
             setPage(1);
+          },
+          placeholder: 'Buscar por documento o cliente...',
+          isSearching: loading,
+        }}
+      >
+        <StandardDataTable<AprobacionDto>
+          columns={columns}
+          data={visible.slice((page - 1) * pageSize, page * pageSize)}
+          keyExtractor={(a) => a.id}
+          rowActions={rowActions}
+          loading={loading && approvals.length === 0}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalItems: visible.length,
+            onPageChange: (p) => setPage(p),
+            onPageSizeChange: (s) => {
+              setPageSize(s);
+              setPage(1);
+            },
           }}
+          emptyMessage="No hay aprobaciones pendientes en este momento."
         />
-      </section>
+      </ListPageLayout>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal

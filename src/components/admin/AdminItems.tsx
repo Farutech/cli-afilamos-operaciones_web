@@ -4,7 +4,6 @@ import {
   Eye,
   Pencil,
   Power,
-  Search,
   Package,
   Wrench,
   Boxes,
@@ -13,7 +12,8 @@ import {
   Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Badge, CrudPagination } from '@farutech/design-system';
+import { Modal, Badge } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { ItemCatalogo } from '@/types/catalogos';
 
@@ -84,7 +84,6 @@ export default function AdminItems({ token }: { token?: string }) {
     });
   }, [items, query, filtroNaturaleza, filtroCategoria]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const visible = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredItems.slice(start, start + pageSize);
@@ -190,39 +189,123 @@ export default function AdminItems({ token }: { token?: string }) {
     }
   }
 
+  const columns = useMemo<ColumnDef<ItemCatalogo>[]>(
+    () => [
+      {
+        key: 'item',
+        header: 'ÍTEM / SERVICIO',
+        sortable: true,
+        render: (it) => (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center shrink-0">
+              {it.naturaleza === 'INVENTARIO' ? (
+                <Package className="w-4 h-4 text-indigo-400" />
+              ) : (
+                <Wrench className="w-4 h-4 text-emerald-400" />
+              )}
+            </div>
+            <div>
+              <strong className="text-white block font-medium">{it.nombre}</strong>
+              <span className="font-mono text-amber-300 text-xs block">{it.codigoReferencia}</span>
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: 'naturaleza',
+        header: 'NATURALEZA & CATEGORÍA',
+        render: (it) => (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge variant={it.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
+              {it.naturaleza === 'INVENTARIO' ? '📦 Producto' : '🛠️ Servicio'}
+            </Badge>
+            {it.categoria?.nombre && (
+              <span className="text-[11px] text-slate-400 truncate max-w-[130px]">
+                {it.categoria.nombre}
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'stock',
+        header: 'EXISTENCIA',
+        align: 'center',
+        render: (it) => (
+          <span className="font-mono text-xs">
+            {it.naturaleza === 'INVENTARIO' ? (
+              <span className="text-emerald-400 font-bold">{it.stockReferencial ?? 0} UND</span>
+            ) : (
+              <span className="text-slate-500">—</span>
+            )}
+          </span>
+        ),
+      },
+      {
+        key: 'precio',
+        header: 'PRECIO BASE',
+        align: 'right',
+        render: (it) => (
+          <span className="font-mono font-bold text-white text-xs">
+            ${(it.precioBase || 0).toLocaleString('es-CO')}
+          </span>
+        ),
+      },
+      {
+        key: 'estado',
+        header: 'ESTADO',
+        render: (it) => (
+          <Badge variant={it.activo ? 'success' : 'neutral'}>
+            {it.activo ? 'Activo' : 'Inactivo'}
+          </Badge>
+        ),
+      },
+    ],
+    []
+  );
+
+  const rowActions = useMemo<StandardRowAction<ItemCatalogo>[]>(
+    () => [
+      {
+        label: 'Ver detalle',
+        icon: <Eye className="w-3.5 h-3.5" />,
+        onClick: (it) => setViewItem(it),
+      },
+      {
+        label: 'Editar ítem',
+        icon: <Pencil className="w-3.5 h-3.5" />,
+        onClick: (it) => {
+          setModalTipo(it.naturaleza);
+          setModal(it);
+        },
+      },
+      {
+        label: 'Cambiar estado',
+        icon: <Power className="w-3.5 h-3.5" />,
+        onClick: (it) => void toggleStatus(it),
+      },
+    ],
+    []
+  );
+
   return (
     <div className="page-content">
-      {/* Encabezado Principal */}
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">CATÁLOGOS · ÍTEMS</p>
-          <h1>Productos y Servicios</h1>
-          <p className="heading-copy">
-            Gestión unificada de materiales de inventario, insumos y servicios de taller.
-          </p>
-        </div>
-        <button
-          className="primary-button"
-          onClick={() => {
-            setModalTipo('INVENTARIO');
-            setModal('new');
-          }}
-        >
-          <Package className="w-4 h-4 mr-2 inline" /> + Nuevo Ítem
-        </button>
-      </div>
-
-      {/* Panel Principal */}
-      <section className="panel clients-panel">
-        <div className="panel-heading" style={{ flexWrap: 'wrap', gap: '12px' }}>
-          <div className="flex items-center gap-2">
-            <h2>Catálogo de Ítems</h2>
-            <span className="text-xs text-slate-400 font-mono">({filteredItems.length} registros)</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Filtro Naturaleza */}
-            <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+      <ListPageLayout
+        title="Productos y Servicios"
+        eyebrow="CATÁLOGOS · ÍTEMS"
+        description="Gestión unificada de materiales de inventario, insumos y servicios de taller."
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
+            setPage(1);
+          },
+          placeholder: 'Buscar por código, nombre o descripción...',
+          isSearching: loading,
+        }}
+        filters={
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
               {(['TODOS', 'INVENTARIO', 'SERVICIO'] as const).map((nat) => (
                 <button
                   key={nat}
@@ -242,7 +325,6 @@ export default function AdminItems({ token }: { token?: string }) {
               ))}
             </div>
 
-            {/* Filtro Categoría */}
             {categoriasDisponibles.length > 0 && (
               <select
                 value={filtroCategoria}
@@ -250,7 +332,7 @@ export default function AdminItems({ token }: { token?: string }) {
                   setFiltroCategoria(e.target.value);
                   setPage(1);
                 }}
-                className="h-9 px-3 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                className="h-8 px-2.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
               >
                 <option value="">📁 Todas las categorías</option>
                 {categoriasDisponibles.map((c) => (
@@ -260,139 +342,45 @@ export default function AdminItems({ token }: { token?: string }) {
                 ))}
               </select>
             )}
-
-            {/* Buscador de texto */}
-            <div className="client-search" style={{ minWidth: '220px' }}>
-              <Search className="w-4 h-4" />
-              <input
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Buscar por código, nombre o descripción..."
-                aria-label="Buscar ítems"
-              />
-            </div>
           </div>
-        </div>
-
-        {/* Encabezado de Columnas (5 columnas exactas alineadas) */}
-        <div className="client-table-head">
-          <span>ÍTEM / SERVICIO</span>
-          <span>NATURALEZA & CATEGORÍA</span>
-          <span>EXISTENCIA</span>
-          <span>PRECIO BASE</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {/* Lista de Registros */}
-        {loading ? (
-          <div className="empty-state">
-            <span className="spinner-sm inline-block mr-2" /> Cargando catálogo de ítems…
-          </div>
-        ) : visible.length === 0 ? (
-          <div className="empty-state">
-            {query.trim() || filtroNaturaleza !== 'TODOS' || filtroCategoria
+        }
+        actions={
+          <button
+            className="primary-button flex items-center gap-2"
+            onClick={() => {
+              setModalTipo('INVENTARIO');
+              setModal('new');
+            }}
+          >
+            <Package className="w-4 h-4 mr-2 inline" /> + Nuevo Ítem
+          </button>
+        }
+        onRefresh={loadItems}
+        isRefreshing={loading}
+      >
+        <StandardDataTable
+          columns={columns}
+          data={visible}
+          keyExtractor={(it) => it.uuid}
+          loading={loading}
+          rowActions={rowActions}
+          emptyMessage={
+            query.trim() || filtroNaturaleza !== 'TODOS' || filtroCategoria
               ? 'No se encontraron ítems que coincidan con los filtros aplicados.'
-              : 'No hay ítems registrados en el catálogo.'}
-          </div>
-        ) : (
-          <div className="client-list">
-            {visible.map((it) => (
-              <div className="client-row" key={it.uuid}>
-                {/* Columna 1: Avatar badge + Nombre + Código */}
-                <div className="client-cell-main">
-                  <div className="client-avatar">
-                    {it.naturaleza === 'INVENTARIO' ? (
-                      <Package className="w-4 h-4 text-indigo-300" />
-                    ) : (
-                      <Wrench className="w-4 h-4 text-emerald-300" />
-                    )}
-                  </div>
-                  <div className="client-main">
-                    <strong>{it.nombre}</strong>
-                    <span className="font-mono text-amber-300">{it.codigoReferencia}</span>
-                  </div>
-                </div>
-
-                {/* Columna 2: Naturaleza & Categoría */}
-                <div className="client-contact flex items-center gap-1.5">
-                  <Badge variant={it.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
-                    {it.naturaleza === 'INVENTARIO' ? '📦 Producto' : '🛠️ Servicio'}
-                  </Badge>
-                  {it.categoria?.nombre && (
-                    <span className="text-[11px] text-slate-400 truncate max-w-[120px]">
-                      {it.categoria.nombre}
-                    </span>
-                  )}
-                </div>
-
-                {/* Columna 3: Existencia / Stock */}
-                <span className="client-orders font-mono">
-                  {it.naturaleza === 'INVENTARIO' ? (
-                    <span className="text-emerald-400 font-bold">{it.stockReferencial ?? 0} UND</span>
-                  ) : (
-                    <span className="text-slate-500">—</span>
-                  )}
-                </span>
-
-                {/* Columna 4: Precio Base */}
-                <span className="font-mono font-bold text-white text-xs">
-                  ${(it.precioBase || 0).toLocaleString('es-CO')}
-                </span>
-
-                {/* Columna 5: Acciones alineadas a la derecha */}
-                <div className="client-actions">
-                  <button
-                    className="icon-action"
-                    onClick={() => setViewItem(it)}
-                    aria-label={`Ver detalle de ${it.nombre}`}
-                    title="Ver detalle completo"
-                  >
-                    <Eye className="w-4 h-4 text-violet-400" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => {
-                      setModalTipo(it.naturaleza);
-                      setModal(it);
-                    }}
-                    aria-label={`Editar ${it.nombre}`}
-                    title="Editar ítem"
-                  >
-                    <Pencil className="w-4 h-4 text-indigo-400" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => void toggleStatus(it)}
-                    aria-label={it.activo ? `Desactivar ${it.nombre}` : `Activar ${it.nombre}`}
-                    title={it.activo ? 'Desactivar ítem' : 'Activar ítem'}
-                  >
-                    <Power className={`w-4 h-4 ${it.activo ? 'text-emerald-400' : 'text-slate-500'}`} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Paginación Estandarizada Design System */}
-        {filteredItems.length > 0 && (
-          <CrudPagination
-            currentPage={page}
-            totalPages={totalPages}
-            perPage={pageSize}
-            total={filteredItems.length}
-            onPageChange={(newPage) => setPage(newPage)}
-            onPerPageChange={(newSize: number) => {
+              : 'No hay ítems registrados en el catálogo.'
+          }
+          pagination={{
+            page,
+            pageSize,
+            totalItems: filteredItems.length,
+            onPageChange: (newPage) => setPage(newPage),
+            onPageSizeChange: (newSize) => {
               setPageSize(newSize);
               setPage(1);
-            }}
-            variant="dark"
-          />
-        )}
-      </section>
+            },
+          }}
+        />
+      </ListPageLayout>
 
       {/* Modal 1: VER DETALLE DEL ÍTEM */}
       <Modal

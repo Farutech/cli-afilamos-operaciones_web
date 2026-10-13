@@ -155,7 +155,8 @@ export function App() {
           if (detalle.items && detalle.items.length > 0) {
             lineasCargadas = detalle.items.map((it) => ({
               idTemp: it.publicId || `it-${Date.now()}-${Math.random()}`,
-              itemCatalogoId: it.publicId,
+              lineaId: it.lineaId || it.publicId,
+              itemCatalogoId: it.itemCatalogoId,
               naturaleza: it.naturaleza,
               descripcion: it.descripcion,
               cantidad: it.cantidad,
@@ -267,23 +268,58 @@ export function App() {
         nuevaSolicitudHistorial.numeroSolicitud = resSolicitud.codigo || nuevoNumero;
       }
 
-      // 2. Agregar ítems al backend si tienen identificador en catálogo
-      for (const linea of solicitud.lineas) {
-        if (linea.itemCatalogoId && uuidSol) {
+      // 2. Sincronizar ítems en backend
+      if (uuidSol) {
+        let lineasExistentesEnBackend: { id: string }[] = [];
+        if (solicitud.requestId) {
           try {
-            await solicitudesApi.agregarItem(
-              uuidSol,
-              {
-                itemCatalogoPublicId: linea.itemCatalogoId,
-                naturaleza: linea.naturaleza,
-                cantidad: linea.cantidad,
-                precioUnitario: linea.precioUnitario,
-                descripcion: linea.descripcion,
-              },
-              session?.token
-            );
-          } catch (itemErr) {
-            console.warn('Error al agregar ítem a solicitud:', itemErr);
+            const detalleActual = await solicitudesApi.getSolicitudByUuid(uuidSol, session?.token);
+            lineasExistentesEnBackend = detalleActual?.items?.map((it) => ({ id: it.publicId })) || [];
+          } catch {
+            lineasExistentesEnBackend = [];
+          }
+        }
+
+        // A. Eliminar líneas en backend que el usuario quitó en la pantalla
+        const idsLineasEnPantalla = new Set(solicitud.lineas.map((l) => l.lineaId).filter(Boolean));
+        for (const lineaBackend of lineasExistentesEnBackend) {
+          if (!idsLineasEnPantalla.has(lineaBackend.id)) {
+            try {
+              await solicitudesApi.removerItem(uuidSol, lineaBackend.id, session?.token);
+            } catch (errRemover: any) {
+              const msg = errRemover?.message || 'Error al remover ítem';
+              toast.error(`Error al remover ítem de la solicitud: ${msg}`, { id: 'asentar-sol' });
+              throw errRemover;
+            }
+          }
+        }
+
+        // B. Agregar líneas nuevas (aquellas que no estaban ya en backend)
+        const idsExistentes = new Set(lineasExistentesEnBackend.map((l) => l.id));
+        for (const linea of solicitud.lineas) {
+          const yaExisteEnBackend = linea.lineaId && idsExistentes.has(linea.lineaId);
+          if (!yaExisteEnBackend && linea.itemCatalogoId) {
+            try {
+              const resItem = await solicitudesApi.agregarItem(
+                uuidSol,
+                {
+                  itemCatalogoPublicId: linea.itemCatalogoId,
+                  naturaleza: linea.naturaleza,
+                  cantidad: linea.cantidad,
+                  precioUnitario: linea.precioUnitario,
+                  descripcion: linea.descripcion,
+                },
+                session?.token
+              );
+              const nuevoItem = resItem.items?.find((it) => it.itemCatalogoId === linea.itemCatalogoId);
+              if (nuevoItem) {
+                linea.lineaId = nuevoItem.publicId;
+              }
+            } catch (itemErr: any) {
+              const msg = itemErr?.message || 'Error al agregar ítem';
+              toast.error(`Error al guardar ítem "${linea.descripcion}": ${msg}`, { id: 'asentar-sol' });
+              throw itemErr;
+            }
           }
         }
       }
@@ -567,13 +603,23 @@ export function App() {
       </div>
     );
   } else if (activeSection === 'Solicitudes') {
-    content = (
+    content = solicitudesSubView === 'lista' ? (
+      <HistorialSolicitudesView
+        onNuevaSolicitud={() => {
+          setSolicitudEnEdicion(null);
+          setSolicitudesSubView('nueva');
+        }}
+        onEditarSolicitud={handleEditarSolicitud}
+        solicitudesExtra={solicitudesCreadas}
+        token={session?.token}
+      />
+    ) : (
       <div className="page-content">
         <div className="page-heading">
           <div>
             <p className="eyebrow">OPERACIÓN · SOLICITUDES</p>
-            <h1>Gestión de Solicitudes</h1>
-            <p className="heading-copy">Captura y consulta solicitudes operativas de afilado y servicios.</p>
+            <h1>Captura de Solicitudes (POS)</h1>
+            <p className="heading-copy">Captura y asienta solicitudes operativas de afilado y servicios.</p>
           </div>
           <SegmentedControl
             size="sm"
@@ -591,29 +637,17 @@ export function App() {
           />
         </div>
 
-        {solicitudesSubView === 'lista' ? (
-          <HistorialSolicitudesView
-            onNuevaSolicitud={() => {
-              setSolicitudEnEdicion(null);
-              setSolicitudesSubView('nueva');
-            }}
-            onEditarSolicitud={handleEditarSolicitud}
-            solicitudesExtra={solicitudesCreadas}
-            token={session?.token}
-          />
-        ) : (
-          <SolicitudCapturaMixta
-            canales={canales}
-            tiposDocumento={tiposDoc}
-            clientes={clientes}
-            onAsentarSolicitud={handleAsentarSolicitud}
-            solicitudInicial={solicitudEnEdicion}
-            onCancelarEdicion={() => {
-              setSolicitudEnEdicion(null);
-              setSolicitudesSubView('lista');
-            }}
-          />
-        )}
+        <SolicitudCapturaMixta
+          canales={canales}
+          tiposDocumento={tiposDoc}
+          clientes={clientes}
+          onAsentarSolicitud={handleAsentarSolicitud}
+          solicitudInicial={solicitudEnEdicion}
+          onCancelarEdicion={() => {
+            setSolicitudEnEdicion(null);
+            setSolicitudesSubView('lista');
+          }}
+        />
       </div>
     );
   } else if (activeSection === 'Órdenes de trabajo') {

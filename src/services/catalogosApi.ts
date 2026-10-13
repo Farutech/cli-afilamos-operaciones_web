@@ -616,17 +616,70 @@ export const catalogosApi = {
         paymentMethodsFetchCount++;
         const res = await api.get<any>('/catalogs/payment-methods', token);
         const raw = Array.isArray(res) ? res : (res?.paymentMethods || res?.items || []);
-        const instrumentos: MedioPagoInstrumento[] = raw.map((m: any) => ({
-          uuid: m.id || m.uuid,
-          codigo: m.code || m.codigo,
-          nombre: m.name || m.nombre,
-          categoria: m.type || 'EFECTIVO',
-          esHoja: true,
-          requiereReferencia: (m.code || m.codigo) !== 'EFECTIVO',
-          isDefault: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
-          esPorDefecto: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
-          activo: m.active ?? true,
-        }));
+        const instrumentos: MedioPagoInstrumento[] = raw.map((m: any) => {
+          const cod = String(m.code || m.codigo || '').toUpperCase();
+          const esCredito = cod.startsWith('CRED');
+          const esValidaEnCierre = m.validaEnCierre !== undefined ? Boolean(m.validaEnCierre) : !esCredito;
+          return {
+            uuid: m.id || m.uuid,
+            codigo: cod,
+            nombre: m.name || m.nombre,
+            categoria: cod.includes('EFECTIVO')
+              ? 'EFECTIVO'
+              : (cod.includes('TRANSF') || cod.includes('BANCO') || cod.includes('CONSIGN') || cod.includes('NEQUI') || cod.includes('DAVI'))
+              ? 'TRANSFERENCIA'
+              : (cod.includes('TARJ') || cod.includes('DATA'))
+              ? 'TARJETA'
+              : 'OTROS',
+            esHoja: true,
+            requiereReferencia: !cod.includes('EFECTIVO') && !esCredito,
+            diasCredito: esCredito ? (m.diasCredito || (cod.includes('15') ? 15 : cod.includes('30') ? 30 : cod.includes('60') ? 60 : cod.includes('90') ? 90 : cod.includes('120') ? 120 : 30)) : undefined,
+            validaEnCierre: esValidaEnCierre,
+            permiteEnCierre: esValidaEnCierre,
+            isDefault: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
+            esPorDefecto: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
+            activo: m.active ?? true,
+          };
+        });
+
+        // Asegurar que existan los instrumentos canónicos requeridos por la norma de negocio
+        const asegurarInstrumento = (
+          codigo: string,
+          nombre: string,
+          categoria: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'OTROS',
+          validaEnCierre: boolean,
+          requiereRef: boolean,
+          diasCred?: number
+        ) => {
+          const existe = instrumentos.find((i) => i.codigo === codigo);
+          if (!existe) {
+            instrumentos.push({
+              uuid: `inst-${codigo.toLowerCase()}`,
+              codigo,
+              nombre,
+              categoria,
+              esHoja: true,
+              requiereReferencia: requiereRef,
+              validaEnCierre,
+              permiteEnCierre: validaEnCierre,
+              diasCredito: diasCred,
+              activo: true,
+              isDefault: codigo === 'EFECTIVO',
+              esPorDefecto: codigo === 'EFECTIVO',
+            });
+          }
+        };
+
+        asegurarInstrumento('EFECTIVO', 'Efectivo', 'EFECTIVO', true, false);
+        asegurarInstrumento('TRANSFERENCIA', 'Transferencia Bancaria', 'TRANSFERENCIA', true, true);
+        asegurarInstrumento('CONSIGNACION', 'Consignación Bancaria', 'TRANSFERENCIA', true, true);
+        asegurarInstrumento('TARJETA', 'Datáfono / Tarjeta', 'TARJETA', true, true);
+        asegurarInstrumento('CHEQUE', 'Cheque', 'OTROS', true, true);
+        asegurarInstrumento('CRED_15', 'Crédito a 15 días', 'OTROS', false, false, 15);
+        asegurarInstrumento('CRED_30', 'Crédito a 30 días', 'OTROS', false, false, 30);
+        asegurarInstrumento('CRED_60', 'Crédito a 60 días', 'OTROS', false, false, 60);
+        asegurarInstrumento('CRED_90', 'Crédito a 90 días', 'OTROS', false, false, 90);
+        asegurarInstrumento('CRED_120', 'Crédito a 120 días', 'OTROS', false, false, 120);
 
         const categorias: MedioPagoCategoria[] = [
           {
@@ -638,12 +691,28 @@ export const catalogosApi = {
             instrumentos: instrumentos.filter((i) => i.categoria === 'EFECTIVO'),
           },
           {
-            uuid: 'cat-electronico',
-            codigo: 'ELECTRONICO',
-            nombre: 'Electrónico y Transferencias',
+            uuid: 'cat-transferencia',
+            codigo: 'TRANSFERENCIA',
+            nombre: 'Transferencia bancaria o consignaciones',
             orden: 2,
             activo: true,
-            instrumentos: instrumentos.filter((i) => i.categoria !== 'EFECTIVO'),
+            instrumentos: instrumentos.filter((i) => i.categoria === 'TRANSFERENCIA'),
+          },
+          {
+            uuid: 'cat-tarjeta',
+            codigo: 'TARJETA',
+            nombre: 'Datáfono o tarjeta',
+            orden: 3,
+            activo: true,
+            instrumentos: instrumentos.filter((i) => i.categoria === 'TARJETA'),
+          },
+          {
+            uuid: 'cat-otros',
+            codigo: 'OTROS',
+            nombre: 'Otros',
+            orden: 4,
+            activo: true,
+            instrumentos: instrumentos.filter((i) => i.categoria === 'OTROS'),
           },
         ];
 

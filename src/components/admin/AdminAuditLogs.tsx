@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Eye,
-  Search,
   ShieldCheck,
   User,
   Clock,
   Code,
   Layers,
 } from 'lucide-react';
-import { Modal, Button, Badge, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { auditoriaApi, type EventoAuditoriaDto } from '@/services/auditoriaApi';
 
 const FALLBACK_LOGS: EventoAuditoriaDto[] = [
@@ -27,8 +27,6 @@ export default function AdminAuditLogs({ token }: { token?: string }) {
   const [totalItems, setTotalItems] = useState(FALLBACK_LOGS.length);
   const [viewLog, setViewLog] = useState<EventoAuditoriaDto | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   async function loadLogs() {
     setLoading(true);
@@ -63,109 +61,97 @@ export default function AdminAuditLogs({ token }: { token?: string }) {
     [logs, query]
   );
 
+  const columns: ColumnDef<EventoAuditoriaDto>[] = [
+    {
+      key: 'fecha',
+      header: 'FECHA Y HORA',
+      render: (log) => {
+        const dateStr = new Date(log.timestamp).toLocaleString('es-CO', {
+          dateStyle: 'short',
+          timeStyle: 'medium',
+        });
+        return (
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4 text-violet-300" />
+            </div>
+            <div>
+              <strong className="text-white font-medium block">{dateStr}</strong>
+              <span className="text-[11px] text-slate-400 font-mono">ID: {log.entityId}</span>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'usuario',
+      header: 'USUARIO / ACTOR',
+      render: (log) => (
+        <span className="font-medium text-slate-200">
+          {log.actorName || log.userId || 'Sistema'}
+        </span>
+      ),
+    },
+    {
+      key: 'accion',
+      header: 'ACCIÓN',
+      render: (log) => (
+        <span className="font-mono text-xs text-violet-300 font-semibold">{log.action}</span>
+      ),
+    },
+    {
+      key: 'modulo',
+      header: 'MÓDULO',
+      align: 'center',
+      render: (log) => (
+        <Badge variant="neutral">{log.entityType}</Badge>
+      ),
+    },
+  ];
+
+  const rowActions: StandardRowAction<EventoAuditoriaDto>[] = [
+    {
+      label: 'Ver detalle',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (log) => setViewLog(log),
+    },
+  ];
+
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ADMINISTRACIÓN · AUDITORÍA</p>
-          <h1>Registro de actividad</h1>
-          <p className="heading-copy">
-            Trazabilidad completa, auditoría de eventos de seguridad y bitácora de operaciones.
-          </p>
-        </div>
-      </div>
-
-      <section className="panel clients-panel">
-        <div className="panel-heading">
-          <div className="panel-title-row">
-            <h2>Eventos de Auditoría</h2>
-          </div>
-          <div className="client-search">
-            <Search className="w-4 h-4" />
-            <input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar por usuario, acción o ID..."
-              aria-label="Buscar eventos"
-            />
-          </div>
-        </div>
-
-        <div className="client-table-head">
-          <span>FECHA Y HORA</span>
-          <span>USUARIO / ACTOR</span>
-          <span>ACCIÓN</span>
-          <span>MÓDULO</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {loading && logs.length === 0 ? (
-          <div className="empty-state">Consultando bitácora…</div>
-        ) : visible.length === 0 ? (
-          <div className="empty-state">No hay eventos coincidentes en el periodo.</div>
-        ) : (
-          <div className="client-list">
-            {visible.map((log) => {
-              const dateStr = new Date(log.timestamp).toLocaleString('es-CO', {
-                dateStyle: 'short',
-                timeStyle: 'medium',
-              });
-
-              return (
-                <div className="client-row" key={log.id}>
-                  <div className="client-cell-main">
-
-                    <div className="client-avatar">
-                    <ShieldCheck className="w-4 h-4 text-violet-300" />
-                  </div>
-
-                    <div className="client-main">
-                    <strong>{dateStr}</strong>
-                    <span>ID: {log.entityId}</span>
-                  </div>
-
-                  </div>
-                  <span className="client-contact font-medium text-slate-200">
-                    {log.actorName || log.userId || 'Sistema'}
-                  </span>
-                  <span className="client-orders font-mono text-xs text-violet-300">
-                    {log.action}
-                  </span>
-                  <span className="client-status">
-                    {log.entityType}
-                  </span>
-                  <div className="client-actions">
-                    <button
-                      className="icon-action"
-                      onClick={() => setViewLog(log)}
-                      aria-label={`Ver evento ${log.action}`}
-                      title="Ver detalle del evento"
-                    >
-                      <Eye className="w-4 h-4 text-violet-400" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <CrudPagination
-          currentPage={page}
-          totalPages={totalPages}
-          perPage={pageSize}
-          total={totalItems}
-          onPageChange={setPage}
-          onPerPageChange={(newSize) => {
-            setPageSize(newSize);
+      <ListPageLayout
+        title="Registro de actividad"
+        eyebrow="ADMINISTRACIÓN · AUDITORÍA"
+        description="Trazabilidad completa, auditoría de eventos de seguridad y bitácora de operaciones."
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
             setPage(1);
+          },
+          placeholder: 'Buscar por usuario, acción o ID...',
+          isSearching: loading,
+        }}
+      >
+        <StandardDataTable<EventoAuditoriaDto>
+          columns={columns}
+          data={visible}
+          keyExtractor={(log) => log.id}
+          rowActions={rowActions}
+          loading={loading && logs.length === 0}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalItems,
+            onPageChange: (p) => setPage(p),
+            onPageSizeChange: (s) => {
+              setPageSize(s);
+              setPage(1);
+            },
           }}
-          variant="dark"
+          emptyMessage="No hay eventos coincidentes en el periodo."
         />
-      </section>
+      </ListPageLayout>
 
       {/* Modal: VER DETALLE DEL EVENTO (Design System Modal) */}
       <Modal

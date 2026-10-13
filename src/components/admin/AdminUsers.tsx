@@ -4,8 +4,6 @@ import {
   Eye,
   Pencil,
   Power,
-  Search,
-  UserCheck,
   Shield,
   User,
   CheckCircle2,
@@ -19,7 +17,8 @@ import {
   Sliders,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { adminApi } from '@/services/adminApi';
 import type { UsuarioAdminDto } from '@/types/admin';
 
@@ -189,8 +188,6 @@ export default function AdminUsers({
   const rolActivo = useMemo(() => {
     return roles.find((r) => r.codigo === rolSeleccionadoCodigo) || roles[0];
   }, [roles, rolSeleccionadoCodigo]);
-
-  const totalPages = Math.max(1, Math.ceil(users.length / pageSize));
 
   async function loadUsers() {
     setLoading(true);
@@ -377,199 +374,163 @@ export default function AdminUsers({
     );
   }, [users, query]);
 
-  const pagedUsers = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredUsers.slice(start, start + pageSize);
-  }, [filteredUsers, page, pageSize]);
+  const userColumns: ColumnDef<UsuarioAdminDto>[] = [
+    {
+      key: 'usuario',
+      header: 'USUARIO / COLABORADOR',
+      render: (usr) => (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0">
+            {usr.nombreCompleto.slice(0, 2)}
+          </div>
+          <div className="truncate">
+            <div className="font-semibold text-white truncate">{usr.nombreCompleto}</div>
+            <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
+              <span>@{usr.codigo}</span>
+              <span>·</span>
+              <span className="truncate">{usr.email}</span>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'rol',
+      header: 'ROL ASIGNADO',
+      render: (usr) => (
+        <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">
+          {usr.rol}
+        </span>
+      ),
+    },
+    {
+      key: 'pin',
+      header: 'FACULTAD DE PIN',
+      render: (usr) => {
+        const tieneFacultadPin = rolPuedeAprobarPin(usr.rol);
+        return usr.tienePin ? (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+              <Key className="w-3 h-3 text-emerald-400" /> PIN Activo
+            </span>
+            {tieneFacultadPin ? (
+              <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-0.5">
+                <ShieldCheck className="w-2.5 h-2.5" /> Aprueba VoBo
+              </span>
+            ) : (
+              <span className="text-[9px] text-slate-500">Solo identificación</span>
+            )}
+          </div>
+        ) : (
+          <span className="text-[11px] text-slate-500 italic">Sin PIN</span>
+        );
+      },
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (usr) => (
+        <Badge variant={usr.activo ? 'success' : 'neutral'}>
+          {usr.activo ? 'Activo' : 'Inactivo'}
+        </Badge>
+      ),
+    },
+  ];
+
+  const userRowActions: StandardRowAction<UsuarioAdminDto>[] = [
+    {
+      label: 'Ver detalle',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (usr) => setViewUser(usr),
+    },
+    {
+      label: 'Editar usuario',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: (usr) => setModal(usr),
+    },
+    {
+      label: 'Activar/Desactivar',
+      icon: <Power className="w-3.5 h-3.5" />,
+      onClick: (usr) => void toggleStatus(usr),
+      variant: 'ghost',
+    },
+  ];
 
   return (
-    <div className="space-y-4">
-      {/* Pestañas Superiores */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab('usuarios')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'usuarios'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-          }`}
-        >
-          <User className="w-4 h-4" /> 👥 Personal & Usuarios ({users.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('roles')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
-            activeTab === 'roles'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-          }`}
-        >
-          <Shield className="w-4 h-4" /> 🔑 Roles, Permisos & Autorizaciones PIN ({roles.length})
-        </button>
-      </div>
-
-      {/* PESTAÑA 1: USUARIOS */}
-      {activeTab === 'usuarios' && (
-        <section className="bg-slate-900/60 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
-          <header className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-bold text-white tracking-wide uppercase m-0 flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-indigo-400" />
-                Directorio de Personal y Accesos
-              </h2>
-              <p className="text-xs text-slate-400 m-0 mt-0.5">
-                Cuentas de acceso, credenciales POS, estado de cuenta y facultamiento de PIN para VoBo.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre, usuario, rol..."
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setPage(1);
-                  }}
-                  className="pl-8 pr-3 py-1.5 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-52 sm:w-64"
-                />
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setModal('new')}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-sm"
-              >
-                + Nuevo Usuario
-              </Button>
-            </div>
-          </header>
-
-          {loading ? (
-            <div className="p-8 text-center text-xs text-slate-400">Cargando personal...</div>
-          ) : pagedUsers.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400">No se encontraron usuarios registrados.</div>
-          ) : (
-            <div className="divide-y divide-slate-800/60">
-              <div className="grid grid-cols-12 gap-2 p-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-950/40">
-                <span className="col-span-4">Usuario / Colaborador</span>
-                <span className="col-span-2">Rol Asignado</span>
-                <span className="col-span-2">Facultad de PIN</span>
-                <span className="col-span-2">Estado</span>
-                <span className="col-span-2 text-right">Acciones</span>
-              </div>
-              {pagedUsers.map((usr) => {
-                const tieneFacultadPin = rolPuedeAprobarPin(usr.rol);
-                return (
-                  <div key={usr.uuid} className="grid grid-cols-12 gap-2 p-3 items-center hover:bg-slate-800/30 transition-colors text-xs">
-                    <div className="col-span-4 flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-white font-bold text-xs uppercase shrink-0">
-                        {usr.nombreCompleto.slice(0, 2)}
-                      </div>
-                      <div className="truncate">
-                        <div className="font-semibold text-white truncate">{usr.nombreCompleto}</div>
-                        <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
-                          <span>@{usr.codigo}</span>
-                          <span>·</span>
-                          <span className="truncate">{usr.email}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="col-span-2">
-                      <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">
-                        {usr.rol}
-                      </span>
-                    </div>
-
-                    {/* Estado de PIN y VoBo */}
-                    <div className="col-span-2">
-                      {usr.tienePin ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400">
-                            <Key className="w-3 h-3 text-emerald-400" /> PIN Activo
-                          </span>
-                          {tieneFacultadPin ? (
-                            <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-0.5">
-                              <ShieldCheck className="w-2.5 h-2.5" /> Aprueba VoBo
-                            </span>
-                          ) : (
-                            <span className="text-[9px] text-slate-500">Solo identificación</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-500 italic">Sin PIN</span>
-                      )}
-                    </div>
-
-                    <div className="col-span-2">
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full inline-block ${
-                        usr.activo
-                          ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/50'
-                          : 'bg-rose-950/60 text-rose-300 border border-rose-800/50'
-                      }`}>
-                        {usr.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </div>
-
-                    <div className="col-span-2 flex items-center justify-end gap-1.5">
-                      <button
-                        className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
-                        onClick={() => setViewUser(usr)}
-                        aria-label={`Ver detalle de ${usr.nombreCompleto}`}
-                        title="Ver detalle completo"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors cursor-pointer"
-                        onClick={() => setModal(usr)}
-                        aria-label={`Editar ${usr.nombreCompleto}`}
-                        title="Editar usuario"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        className={`p-1.5 rounded transition-colors cursor-pointer ${
-                          usr.activo
-                            ? 'text-slate-400 hover:text-rose-400 hover:bg-rose-950/30'
-                            : 'text-slate-400 hover:text-emerald-400 hover:bg-emerald-950/30'
-                        }`}
-                        onClick={() => void toggleStatus(usr)}
-                        aria-label={`Cambiar estado de ${usr.nombreCompleto}`}
-                        title={usr.activo ? 'Desactivar cuenta' : 'Activar cuenta'}
-                      >
-                        <Power className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="p-3 border-t border-slate-800 bg-slate-900/30">
-            <CrudPagination
-              currentPage={page}
-              totalPages={totalPages}
-              perPage={pageSize}
-              total={users.length}
-              onPageChange={(newPage) => setPage(newPage)}
-              perPageOptions={[10, 25, 50, 100]}
-              onPerPageChange={(newSize) => {
+    <div className="page-content">
+      <ListPageLayout
+        title="Personal, roles y autorizaciones"
+        eyebrow="ADMINISTRACIÓN · SEGURIDAD"
+        description="Gestión de cuentas de acceso, roles del sistema, permisos granulares y facultamiento de PIN para VoBo."
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => setModal('new')}
+          >
+            <User className="w-4 h-4 mr-1.5 inline" /> + Nuevo Usuario
+          </Button>
+        }
+        filters={
+          <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setActiveTab('usuarios')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                activeTab === 'usuarios'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" /> Personal & Usuarios ({users.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('roles')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                activeTab === 'roles'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" /> Roles & Permisos PIN ({roles.length})
+            </button>
+          </div>
+        }
+        search={
+          activeTab === 'usuarios'
+            ? {
+                value: query,
+                onChange: (val) => {
+                  setQuery(val);
+                  setPage(1);
+                },
+                placeholder: 'Buscar por nombre, usuario, rol...',
+                isSearching: loading,
+              }
+            : undefined
+        }
+      >
+        {activeTab === 'usuarios' ? (
+          <StandardDataTable<UsuarioAdminDto>
+            columns={userColumns}
+            data={filteredUsers.slice((page - 1) * pageSize, page * pageSize)}
+            keyExtractor={(usr) => usr.uuid}
+            rowActions={userRowActions}
+            loading={loading && users.length === 0}
+            pagination={{
+              currentPage: page,
+              pageSize,
+              totalItems: filteredUsers.length,
+              onPageChange: (newPage) => setPage(newPage),
+              onPageSizeChange: (newSize) => {
                 setPageSize(newSize);
                 setPage(1);
-              }}
-            />
-          </div>
-        </section>
-      )}
-
-      {/* PESTAÑA 2: ROLES & PERMISOS */}
-      {activeTab === 'roles' && (
+              },
+            }}
+            emptyMessage="No se encontraron usuarios registrados."
+          />
+        ) : (
         <div className="space-y-4">
           <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3 mb-4">
@@ -640,6 +601,7 @@ export default function AdminUsers({
           </div>
         </div>
       )}
+      </ListPageLayout>
 
       {/* ========================================================================= */}
       {/* MODAL DE PERMISOS DE ROL CON ACORDEÓN INTERACTIVO                         */}

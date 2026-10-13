@@ -6,13 +6,13 @@ import {
   Eye,
   Pencil,
   Power,
-  Search,
   BadgePercent,
   Coins,
   Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Modal, Button, Badge, FloatingInput, CrudPagination } from '@farutech/design-system';
+import { Modal, Button, Badge, FloatingInput } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { catalogosApi } from '@/services/catalogosApi';
 import type { ListaPrecio, PoliticaPrecios } from '@/types/catalogos';
 
@@ -97,7 +97,6 @@ export default function AdminPrices({ token }: { token?: string }) {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(priceLists.length / pageSize));
 
   async function loadPrices() {
     setLoading(true);
@@ -185,205 +184,208 @@ export default function AdminPrices({ token }: { token?: string }) {
     [priceLists, query]
   );
 
+  const columns: ColumnDef<ListaPrecio>[] = [
+    {
+      key: 'nombre',
+      header: 'LISTA DE PRECIO',
+      render: (lp) => (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center shrink-0">
+            <Coins className="w-4 h-4 text-amber-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <strong className="text-white font-medium">{lp.nombre}</strong>
+              {lp.esPredeterminada && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-950/80 border border-violet-800/60 text-violet-300 font-medium">
+                  Predeterminada
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] text-slate-400">Ajuste comercial sobre precio base</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'codigo',
+      header: 'CÓDIGO',
+      render: (lp) => <span className="font-mono text-xs text-amber-300">{lp.codigo}</span>,
+    },
+    {
+      key: 'ajuste',
+      header: 'AJUSTE (%)',
+      align: 'right',
+      render: (lp) => (
+        <span
+          className={`font-mono font-bold text-xs ${
+            lp.porcentajeAjuste < 0
+              ? 'text-emerald-400'
+              : lp.porcentajeAjuste > 0
+              ? 'text-amber-400'
+              : 'text-slate-300'
+          }`}
+        >
+          {lp.porcentajeAjuste > 0 ? `+${lp.porcentajeAjuste}%` : `${lp.porcentajeAjuste}%`}
+        </span>
+      ),
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (lp) => (
+        <Badge variant={lp.activa ? 'success' : 'neutral'}>
+          {lp.activa ? 'Vigente' : 'Inactiva'}
+        </Badge>
+      ),
+    },
+  ];
+
+  const rowActions: StandardRowAction<ListaPrecio>[] = [
+    {
+      label: 'Ver detalle',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (lp) => setViewPrice(lp),
+    },
+    {
+      label: 'Editar lista',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: (lp) => setModal(lp),
+    },
+    {
+      label: 'Activar/Desactivar',
+      icon: <Power className="w-3.5 h-3.5" />,
+      onClick: (lp) => toggleStatus(lp),
+      variant: 'ghost',
+    },
+  ];
+
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ADMINISTRACIÓN · CATÁLOGOS</p>
-          <h1>Tarifas y listas de precios</h1>
-          <p className="heading-copy">
-            Estructuras de cobro, tarifas comerciales y márgenes diferenciales de precios.
-          </p>
-        </div>
-        <button className="primary-button" onClick={() => setModal('new')}>
-          <BadgePercent className="w-4 h-4 mr-2 inline" /> Nueva tarifa
-        </button>
-      </div>
-
-      {/* Configuración de Política de Precios y Tolerancia en Mostrador */}
-      <section className="panel" style={{ marginBottom: '1.25rem', padding: '1.25rem' }}>
-        <form onSubmit={handleGuardarPolitica}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.75rem' }}>
-            <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ffffff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Shield className="w-4 h-4 inline mr-1 text-indigo-400" /> Política Comercial & Tolerancia en Mostrador
-              </h3>
-              <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '0.2rem 0 0 0' }}>
-                Configure si el operador en mostrador puede alterar precios y el margen máximo de tolerancia antes de exigir VoBo.
-              </p>
-            </div>
-            <Button type="submit" variant="primary" size="sm" loading={guardandoPolitica}>
-              Guardar Política
+      <ListPageLayout
+        title="Tarifas y listas de precios"
+        eyebrow="ADMINISTRACIÓN · CATÁLOGOS"
+        description="Estructuras de cobro, tarifas comerciales y márgenes diferenciales de precios."
+        actions={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setMostrarModalAumento(true)}
+            >
+              <BadgePercent className="w-4 h-4 mr-1.5" /> Aumento masivo
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => setModal('new')}
+            >
+              <Coins className="w-4 h-4 mr-1.5" /> Nueva tarifa
             </Button>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8rem', color: '#e2e8f0' }}>
-              <input
-                type="checkbox"
-                checked={politica.permiteModificarPrecio}
-                onChange={(e) => setPolitica({ ...politica, permiteModificarPrecio: e.target.checked })}
-                style={{ width: '16px', height: '16px', accentColor: '#6366f1', cursor: 'pointer' }}
-              />
-              <span>
-                <strong>Permitir modificar precio unitario en mostrador</strong>
-                <span style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8' }}>
-                  {politica.permiteModificarPrecio ? 'Cajeros pueden digitar un precio distinto al catálogo' : 'Precios bloqueados estrictamente al catálogo'}
+        }
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
+            setPage(1);
+          },
+          placeholder: 'Buscar lista por nombre o código...',
+          isSearching: loading,
+        }}
+      >
+        {/* Política Comercial Collapsible / Card */}
+        <div className="mb-4 bg-slate-900/60 border border-slate-800 rounded-xl p-3.5 space-y-3">
+          <form onSubmit={handleGuardarPolitica}>
+            <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-slate-800/80">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-indigo-400" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider">
+                  Política Comercial & Tolerancia en Mostrador
                 </span>
-              </span>
-            </label>
+              </div>
+              <Button type="submit" variant="primary" size="sm" loading={guardandoPolitica}>
+                Guardar Política
+              </Button>
+            </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#94a3b8', marginBottom: '0.25rem' }}>
-                Tolerancia Máxima de Diferencia (%)
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={politica.permiteModificarPrecio}
+                  onChange={(e) =>
+                    setPolitica({ ...politica, permiteModificarPrecio: e.target.checked })
+                  }
+                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>
+                  <strong>Modificar precio en mostrador</strong>
+                  <span className="block text-[11px] text-slate-400">
+                    Cajeros pueden digitar precio distinto
+                  </span>
+                </span>
               </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 whitespace-nowrap">Tolerancia máxima:</span>
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={politica.maxDiferenciaPorcentaje}
                   onChange={(e) =>
-                    setPolitica({ ...politica, maxDiferenciaPorcentaje: Math.max(0, parseInt(e.target.value) || 0) })
+                    setPolitica({
+                      ...politica,
+                      maxDiferenciaPorcentaje: Math.max(0, parseInt(e.target.value) || 0),
+                    })
                   }
-                  style={{
-                    width: '90px',
-                    padding: '0.35rem 0.5rem',
-                    background: '#020617',
-                    border: '1px solid #475569',
-                    borderRadius: '6px',
-                    color: '#fbbf24',
-                    fontFamily: 'monospace',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    textAlign: 'center',
-                  }}
+                  className="w-16 h-8 px-2 bg-slate-950 border border-slate-700 rounded text-center font-mono font-bold text-amber-300 text-xs"
                 />
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>% sobre precio base</span>
+                <span className="text-slate-500">% base</span>
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={politica.requiereVoBoSuperaTolerancia}
+                  onChange={(e) =>
+                    setPolitica({
+                      ...politica,
+                      requiereVoBoSuperaTolerancia: e.target.checked,
+                    })
+                  }
+                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>
+                  <strong>Exigir VoBo supervisor</strong>
+                  <span className="block text-[11px] text-slate-400">
+                    Si supera tolerancia
+                  </span>
+                </span>
+              </label>
             </div>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8rem', color: '#e2e8f0' }}>
-              <input
-                type="checkbox"
-                checked={politica.requiereVoBoSuperaTolerancia}
-                onChange={(e) =>
-                  setPolitica({ ...politica, requiereVoBoSuperaTolerancia: e.target.checked })
-                }
-                style={{ width: '16px', height: '16px', accentColor: '#6366f1', cursor: 'pointer' }}
-              />
-              <span>
-                <strong>Exigir VoBo de Supervisor si supera tolerancia</strong>
-                <span style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8' }}>
-                  Bloquea el asentamiento de orden sin PIN de supervisor
-                </span>
-              </span>
-            </label>
-          </div>
-        </form>
-      </section>
-
-      <section className="panel clients-panel">
-        <div className="panel-heading">
-          <div className="panel-title-row">
-            <h2>Listas Tarifarias</h2>
-          </div>
-          <div className="client-search">
-            <Search className="w-4 h-4" />
-            <input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar lista por nombre o código"
-              aria-label="Buscar tarifas"
-            />
-          </div>
+          </form>
         </div>
 
-        <div className="client-table-head">
-          <span>LISTA DE PRECIO</span>
-          <span>CÓDIGO</span>
-          <span>AJUSTE (%)</span>
-          <span>ESTADO</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {loading && priceLists.length === 0 ? (
-          <div className="empty-state">Cargando listas de precio…</div>
-        ) : visible.length === 0 ? (
-          <div className="empty-state">No hay listas de precio registradas.</div>
-        ) : (
-          <div className="client-list">
-            {visible.map((lp) => (
-              <div className="client-row" key={lp.uuid}>
-                <div className="client-cell-main">
-
-                  <div className="client-avatar">
-                  <Coins className="w-4 h-4" />
-                </div>
-
-                  <div className="client-main">
-                  <strong>
-                    {lp.nombre} {lp.esPredeterminada && <span className="text-violet-400 text-xs font-normal">(Predeterminada)</span>}
-                  </strong>
-                  <span>Ajuste comercial sobre precio base</span>
-                </div>
-
-                </div>
-                <span className="client-contact font-mono text-xs">{lp.codigo}</span>
-                <span className={`client-orders font-bold ${lp.porcentajeAjuste < 0 ? 'text-emerald-400' : lp.porcentajeAjuste > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
-                  {lp.porcentajeAjuste > 0 ? `+${lp.porcentajeAjuste}%` : `${lp.porcentajeAjuste}%`}
-                </span>
-                <span className={`client-status ${!lp.activa ? 'is-pending' : ''}`}>
-                  {lp.activa ? 'Vigente' : 'Inactiva'}
-                </span>
-                <div className="client-actions">
-                  <button
-                    className="icon-action"
-                    onClick={() => setViewPrice(lp)}
-                    aria-label={`Ver detalle de ${lp.nombre}`}
-                    title="Ver detalle completo"
-                  >
-                    <Eye className="w-4 h-4 text-violet-400" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => setModal(lp)}
-                    aria-label={`Editar ${lp.nombre}`}
-                    title="Editar lista"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    onClick={() => toggleStatus(lp)}
-                    aria-label={`Cambiar estado de ${lp.nombre}`}
-                    title="Activar o desactivar"
-                  >
-                    <Power className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
-        <CrudPagination
-          currentPage={page}
-          totalPages={totalPages}
-          perPage={pageSize}
-          total={priceLists.length}
-          onPageChange={(newPage) => setPage(newPage)}
-          onPerPageChange={(newSize) => {
-            setPageSize(newSize);
-            setPage(1);
+        <StandardDataTable<ListaPrecio>
+          columns={columns}
+          data={visible.slice((page - 1) * pageSize, page * pageSize)}
+          keyExtractor={(lp) => lp.uuid}
+          rowActions={rowActions}
+          loading={loading && priceLists.length === 0}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalItems: visible.length,
+            onPageChange: (p) => setPage(p),
+            onPageSizeChange: (s) => {
+              setPageSize(s);
+              setPage(1);
+            },
           }}
-          variant="dark"
+          emptyMessage="No se encontraron listas de precio registradas."
         />
-      </section>
+      </ListPageLayout>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal

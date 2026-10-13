@@ -18,10 +18,10 @@ import {
   Button,
   Badge,
   FloatingInput,
-  CrudPagination,
   LookupInput,
   type LookupOption,
 } from '@farutech/design-system';
+import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
 import { ordeonRequest } from '@/lib/api-client';
 
 export interface CreditPolicyItem {
@@ -64,8 +64,6 @@ export default function AdminCreditLimits({ token }: { token?: string }) {
   const [advQuery, setAdvQuery] = useState('');
   const [advResults, setAdvResults] = useState<RawCustomer[]>([]);
   const [advLoading, setAdvLoading] = useState(false);
-
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   // Carga inicial y por paginación desde el API de Ordeon
   async function loadCredits() {
@@ -245,149 +243,165 @@ export default function AdminCreditLimits({ token }: { token?: string }) {
     );
   }, [credits, query]);
 
+  const columns: ColumnDef<CreditPolicyItem>[] = [
+    {
+      key: 'cliente',
+      header: 'CLIENTE',
+      render: (item) => (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center shrink-0">
+            <CreditCard className="w-4 h-4 text-violet-400" />
+          </div>
+          <div>
+            <strong className="text-white font-medium block">{item.clienteNombre}</strong>
+            <span className="text-[11px] text-slate-400 font-mono">
+              {item.clienteCodigo} · {item.diasPlazo} días de plazo
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'limiteCredito',
+      header: 'CUPO ASIGNADO',
+      align: 'right',
+      render: (item) => (
+        <span className="font-mono font-bold text-xs text-slate-100">
+          ${item.limiteCredito.toLocaleString('es-CO')} COP
+        </span>
+      ),
+    },
+    {
+      key: 'saldoUtilizado',
+      header: 'SALDO PENDIENTE',
+      align: 'right',
+      render: (item) => {
+        const porcentajeUso = Math.min(
+          100,
+          Math.round((item.saldoUtilizado / (item.limiteCredito || 1)) * 100)
+        );
+        return (
+          <div>
+            <span className="font-mono font-bold text-xs text-amber-400 block">
+              ${item.saldoUtilizado.toLocaleString('es-CO')} ({porcentajeUso}%)
+            </span>
+            <div className="w-24 h-1.5 bg-slate-800 rounded-full mt-1 ml-auto overflow-hidden">
+              <div
+                className={`h-full rounded-full ${
+                  porcentajeUso > 90 ? 'bg-rose-500' : porcentajeUso > 60 ? 'bg-amber-500' : 'bg-emerald-500'
+                }`}
+                style={{ width: `${porcentajeUso}%` }}
+              />
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'disponible',
+      header: 'CUPO DISPONIBLE',
+      align: 'right',
+      render: (item) => {
+        const disponible = Math.max(0, item.limiteCredito - item.saldoUtilizado);
+        return (
+          <span className="font-mono font-bold text-xs text-emerald-400">
+            ${disponible.toLocaleString('es-CO')} COP
+          </span>
+        );
+      },
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (item) => {
+        if (!item.activo) {
+          return <Badge variant="neutral">Suspendido</Badge>;
+        }
+        if (item.bloqueadoPorMora) {
+          return <Badge variant="danger">Bloqueado x Mora</Badge>;
+        }
+        return <Badge variant="success">Habilitado</Badge>;
+      },
+    },
+  ];
+
+  const rowActions: StandardRowAction<CreditPolicyItem>[] = [
+    {
+      label: 'Ver detalle',
+      icon: <Eye className="w-3.5 h-3.5" />,
+      onClick: (item) => setViewCredit(item),
+    },
+    {
+      label: 'Editar cupo',
+      icon: <Pencil className="w-3.5 h-3.5" />,
+      onClick: (item) => {
+        setSelectedClientOption({
+          value: item.clienteId || item.id,
+          label: `${item.clienteNombre} (${item.clienteCodigo})`,
+          description: `Código: ${item.clienteCodigo}`,
+        });
+        setModal(item);
+      },
+    },
+    {
+      label: 'Cambiar estado',
+      icon: <Power className="w-3.5 h-3.5" />,
+      onClick: (item) => void toggleCreditStatus(item),
+      variant: 'ghost',
+    },
+  ];
+
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ADMINISTRACIÓN · CLIENTES</p>
-          <h1>Crédito y límites comerciales</h1>
-          <p className="heading-copy">
-            Políticas de cupo autorizado, exposición de riesgo y días de crédito por cliente en Ordeon.
-          </p>
-        </div>
-        <button
-          className="primary-button"
-          onClick={() => {
-            setSelectedClientOption(null);
-            setModal('new');
-          }}
-        >
-          <CreditCard className="w-4 h-4 mr-2 inline" /> Asignar cupo
-        </button>
-      </div>
-
-      <section className="panel clients-panel">
-        <div className="panel-heading">
-          <div className="panel-title-row">
-            <h2>Límites de Crédito</h2>
-          </div>
-          <div className="client-search">
-            <Search className="w-4 h-4" />
-            <input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Buscar por cliente o código..."
-              aria-label="Buscar límites"
-            />
-          </div>
-        </div>
-
-        {/* Encabezado fijo de columnas */}
-        <div className="client-table-head">
-          <span>CLIENTE</span>
-          <span>CUPO ASIGNADO</span>
-          <span>SALDO PENDIENTE</span>
-          <span>ESTADO CRÉDITO</span>
-          <span>ACCIONES</span>
-        </div>
-
-        {loading && credits.length === 0 ? (
-          <div className="empty-state">
-            <span className="spinner-sm inline-block mr-2" /> Cargando límites de crédito…
-          </div>
-        ) : visible.length === 0 ? (
-          <div className="empty-state">
-            {query.trim()
-              ? 'No hay registros de crédito que coincidan con la búsqueda.'
-              : 'No hay cupos de crédito asignados actualmente.'}
-          </div>
-        ) : (
-          <div className="client-list">
-            {visible.map((item) => {
-              const porcentajeUso = Math.min(
-                100,
-                Math.round((item.saldoUtilizado / (item.limiteCredito || 1)) * 100)
-              );
-
-              return (
-                <div className="client-row" key={item.id}>
-                  <div className="client-cell-main">
-
-                    <div className="client-avatar">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
-
-                    <div className="client-main">
-                    <strong>{item.clienteNombre}</strong>
-                    <span>{item.clienteCodigo} · {item.diasPlazo} días de plazo</span>
-                  </div>
-
-                  </div>
-                  <span className="client-contact font-bold text-slate-100">
-                    ${item.limiteCredito.toLocaleString('es-CO')} COP
-                  </span>
-                  <span className="client-orders font-bold text-amber-400">
-                    ${item.saldoUtilizado.toLocaleString('es-CO')} ({porcentajeUso}%)
-                  </span>
-                  <span className={`client-status ${item.bloqueadoPorMora || !item.activo ? 'is-pending' : ''}`}>
-                    {!item.activo ? 'Suspendido' : item.bloqueadoPorMora ? 'Bloqueado x Mora' : 'Habilitado'}
-                  </span>
-                  <div className="client-actions">
-                    <button
-                      className="icon-action"
-                      onClick={() => setViewCredit(item)}
-                      aria-label={`Ver crédito de ${item.clienteNombre}`}
-                      title="Ver detalle de crédito"
-                    >
-                      <Eye className="w-4 h-4 text-violet-400" />
-                    </button>
-                    <button
-                      className="icon-action"
-                      onClick={() => {
-                        setSelectedClientOption({
-                          value: item.clienteId || item.id,
-                          label: `${item.clienteNombre} (${item.clienteCodigo})`,
-                          description: `Código: ${item.clienteCodigo}`,
-                        });
-                        setModal(item);
-                      }}
-                      aria-label={`Editar límite de ${item.clienteNombre}`}
-                      title="Editar cupo"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      className="icon-action"
-                      onClick={() => void toggleCreditStatus(item)}
-                      aria-label={`Cambiar estado de crédito de ${item.clienteNombre}`}
-                      title="Suspender o activar crédito"
-                    >
-                      <Power className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Paginación Estandarizada Design System (3 Columnas Equilibradas) */}
-        <CrudPagination
-          currentPage={page}
-          totalPages={totalPages}
-          perPage={pageSize}
-          total={totalItems}
-          onPageChange={(newPage) => setPage(newPage)}
-          onPerPageChange={(newSize) => {
-            setPageSize(newSize);
+      <ListPageLayout
+        title="Crédito y límites comerciales"
+        eyebrow="ADMINISTRACIÓN · CLIENTES"
+        description="Políticas de cupo autorizado, exposición de riesgo y días de crédito por cliente en Ordeon."
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => {
+              setSelectedClientOption(null);
+              setModal('new');
+            }}
+          >
+            <CreditCard className="w-4 h-4 mr-2 inline" /> Asignar cupo
+          </Button>
+        }
+        search={{
+          value: query,
+          onChange: (val) => {
+            setQuery(val);
             setPage(1);
+          },
+          placeholder: 'Buscar por cliente o código...',
+          isSearching: loading,
+        }}
+      >
+        <StandardDataTable<CreditPolicyItem>
+          columns={columns}
+          data={visible}
+          keyExtractor={(item) => item.id}
+          loading={loading && credits.length === 0}
+          emptyMessage={
+            query.trim()
+              ? 'No hay registros de crédito que coincidan con la búsqueda.'
+              : 'No hay cupos de crédito asignados actualmente.'
+          }
+          rowActions={rowActions}
+          pagination={{
+            currentPage: page,
+            pageSize,
+            totalItems,
+            onPageChange: (newPage) => setPage(newPage),
+            onPageSizeChange: (newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            },
           }}
-          variant="dark"
         />
-      </section>
+      </ListPageLayout>
 
       {/* Modal 1: VER DETALLE (Design System Modal) */}
       <Modal
