@@ -282,6 +282,8 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
 
   const handleSeleccionarCliente = (cId: string) => {
     setClienteSeleccionadoId(cId);
+    setErrorMsg(null);
+    setSuccessMsg(null);
     const c = clientesAgrupados.find((cl) => cl.clienteId === cId);
     if (c) {
       setItemsSeleccionadosIds(c.items.map((i) => i.itemPublicId));
@@ -337,26 +339,25 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
         if (!cancelado && preview) {
           setPreviewData(preview);
           const initialAlloc: Record<string, number> = {};
-          if (Array.isArray(preview.requests)) {
-            for (const req of preview.requests) {
+          if (Array.isArray(preview.requestAdvances)) {
+            for (const req of preview.requestAdvances) {
               initialAlloc[req.documentId] = req.suggestedAdvanceToApply;
             }
           }
           setOrdenesAvanceAplicado(initialAlloc);
-
-          const sumaOrdenes = Object.values(initialAlloc).reduce((a, b) => a + b, 0);
-          const saldoTrasOrdenes = Math.max(0, preview.totalDeliverySubtotal - sumaOrdenes);
-          const saldoClienteUsar = Math.min(preview.availableCustomerAdvance || 0, saldoTrasOrdenes);
-          setAnticipoClienteAplicado(saldoClienteUsar);
-          const aPagar = Math.max(0, saldoTrasOrdenes - saldoClienteUsar);
-          setMontoPagoConsolidado(aPagar);
+          setAnticipoClienteAplicado(preview.customerAdvance?.maxApplicableAdvance || 0);
+          setMontoPagoConsolidado(preview.netBalanceToCollect);
         }
-      } catch {
+      } catch (err: unknown) {
         if (!cancelado) {
           setPreviewData(null);
           setOrdenesAvanceAplicado({});
           setAnticipoClienteAplicado(0);
           setMontoPagoConsolidado(totalesSeleccion.saldoPendiente);
+          const msg = (err as { message?: string })?.message;
+          if (msg) {
+            setErrorMsg(msg);
+          }
         }
       } finally {
         if (!cancelado) setLoadingPreview(false);
@@ -368,17 +369,23 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   }, [clienteActivo, itemsClienteMarcados, token, totalesSeleccion.saldoPendiente]);
 
   const resumenFinanciero = useMemo(() => {
-    const totalEntregar = previewData ? previewData.totalDeliverySubtotal : totalesSeleccion.totalNeto;
-    const anticiposOrdenes = Object.values(ordenesAvanceAplicado).reduce((acc, val) => acc + (val || 0), 0);
-    const anticipoCliente = anticipoClienteAplicado || 0;
-    const totalAnticipos = previewData ? (anticiposOrdenes + anticipoCliente) : totalesSeleccion.totalAnticipos;
-    const saldoPendiente = Math.max(0, totalEntregar - (previewData ? (anticiposOrdenes + anticipoCliente) : totalesSeleccion.totalAnticipos));
+    if (previewData) {
+      const anticiposOrdenes = Object.values(ordenesAvanceAplicado).reduce((acc, val) => acc + (val || 0), 0);
+      const anticipoCliente = anticipoClienteAplicado || 0;
+      return {
+        totalEntregar: previewData.totalDeliveredAmount,
+        anticiposOrdenes,
+        anticipoCliente,
+        totalAnticipos: anticiposOrdenes + anticipoCliente,
+        saldoPendiente: previewData.netBalanceToCollect,
+      };
+    }
     return {
-      totalEntregar,
-      anticiposOrdenes,
-      anticipoCliente,
-      totalAnticipos,
-      saldoPendiente,
+      totalEntregar: totalesSeleccion.totalNeto,
+      anticiposOrdenes: totalesSeleccion.totalAnticipos,
+      anticipoCliente: 0,
+      totalAnticipos: totalesSeleccion.totalAnticipos,
+      saldoPendiente: totalesSeleccion.saldoPendiente,
     };
   }, [previewData, ordenesAvanceAplicado, anticipoClienteAplicado, totalesSeleccion]);
 
@@ -397,12 +404,14 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   };
 
   const toggleSeleccionItem = (itemPublicId: string) => {
+    setErrorMsg(null);
     setItemsSeleccionadosIds((prev) =>
       prev.includes(itemPublicId) ? prev.filter((id) => id !== itemPublicId) : [...prev, itemPublicId]
     );
   };
 
   const seleccionarTodosLosItems = () => {
+    setErrorMsg(null);
     if (!clienteActivo) return;
     if (itemsSeleccionadosIds.length === clienteActivo.items.length) {
       setItemsSeleccionadosIds([]);
@@ -426,15 +435,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       return;
     }
 
-    const saldoPendiente = resumenFinanciero.saldoPendiente;
     const montoAPagar = incluirPagoConsolidado ? montoPagoConsolidado : 0;
-
-    if (saldoPendiente > 0 && montoAPagar < saldoPendiente) {
-      setErrorMsg(
-        `Existe un saldo pendiente de $${saldoPendiente.toLocaleString('es-CO')}. Ingrese el pago correspondiente para saldar el total y habilitar el despacho.`
-      );
-      return;
-    }
 
     setLoading(true);
     setErrorMsg(null);
@@ -1320,7 +1321,10 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                             </label>
                             <select
                               value={metodoPagoConsolidado}
-                              onChange={(e) => setMetodoPagoConsolidado(e.target.value)}
+                              onChange={(e) => {
+                                setMetodoPagoConsolidado(e.target.value);
+                                setErrorMsg(null);
+                              }}
                               className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                               {mediosPago.map((m) => (
@@ -1433,6 +1437,16 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                         ) : (
                           <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1.5">
                             <span>⚠️</span> Saldo restante de ${(resumenFinanciero.saldoPendiente - montoPagoConsolidado).toLocaleString('es-CO')}.
+                          </div>
+                        )}
+
+                        {errorMsg && (
+                          <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-500/50 text-rose-300 text-xs flex items-center justify-between animate-fade-in">
+                            <div className="flex items-center gap-1.5">
+                              <span>⚠️</span>
+                              <span>{errorMsg}</span>
+                            </div>
+                            <button onClick={() => setErrorMsg(null)} className="text-rose-400 hover:text-rose-200 font-bold ml-2">✕</button>
                           </div>
                         )}
 

@@ -12,6 +12,8 @@ vi.mock('@/services/entregasApi', () => ({
     getRemisionByUuid: vi.fn(),
     registrarPago: vi.fn(),
     despacharRemision: vi.fn(),
+    previewEntregaConsolidada: vi.fn(),
+    generarEntregaConsolidada: vi.fn(),
   },
 }));
 
@@ -222,6 +224,133 @@ describe('ModuloEntregas Component', () => {
       expect(screen.getByText('SOL-0001')).toBeInTheDocument();
     });
     expect(getPaymentMethodsFetchCount()).toBe(1);
+  });
+
+  it('construye correctamente el payload de despacho con settlementPayments y anticipos (1.6)', async () => {
+    vi.mocked(entregasApi.previewEntregaConsolidada).mockResolvedValue({
+      customerId: 'cli-1',
+      customerName: 'Restaurante Central',
+      totalDeliveredAmount: 50000,
+      requestAdvances: [
+        {
+          documentId: 'sol-1',
+          documentNumber: 'SOL-0001',
+          totalPendingAllItems: 50000,
+          deliveringItemsPending: 50000,
+          undeliveredItemsPending: 0,
+          availableAdvance: 20000,
+          minAdvanceToApply: 20000,
+          maxAdvanceToApply: 20000,
+          suggestedAdvanceToApply: 20000,
+        },
+      ],
+      customerAdvance: { availableAdvance: 0, maxApplicableAdvance: 0 },
+      totalOrderAdvanceSuggested: 20000,
+      netBalanceToCollect: 30000,
+    });
+
+    const mockDespachada: RemisionDetalle = {
+      ...mockRemisionBorradorConSaldo,
+      estado: 'ENTREGADO',
+      numeroDocumento: 'ENT-0001',
+      saldoPendiente: 0,
+    };
+    vi.mocked(entregasApi.generarEntregaConsolidada).mockResolvedValue(mockDespachada);
+
+    render(<ModuloEntregas />);
+
+    // Cambiar a la vista consolidada por cliente
+    fireEvent.click(screen.getByText(/Por Cliente \(Consolidada\)/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Restaurante Central/i)).toBeInTheDocument();
+    });
+
+    // Seleccionar cliente
+    fireEvent.click(screen.getByText('Restaurante Central'));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Nombre de quien retira/i)).toBeInTheDocument();
+    });
+
+    // Rellenar receptor
+    const inputNombre = screen.getByPlaceholderText(/Nombre de quien retira/i);
+    const inputDoc = screen.getByPlaceholderText(/Cédula o NIT/i);
+    fireEvent.change(inputNombre, { target: { value: 'Gloria Receptor' } });
+    fireEvent.change(inputDoc, { target: { value: 'CC 52123456' } });
+
+    // Pulsar botón de despacho
+    const botonDespachar = screen.getByRole('button', { name: /Despachar/i });
+    fireEvent.click(botonDespachar);
+
+    await waitFor(() => {
+      expect(entregasApi.generarEntregaConsolidada).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clienteUuid: 'cli-1',
+          items: expect.arrayContaining([
+            expect.objectContaining({ itemPublicId: 'item-1', cantidad: 1 }),
+          ]),
+          recibidoPorNombre: 'Gloria Receptor',
+          recibidoPorDocumento: 'CC 52123456',
+          pagoLiquidacion: expect.objectContaining({
+            monto: 30000,
+          }),
+        }),
+        undefined,
+      );
+    });
+  });
+
+  it('muestra errores del backend y los limpia al cambiar cliente, ítem o medio de pago (1.5 y 1.6)', async () => {
+    vi.mocked(entregasApi.previewEntregaConsolidada).mockResolvedValue({
+      customerId: 'cli-1',
+      customerName: 'Restaurante Central',
+      totalDeliveredAmount: 50000,
+      requestAdvances: [],
+      customerAdvance: { availableAdvance: 0, maxApplicableAdvance: 0 },
+      totalOrderAdvanceSuggested: 0,
+      netBalanceToCollect: 50000,
+    });
+
+    // Simular error 422 UNSETTLED_BALANCE del backend
+    vi.mocked(entregasApi.generarEntregaConsolidada).mockRejectedValue(
+      new Error('Existe un saldo pendiente de 50.000 COP no cubierto por recaudos ni cupo de crédito disponible (0 COP).')
+    );
+
+    render(<ModuloEntregas />);
+    fireEvent.click(screen.getByText(/Por Cliente \(Consolidada\)/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Restaurante Central/i)).toBeInTheDocument();
+    });
+
+    // Seleccionar cliente
+    fireEvent.click(screen.getByText('Restaurante Central'));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Nombre de quien retira/i)).toBeInTheDocument();
+    });
+
+    const inputNombre = screen.getByPlaceholderText(/Nombre de quien retira/i);
+    const inputDoc = screen.getByPlaceholderText(/Cédula o NIT/i);
+    fireEvent.change(inputNombre, { target: { value: 'Receptor Prueba' } });
+    fireEvent.change(inputDoc, { target: { value: '123456' } });
+
+    const botonDespachar = screen.getByRole('button', { name: /Despachar/i });
+    fireEvent.click(botonDespachar);
+
+    // Debe mostrarse el error retornado por el backend
+    await waitFor(() => {
+      expect(screen.getAllByText(/Existe un saldo pendiente de 50.000 COP/i).length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Al desmarcar/cambiar un ítem, el error debe limpiarse
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]);
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Existe un saldo pendiente de 50.000 COP/i)).not.toBeInTheDocument();
+    });
   });
 });
 
