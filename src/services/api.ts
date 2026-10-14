@@ -32,13 +32,16 @@ const getBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
     const runtimeUrl = window.__ENV__?.VITE_API_BASE_URL || window.__ENV__?.API_BASE_URL
     if (runtimeUrl && runtimeUrl.trim() !== '') {
-      return runtimeUrl.trim()
+      const clean = runtimeUrl.trim().replace(/\/$/, '')
+      return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`
     }
   }
 
   // 2. Prioridad: Variable en tiempo de compilación (.env local de Vite)
-  if (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim() !== '') {
-    return import.meta.env.VITE_API_BASE_URL.trim()
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    const clean = envUrl.trim().replace(/\/$/, '')
+    return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`
   }
 
   // 3. Ambiente explícito del despliegue (VITE_APP_ENV), ideal para ConfigMaps por namespace.
@@ -47,16 +50,16 @@ const getBaseUrl = (): string => {
     return API_URLS[configuredEnvironment]
   }
 
-  // 4. Detección zero-config por hostname del frontend (excepto en tests unitarios)
+  // 4. Detección zero-config por hostname del frontend
   if (typeof window !== 'undefined') {
-    if (import.meta.env.MODE === 'test') {
-      return API_URLS.dev
-    }
-
-    const { hostname } = window.location
+    const { hostname, protocol } = window.location
 
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return `http://${hostname}:5005/api/v1`
+    }
+
+    if (hostname.includes('afilamoshermanos.local') || hostname.endsWith('.local')) {
+      return `${protocol}//api-ops.afilamoshermanos.local/api/v1`
     }
 
     if (hostname.includes('afilamoshermanos.com')) {
@@ -77,8 +80,7 @@ const getBaseUrl = (): string => {
   return API_URLS.dev
 }
 
-
-const BASE_URL = getBaseUrl()
+export { getBaseUrl }
 
 export async function apiClient<T>(
   endpoint: string, 
@@ -93,7 +95,9 @@ export async function apiClient<T>(
     headers.set('Authorization', `Bearer ${authToken}`)
   }
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const baseUrl = getBaseUrl()
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const response = await fetch(`${baseUrl}${normalizedEndpoint}`, {
     ...options,
     headers,
     signal: options.signal,

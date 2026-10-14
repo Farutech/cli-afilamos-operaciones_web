@@ -6,6 +6,10 @@ COPY dist /usr/share/nginx/html
 # Copiar configuracion de Nginx adaptada a puerto 80 para local-gateway
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copiar script de inyección de variables de entorno en runtime
+COPY --chmod=755 docker-entrypoint.d/99-runtime-env.sh /docker-entrypoint.d/99-runtime-env.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.d/99-runtime-env.sh
+
 # Ajustar puerto de escucha a 80 para compatibilidad directa con local-gateway
 RUN sed -i 's/listen 8080;/listen 80;/' /etc/nginx/conf.d/default.conf
 
