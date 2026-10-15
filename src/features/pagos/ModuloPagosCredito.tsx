@@ -13,7 +13,7 @@ import {
   DollarSign,
   Receipt,
 } from 'lucide-react';
-import { ListPageLayout } from '../../components/ui';
+import { ListPageLayout, StandardDataTable, type ColumnDef } from '../../components/ui';
 import { api } from '../../services/api';
 import { catalogosApi } from '../../services/catalogosApi';
 import type { MedioPagoInstrumento } from '../../types/catalogos';
@@ -346,7 +346,6 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
     setPaginaHistorial(1);
   }, [busquedaHistorial, filtroMedioPago, fechaDesde, fechaHasta, itemsHistorialPorPagina]);
 
-  const totalPaginasHistorial = Math.max(1, Math.ceil(historialFiltrado.length / itemsHistorialPorPagina));
   const historialPaginado = useMemo(() => {
     const inicio = (paginaHistorial - 1) * itemsHistorialPorPagina;
     return historialFiltrado.slice(inicio, inicio + itemsHistorialPorPagina);
@@ -396,8 +395,85 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
     return !act || act.categoria === 'EFECTIVO' || act.codigo.includes('EFECTIVO');
   }, [mediosPago, metodoPagoId]);
 
+  const columnsHistorial = useMemo<ColumnDef<PagoHistorial>[]>(() => [
+    {
+      key: 'fecha',
+      header: 'FECHA Y HORA',
+      render: (p) => (
+        <span className="font-mono text-slate-300 text-xs">
+          {new Date(p.receivedAt).toLocaleString('es-CO', {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          })}
+        </span>
+      ),
+    },
+    {
+      key: 'documento',
+      header: 'DOCUMENTO',
+      render: (p) => (
+        <span className="font-mono font-bold text-xs text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30">
+          {p.documentNumber || 'ANTICIPO'}
+        </span>
+      ),
+    },
+    {
+      key: 'cliente',
+      header: 'CLIENTE',
+      render: (p) => <span className="font-medium text-white text-xs">{p.customerName}</span>,
+    },
+    {
+      key: 'medio',
+      header: 'MEDIO DE PAGO',
+      render: (p) => <span className="text-slate-300 text-xs">{p.paymentMethodName}</span>,
+    },
+    {
+      key: 'referencia',
+      header: 'REFERENCIA',
+      render: (p) => <span className="font-mono text-slate-400 text-xs">{p.reference || '—'}</span>,
+    },
+    {
+      key: 'monto',
+      header: 'MONTO',
+      align: 'right',
+      render: (p) => (
+        <span className="text-right font-mono font-bold text-emerald-400 text-xs">
+          ${p.amount.toLocaleString('es-CO')}
+        </span>
+      ),
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (p) => (
+        <Badge variant={p.isVoided ? 'danger' : 'success'} size="sm">
+          {p.isVoided ? 'Anulado' : 'Válido'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'acciones',
+      header: 'ACCIONES',
+      align: 'right',
+      render: (p) => (
+        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => setPagoDetalle(p)}
+            className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
+            title="Ver detalle del comprobante de pago"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Ver</span>
+          </button>
+        </div>
+      ),
+    },
+  ], []);
+
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-8">
+    <div className="space-y-4 pb-8">
       <ListPageLayout
         title="Pagos, Abonos y Crédito"
         eyebrow="OPERACIÓN · TESORERÍA & CARTERA"
@@ -460,7 +536,7 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
       {tabActiva === 'abono' && (
         <div className="space-y-4">
           {/* Franja Horizontal Compacta de KPIs (1 sola línea) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
             <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10 flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Con Saldo</span>
@@ -930,113 +1006,24 @@ export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
               </div>
             </div>
 
-            {/* Tabla con Altura Contenida y Botones con Iconos */}
-            <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
-              <table className="min-w-full divide-y divide-white/10 text-xs">
-                <thead className="bg-slate-950/80 sticky top-0 z-10">
-                  <tr>
-                    <th className="px-3.5 py-2.5 text-left font-semibold text-slate-400">Fecha y Hora</th>
-                    <th className="px-3.5 py-2.5 text-left font-semibold text-slate-400">Documento</th>
-                    <th className="px-3.5 py-2.5 text-left font-semibold text-slate-400">Cliente</th>
-                    <th className="px-3.5 py-2.5 text-left font-semibold text-slate-400">Medio</th>
-                    <th className="px-3.5 py-2.5 text-left font-semibold text-slate-400">Referencia</th>
-                    <th className="px-3.5 py-2.5 text-right font-semibold text-slate-400">Monto</th>
-                    <th className="px-3.5 py-2.5 text-center font-semibold text-slate-400">Estado</th>
-                    <th className="px-3.5 py-2.5 text-right font-semibold text-slate-400">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 bg-slate-900/40">
-                  {historialPaginado.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500 italic">
-                        {cargandoHistorial ? 'Cargando historial...' : 'No hay pagos registrados para estos criterios.'}
-                      </td>
-                    </tr>
-                  ) : (
-                    historialPaginado.map((p) => (
-                      <tr key={p.id} className="hover:bg-white/[0.03] transition-colors">
-                        <td className="px-3.5 py-2 font-mono text-slate-400">
-                          {new Date(p.receivedAt).toLocaleString('es-CO', {
-                            dateStyle: 'short',
-                            timeStyle: 'short',
-                          })}
-                        </td>
-                        <td className="px-3.5 py-2">
-                          <span className="font-mono font-bold text-indigo-400 bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-700/30">
-                            {p.documentNumber || 'ANTICIPO'}
-                          </span>
-                        </td>
-                        <td className="px-3.5 py-2 font-medium text-white truncate max-w-[160px]">{p.customerName}</td>
-                        <td className="px-3.5 py-2 text-slate-300">{p.paymentMethodName}</td>
-                        <td className="px-3.5 py-2 font-mono text-slate-400 truncate max-w-[120px]">{p.reference || '—'}</td>
-                        <td className="px-3.5 py-2 text-right font-mono font-bold text-emerald-400">
-                          ${p.amount.toLocaleString('es-CO')}
-                        </td>
-                        <td className="px-3.5 py-2 text-center">
-                          <Badge variant={p.isVoided ? 'danger' : 'success'} size="sm">
-                            {p.isVoided ? 'Anulado' : 'Válido'}
-                          </Badge>
-                        </td>
-                        <td className="px-3.5 py-2 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => setPagoDetalle(p)}
-                            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                            title="Ver detalle del comprobante de pago"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Paginación Fija */}
-            <div className="p-3 border-t border-white/10 bg-slate-950/60 flex items-center justify-between text-xs text-slate-400">
-              <div className="flex items-center gap-2">
-                <span>
-                  Mostrando <strong className="text-white">{historialFiltrado.length > 0 ? (paginaHistorial - 1) * itemsHistorialPorPagina + 1 : 0}</strong> a{' '}
-                  <strong className="text-white">{Math.min(paginaHistorial * itemsHistorialPorPagina, historialFiltrado.length)}</strong> de{' '}
-                  <strong className="text-white">{historialFiltrado.length}</strong>
-                </span>
-                <select
-                  value={itemsHistorialPorPagina}
-                  onChange={(e) => setItemsHistorialPorPagina(Number(e.target.value))}
-                  className="bg-slate-900 border border-white/10 rounded px-1.5 py-0.5 text-white ml-2"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={paginaHistorial <= 1}
-                  onClick={() => setPaginaHistorial((p) => Math.max(1, p - 1))}
-                  className="py-0.5 px-2 text-xs"
-                >
-                  ←
-                </Button>
-                <span className="font-mono font-bold text-white px-2">
-                  {paginaHistorial} / {totalPaginasHistorial}
-                </span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={paginaHistorial >= totalPaginasHistorial}
-                  onClick={() => setPaginaHistorial((p) => Math.min(totalPaginasHistorial, p + 1))}
-                  className="py-0.5 px-2 text-xs"
-                >
-                  →
-                </Button>
-              </div>
-            </div>
+            <StandardDataTable<PagoHistorial>
+              columns={columnsHistorial}
+              data={historialPaginado}
+              keyExtractor={(p) => p.id}
+              loading={cargandoHistorial}
+              pagination={{
+                currentPage: paginaHistorial,
+                pageSize: itemsHistorialPorPagina,
+                totalItems: historialFiltrado.length,
+                onPageChange: (p) => setPaginaHistorial(p),
+                onPageSizeChange: (s) => {
+                  setItemsHistorialPorPagina(s);
+                  setPaginaHistorial(1);
+                },
+              }}
+              onRowClick={(p: PagoHistorial) => setPagoDetalle(p)}
+              emptyMessage="No hay pagos registrados para los criterios seleccionados."
+            />
           </Card>
         </div>
       )}

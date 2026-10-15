@@ -621,6 +621,7 @@ export function App() {
           canales={canales}
           tiposDocumento={tiposDoc}
           clientes={clientes}
+          onClienteCreado={(nuevo) => setClientes((prev) => [nuevo, ...prev])}
           onAsentarSolicitud={handleAsentarSolicitud}
           solicitudInicial={solicitudEnEdicion}
           onCancelarEdicion={() => {
@@ -669,32 +670,29 @@ export function App() {
     );
   } else if (activeSection === 'Entregas') {
     content = (
-      <div className="page-content">
-        <ModuloEntregas
-          token={session.token || ''}
-          usuarioActual={{
-            publicId: session.publicId || 'usr-001',
-            codigo: session.codigo || 'admin',
-            rol: session.role || 'Administrador',
-          }}
-        />
-      </div>
+      <ModuloEntregas
+        token={session.token || ''}
+        usuarioActual={{
+          publicId: session.publicId || 'usr-001',
+          codigo: session.codigo || 'admin',
+          rol: session.role || 'Administrador',
+        }}
+      />
     );
   } else if (activeSection === 'Pagos y crédito') {
-    content = (
-      <div className="page-content">
-        <ModuloPagosCredito token={session.token} userRole={session.role} />
-      </div>
-    );
+    content = <ModuloPagosCredito token={session.token} userRole={session.role} />;
   } else if (activeSection === 'Caja y turnos') {
     content = (
-      <ListPageLayout
-        title="Caja y Turnos"
-        eyebrow="OPERACIÓN · TESORERÍA"
-        description="Apertura, cierre de turnos, arqueos y registro de movimientos de caja."
-      >
-        <ModuloCaja userRole={session.role} token={session.token} />
-      </ListPageLayout>
+      <ModuloCaja
+        userRole={session.role}
+        token={session.token}
+        usuarioActual={{
+          name: session.name,
+          role: session.role,
+          publicId: session.publicId,
+          codigo: session.codigo,
+        }}
+      />
     );
   } else if (
     activeSection === 'Cajas y terminales' ||

@@ -9,19 +9,36 @@ export interface RegistroClienteModalProps {
   onClose: () => void;
   onClienteCreado: (cliente: Cliente) => void;
   tiposDocumento?: TipoDocumentoIdentidad[];
+  title?: string;
+  subtitle?: string;
+  submitLabel?: string;
 }
+
+export const DEFAULT_TIPOS_DOCUMENTO: TipoDocumentoIdentidad[] = [
+  { uuid: 'doc-cc', codigo: 'CC', nombre: 'Cédula de Ciudadanía', aplicaPersona: 'NATURAL', activo: true },
+  { uuid: 'doc-nit', codigo: 'NIT', nombre: 'NIT / Empresa', aplicaPersona: 'JURIDICA', activo: true },
+  { uuid: 'doc-ce', codigo: 'CE', nombre: 'Cédula de Extranjería', aplicaPersona: 'NATURAL', activo: true },
+];
 
 export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
   isOpen,
   onClose,
   onClienteCreado,
   tiposDocumento: tiposDocProp,
+  title = 'Nuevo Registro de Cliente',
+  subtitle = 'Completa el formulario para dar de alta un nuevo cliente en el sistema',
+  submitLabel = 'Crear y Seleccionar Cliente',
 }) => {
-  const [tiposDoc, setTiposDoc] = useState<TipoDocumentoIdentidad[]>(tiposDocProp || []);
-  const [uuidTipoDoc, setUuidTipoDoc] = useState<string>('');
+  const [tiposDoc, setTiposDoc] = useState<TipoDocumentoIdentidad[]>(
+    tiposDocProp && tiposDocProp.length > 0 ? tiposDocProp : DEFAULT_TIPOS_DOCUMENTO
+  );
+  const [uuidTipoDoc, setUuidTipoDoc] = useState<string>(
+    (tiposDocProp && tiposDocProp[0]?.uuid) || DEFAULT_TIPOS_DOCUMENTO[0].uuid
+  );
   const [numeroDoc, setNumeroDoc] = useState('');
   const [nombreRazonSocial, setNombreRazonSocial] = useState('');
   const [telefono, setTelefono] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +68,7 @@ export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
       setNumeroDoc('');
       setNombreRazonSocial('');
       setTelefono('');
+      setEmail('');
       setError(null);
     }
   }, [isOpen]);
@@ -77,6 +95,7 @@ export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
         numeroDocumento: numeroDoc.trim(),
         nombreRazonSocial: nombreRazonSocial.trim(),
         telefono: telefono.trim(),
+        email: email.trim() || undefined,
       });
 
       onClienteCreado(cliente);
@@ -92,8 +111,8 @@ export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Nuevo Registro de Cliente"
-      subtitle="Completa el formulario para dar de alta un nuevo cliente en el sistema"
+      title={title}
+      subtitle={subtitle}
       size="md"
       className="border-slate-800 shadow-2xl backdrop-blur-md"
       bodyClassName="p-6"
@@ -114,7 +133,7 @@ export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
           />
 
           <Input
-            label="Número de Identificación *"
+            label="Código o Documento (NIT / C.C.) *"
             required
             placeholder="Ej: 1020304050 ó 900123456"
             value={numeroDoc}
@@ -132,20 +151,31 @@ export const RegistroClienteModal: React.FC<RegistroClienteModalProps> = ({
           fullWidth
         />
 
-        <Input
-          label="Teléfono / WhatsApp de Contacto"
-          placeholder="Ej: 3001234567"
-          value={telefono}
-          onChange={(e) => setTelefono(e.target.value)}
-          fullWidth
-        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            label="Teléfono / WhatsApp de Contacto"
+            placeholder="Ej: 3001234567"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            fullWidth
+          />
+
+          <Input
+            label="Correo Electrónico (Opcional)"
+            type="email"
+            placeholder="cliente@ejemplo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            fullWidth
+          />
+        </div>
 
         <div className="pt-3 border-t border-slate-800 flex justify-end gap-2.5">
           <Button variant="secondary" type="button" onClick={onClose} disabled={loading}>
             Cancelar
           </Button>
           <Button variant="primary" type="submit" disabled={loading}>
-            {loading ? 'Guardando Cliente...' : 'Crear y Seleccionar Cliente'}
+            {loading ? 'Guardando Cliente...' : submitLabel}
           </Button>
         </div>
       </form>

@@ -83,6 +83,7 @@ export interface StandardDataTableProps<T> {
   selectedKeys?: Set<string>;
   onSelectionChange?: (newSelected: Set<string>) => void;
   bulkActions?: BulkActionConfig[];
+  onRowClick?: (row: T) => void;
   rowActions?:
     | ((row: T) => RowActionsConfig | StandardRowAction<T>[])
     | StandardRowAction<T>[]
@@ -124,6 +125,7 @@ export function StandardDataTable<T>({
   selectedKeys = new Set<string>(),
   onSelectionChange,
   bulkActions,
+  onRowClick,
   rowActions,
   sortColumn,
   sortDirection,
@@ -390,7 +392,8 @@ export function StandardDataTable<T>({
                   return (
                     <tr
                       key={rowKey}
-                      className={`transition-colors hover:bg-slate-800/40 ${
+                      onClick={() => onRowClick?.(row)}
+                      className={`transition-colors hover:bg-slate-800/40 ${onRowClick ? 'cursor-pointer' : ''} ${
                         isSelected ? 'bg-primary-950/20' : rIdx % 2 === 1 ? 'bg-slate-950/20' : ''
                       }`}
                     >

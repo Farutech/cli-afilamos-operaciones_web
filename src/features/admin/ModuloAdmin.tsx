@@ -10,6 +10,7 @@ import {
   EmptyState,
   CRUDTable,
 } from '@farutech/design-system';
+import { ListadoCrud } from '../../components/ui';
 import { adminApi } from '../../services/adminApi';
 import { catalogosApi } from '../../services/catalogosApi';
 import type {
@@ -562,34 +563,39 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
   const [mediosPagoCategorias, setMediosPagoCategorias] = useState<MedioPagoCategoria[]>([]);
   const [mediosPagoInstrumentos, setMediosPagoInstrumentos] = useState<MedioPagoInstrumento[]>([]);
   const [loadingMediosPago, setLoadingMediosPago] = useState(false);
+  const [busquedaMediosPago, setBusquedaMediosPago] = useState('');
+
+  // Modal 1: Edición de reglas de Forma de Pago Principal
+  const [mostrarModalEditarCategoria, setMostrarModalEditarCategoria] = useState(false);
+  const [categoriaEditando, setCategoriaEditando] = useState<MedioPagoCategoria | null>(null);
+
+  // Modal 2: Visualización y gestión de hijos de una forma principal
+  const [mostrarModalGestionHijos, setMostrarModalGestionHijos] = useState(false);
+  const [categoriaParaHijos, setCategoriaParaHijos] = useState<MedioPagoCategoria | null>(null);
+
+  // Modal 3: Creación o edición de instrumento hijo
   const [mostrarModalInstrumento, setMostrarModalInstrumento] = useState(false);
-  const [nuevoInstrumento, setNuevoInstrumento] = useState<{
+  const [instrumentoEditando, setInstrumentoEditando] = useState<MedioPagoInstrumento | null>(null);
+  const [formInstrumento, setFormInstrumento] = useState<{
     codigoCategoria: string;
     codigo: string;
     nombre: string;
+    proveedor: string;
+    diasCredito: number;
     requiereReferencia: boolean;
-    diasCredito?: number;
-    isDefault?: boolean;
+    isDefault: boolean;
+    activo: boolean;
   }>({
     codigoCategoria: 'EFECTIVO',
     codigo: '',
     nombre: '',
-    requiereReferencia: false,
+    proveedor: '',
     diasCredito: 30,
+    requiereReferencia: false,
     isDefault: false,
+    activo: true,
   });
-
-  const [categoriasExpandidas, setCategoriasExpandidas] = useState<Record<string, boolean>>({
-    EFECTIVO: true,
-    BANCOS: true,
-    TARJETAS: true,
-    BILLETERAS: true,
-    CREDITO: true,
-    OTROS: true,
-  });
-  const toggleCategoriaExpandida = (codigo: string) => {
-    setCategoriasExpandidas((prev) => ({ ...prev, [codigo]: !prev[codigo] }));
-  };
+  const [guardandoMedio, setGuardandoMedio] = useState(false);
 
   const [cuentaBancaria, setCuentaBancaria] = useState<CuentaBancariaConfigDto>({
     banco: '',
@@ -967,8 +973,13 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
     try {
       await adminApi.resetearPinUsuario(usuarioPinTarget.uuid, nuevoPin, token);
       setSuccessMsg(`PIN actualizado para ${usuarioPinTarget.codigo}.`);
+      const targetUuid = usuarioPinTarget.uuid;
+      setUsuarios((prev) =>
+        prev.map((u) => (u.uuid === targetUuid ? { ...u, tienePin: true } : u))
+      );
       setUsuarioPinTarget(null);
       setNuevoPin('');
+      cargarSubCatalogo('usuarios');
     } catch (err: unknown) {
       setErrorMsg((err as Error).message || 'Error al actualizar PIN');
     }
@@ -1407,26 +1418,185 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
     }
   };
 
-  // --- Medios de Pago Instrumentos ---
-  const handleCrearInstrumento = async (e: React.FormEvent) => {
+  // --- Formas y Medios de Pago (Jerárquico y Dinámico) ---
+  const handleToggleCategoriaActiva = async (cat: MedioPagoCategoria) => {
+    try {
+      const nuevoEstado = !cat.activo;
+      await catalogosApi.actualizarCategoriaMedioPago(cat.codigo, { activo: nuevoEstado }, token);
+      setSuccessMsg(`Forma de pago '${cat.nombre}' ${nuevoEstado ? 'activada' : 'inactivada'}.`);
+      await cargarSubCatalogo('medios_pago');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al cambiar estado de la forma de pago');
+    }
+  };
+
+  const handleAbrirEditarCategoria = (cat: MedioPagoCategoria) => {
+    setCategoriaEditando({ ...cat });
+    setMostrarModalEditarCategoria(true);
+  };
+
+  const handleGuardarReglasCategoria = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!categoriaEditando) return;
+    setErrorMsg(null);
+    setGuardandoMedio(true);
+    try {
+      await catalogosApi.actualizarCategoriaMedioPago(
+        categoriaEditando.codigo,
+        {
+          nombre: categoriaEditando.nombre,
+          descripcion: categoriaEditando.descripcion,
+          activo: categoriaEditando.activo,
+          requiereReferencia: categoriaEditando.requiereReferencia,
+          validaEnCierre: categoriaEditando.validaEnCierre,
+          permiteCredito: categoriaEditando.permiteCredito,
+          requiereProveedor: categoriaEditando.requiereProveedor,
+        },
+        token
+      );
+      setSuccessMsg(`Reglas y configuración de '${categoriaEditando.nombre}' guardadas exitosamente.`);
+      setMostrarModalEditarCategoria(false);
+      await cargarSubCatalogo('medios_pago');
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al guardar reglas de la forma de pago');
+    } finally {
+      setGuardandoMedio(false);
+    }
+  };
+
+  const handleAbrirGestionHijos = (cat: MedioPagoCategoria) => {
+    setCategoriaParaHijos(cat);
+    setMostrarModalGestionHijos(true);
+  };
+
+  const handleToggleActivoInstrumento = async (inst: MedioPagoInstrumento) => {
+    try {
+      const nuevoEstado = !inst.activo;
+      await catalogosApi.setMedioPagoActivo(inst.uuid, nuevoEstado, token);
+      setSuccessMsg(`Instrumento '${inst.nombre}' ${nuevoEstado ? 'activado' : 'inactivado'}.`);
+      await cargarSubCatalogo('medios_pago');
+      if (categoriaParaHijos) {
+        const arbol = await catalogosApi.getMediosPagoArbol(token, true);
+        const catActualizada = arbol.categorias.find((c) => c.codigo === categoriaParaHijos.codigo);
+        if (catActualizada) setCategoriaParaHijos(catActualizada);
+      }
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al cambiar estado del medio de pago');
+    }
+  };
+
+  const handleSetDefaultInstrumento = async (inst: MedioPagoInstrumento) => {
+    try {
+      await catalogosApi.setMedioPagoDefault(inst.uuid, token);
+      setSuccessMsg(`'${inst.nombre}' establecido como medio de pago por defecto.`);
+      await cargarSubCatalogo('medios_pago');
+      if (categoriaParaHijos) {
+        const arbol = await catalogosApi.getMediosPagoArbol(token, true);
+        const catActualizada = arbol.categorias.find((c) => c.codigo === categoriaParaHijos.codigo);
+        if (catActualizada) setCategoriaParaHijos(catActualizada);
+      }
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al establecer medio por defecto');
+    }
+  };
+
+  const handleAbrirCrearHijo = (codigoCategoria: string) => {
+    const cat = mediosPagoCategorias.find((c) => c.codigo === codigoCategoria);
+    setInstrumentoEditando(null);
+    setFormInstrumento({
+      codigoCategoria,
+      codigo: '',
+      nombre: '',
+      proveedor: codigoCategoria === 'TRANSFERENCIA' || codigoCategoria === 'TARJETA' ? 'Bold' : '',
+      diasCredito: codigoCategoria === 'CREDITO' ? 30 : 0,
+      requiereReferencia: cat?.requiereReferencia ?? false,
+      isDefault: false,
+      activo: true,
+    });
+    setMostrarModalInstrumento(true);
+  };
+
+  const handleAbrirEditarHijo = (inst: MedioPagoInstrumento) => {
+    setInstrumentoEditando(inst);
+    setFormInstrumento({
+      codigoCategoria: inst.categoria || 'EFECTIVO',
+      codigo: inst.codigo,
+      nombre: inst.nombre,
+      proveedor: inst.proveedor || '',
+      diasCredito: inst.diasCredito || 30,
+      requiereReferencia: inst.requiereReferencia,
+      isDefault: Boolean(inst.isDefault || inst.esPorDefecto),
+      activo: inst.activo,
+    });
+    setMostrarModalInstrumento(true);
+  };
+
+  const handleGuardarInstrumento = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setGuardandoMedio(true);
     try {
-      await catalogosApi.crearMedioPagoInstrumento({
-        codigoCategoria: nuevoInstrumento.codigoCategoria,
-        codigo: nuevoInstrumento.codigo,
-        nombre: nuevoInstrumento.nombre,
-        requiereReferencia: nuevoInstrumento.requiereReferencia,
-        diasCredito: nuevoInstrumento.codigoCategoria === 'CREDITO' ? (nuevoInstrumento.diasCredito || 30) : undefined,
-        isDefault: nuevoInstrumento.isDefault,
-        esPorDefecto: nuevoInstrumento.isDefault,
-      } as any);
-      setSuccessMsg(`Medio de pago '${nuevoInstrumento.nombre}' creado exitosamente.`);
+      if (instrumentoEditando) {
+        await catalogosApi.actualizarMedioPagoInstrumento(
+          instrumentoEditando.uuid,
+          {
+            nombre: formInstrumento.nombre,
+            codigo: formInstrumento.codigo,
+            diasCredito: formInstrumento.codigoCategoria === 'CREDITO' ? formInstrumento.diasCredito : undefined,
+            proveedor: formInstrumento.proveedor || undefined,
+            requiereReferencia: formInstrumento.requiereReferencia,
+            activo: formInstrumento.activo,
+            isDefault: formInstrumento.isDefault,
+          },
+          token
+        );
+        setSuccessMsg(`Medio '${formInstrumento.nombre}' actualizado exitosamente.`);
+      } else {
+        await catalogosApi.crearMedioPagoInstrumento(
+          {
+            codigoCategoria: formInstrumento.codigoCategoria,
+            codigo: formInstrumento.codigo,
+            nombre: formInstrumento.nombre,
+            proveedor: formInstrumento.proveedor || undefined,
+            diasCredito: formInstrumento.codigoCategoria === 'CREDITO' ? formInstrumento.diasCredito : undefined,
+            requiereReferencia: formInstrumento.requiereReferencia,
+            activo: formInstrumento.activo,
+            isDefault: formInstrumento.isDefault,
+          },
+          token
+        );
+        setSuccessMsg(`Nuevo medio '${formInstrumento.nombre}' registrado exitosamente.`);
+      }
       setMostrarModalInstrumento(false);
-      setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false, diasCredito: 30, isDefault: false });
-      cargarSubCatalogo('medios_pago');
+      setInstrumentoEditando(null);
+      await cargarSubCatalogo('medios_pago');
+      if (categoriaParaHijos) {
+        const arbol = await catalogosApi.getMediosPagoArbol(token, true);
+        const catActualizada = arbol.categorias.find((c) => c.codigo === categoriaParaHijos.codigo);
+        if (catActualizada) setCategoriaParaHijos(catActualizada);
+      }
     } catch (err: unknown) {
-      setErrorMsg((err as Error).message || 'Error al crear instrumento de pago');
+      setErrorMsg((err as Error).message || 'Error al guardar medio de pago');
+    } finally {
+      setGuardandoMedio(false);
+    }
+  };
+
+  const handleEliminarInstrumento = async (inst: MedioPagoInstrumento) => {
+    if (!window.confirm(`¿Está seguro de inactivar el medio de pago '${inst.nombre}'? Dejará de estar disponible para cobros.`)) {
+      return;
+    }
+    try {
+      await catalogosApi.setMedioPagoActivo(inst.uuid, false, token);
+      setSuccessMsg(`Medio '${inst.nombre}' inactivado.`);
+      await cargarSubCatalogo('medios_pago');
+      if (categoriaParaHijos) {
+        const arbol = await catalogosApi.getMediosPagoArbol(token, true);
+        const catActualizada = arbol.categorias.find((c) => c.codigo === categoriaParaHijos.codigo);
+        if (catActualizada) setCategoriaParaHijos(catActualizada);
+      }
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || 'Error al inactivar medio de pago');
     }
   };
 
@@ -2706,252 +2876,247 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         </div>
       )}
 
-      {/* 4.2 FORMAS & MEDIOS DE PAGO (ÁRBOL JERÁRQUICO) */}
+      {/* 4.2 FORMAS & MEDIOS DE PAGO (ESTÁNDAR LISTADOCROUD CANÓNICO) */}
       {subCat === 'medios_pago' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/90 border border-slate-800 rounded-xl shadow-lg">
-            <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span>🌳</span> Árbol Jerárquico de Formas & Instrumentos de Pago
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Estructura de dos niveles: {mediosPagoCategorias.length || 6} categorías macro (padres) e instrumentos transaccionales (hijos) habilitados para POS y tesorería.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  const todosExpandidos = Object.values(categoriasExpandidas).every(Boolean);
-                  const nuevoEstado: Record<string, boolean> = {};
-                  ['EFECTIVO', 'BANCOS', 'TARJETAS', 'BILLETERAS', 'CREDITO', 'OTROS'].forEach((k) => {
-                    nuevoEstado[k] = !todosExpandidos;
-                  });
-                  setCategoriasExpandidas(nuevoEstado);
-                }}
-              >
-                {Object.values(categoriasExpandidas).every(Boolean) ? '📁 Colapsar Todo' : '📂 Expandir Todo'}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  const param = parametros.find((p) => p.clave === 'denominaciones_efectivo');
-                  if (param) {
-                    setParametroTarget(param);
-                  } else {
-                    setParametroTarget({
-                      uuid: 'param-denominaciones',
-                      clave: 'denominaciones_efectivo',
-                      valorJson: JSON.stringify({
-                        monedaBase: 'COP',
-                        denominaciones: [
-                          { valor: 100000, etiqueta: '$100.000', tipo: 'BILLETE', activa: true },
-                          { valor: 50000, etiqueta: '$50.000', tipo: 'BILLETE', activa: true },
-                          { valor: 20000, etiqueta: '$20.000', tipo: 'BILLETE', activa: true },
-                          { valor: 10000, etiqueta: '$10.000', tipo: 'BILLETE', activa: true },
-                          { valor: 5000, etiqueta: '$5.000', tipo: 'BILLETE', activa: true },
-                          { valor: 2000, etiqueta: '$2.000', tipo: 'BILLETE', activa: true },
-                          { valor: 1000, etiqueta: '$1.000', tipo: 'BILLETE', activa: true },
-                          { valor: 500, etiqueta: '$500', tipo: 'MONEDA', activa: true },
-                          { valor: 200, etiqueta: '$200', tipo: 'MONEDA', activa: true },
-                          { valor: 100, etiqueta: '$100', tipo: 'MONEDA', activa: true },
-                          { valor: 50, etiqueta: '$50', tipo: 'MONEDA', activa: true },
-                        ],
-                      }),
-                      descripcion: 'Denominaciones de efectivo para arqueo y cierre',
-                      categoria: 'Tesorería',
-                    });
-                  }
-                }}
-              >
-                💵 Monedas de Caja
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setNuevoInstrumento({ codigoCategoria: 'EFECTIVO', codigo: '', nombre: '', requiereReferencia: false, diasCredito: 30, isDefault: false });
-                  setMostrarModalInstrumento(true);
-                }}
-              >
-                + Nuevo Instrumento de Pago
-              </Button>
-            </div>
-          </div>
+          <ListadoCrud<MedioPagoCategoria>
+            eyebrow="Administración > Tesorería"
+            title="Formas & Medios de Pago"
+            icon={<span className="text-xl">💳</span>}
+            description="Gestión oficial de las 5 formas de pago principales y sus instrumentos hijos. Configure qué campos exige cada forma principal (aplicables dinámicamente a sus hijos) y administre la activación/inactivación de cada método."
+            headerChild={
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-2 text-xs">
+                    <span className="text-slate-400">Formas Principales:</span>
+                    <span className="font-bold text-white font-mono">{mediosPagoCategorias.length}</span>
+                    <span className="text-emerald-400 font-semibold font-mono">
+                      ({mediosPagoCategorias.filter((c) => c.activo).length} activas)
+                    </span>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-2 text-xs">
+                    <span className="text-slate-400">Total Instrumentos Hijos:</span>
+                    <span className="font-bold text-white font-mono">{mediosPagoInstrumentos.length}</span>
+                    <span className="text-emerald-400 font-semibold font-mono">
+                      ({mediosPagoInstrumentos.filter((i) => i.activo).length} activos)
+                    </span>
+                  </div>
+                </div>
 
-          {loadingMediosPago ? (
-            <div className="p-8 text-center text-slate-400">Cargando catálogo de medios de pago...</div>
-          ) : (
-            <div className="space-y-3">
-              {[
-                { codigo: 'EFECTIVO', nombre: 'Efectivo & Caja Menor', icono: '💵', desc: 'Conteo físico por denominación en arqueos y cierres Z' },
-                { codigo: 'BANCOS', nombre: 'Transferencias Bancarias & Consignaciones', icono: '🏦', desc: 'Validación por comprobante y cuenta receptora' },
-                { codigo: 'TARJETAS', nombre: 'Tarjetas Débito & Crédito (Datáfonos)', icono: '💳', desc: 'Vouchers y autorizaciones electrónicas de datáfono' },
-                { codigo: 'BILLETERAS', nombre: 'Billeteras Digitales (Nequi / Daviplata)', icono: '📱', desc: 'Recaudo por QR dinámico o número de teléfono celular' },
-                { codigo: 'CREDITO', nombre: 'Crédito Comercial (Cuentas por Cobrar)', icono: '⏱️', desc: 'Otorgamiento de plazo de pago con control de días de crédito' },
-                { codigo: 'OTROS', nombre: 'Otros Instrumentos & Papelería', icono: '📄', desc: 'Cheques, bonos y notas crédito de mostrador' },
-              ].map((catDef) => {
-                const estaExpandido = categoriasExpandidas[catDef.codigo] !== false;
-                const instrumentosCat = mediosPagoInstrumentos.filter((inst) => {
-                  const c = (inst.categoria || '').toUpperCase();
-                  const cod = inst.codigo.toUpperCase();
-                  if (catDef.codigo === 'EFECTIVO') return c.includes('EFECTIVO') || cod.includes('EFE');
-                  if (catDef.codigo === 'BANCOS') return c.includes('BANCO') || c.includes('TRANSF') || cod.includes('BAN') || cod.includes('TRA');
-                  if (catDef.codigo === 'TARJETAS') return c.includes('TARJETA') || c.includes('DATA') || cod.includes('TAR') || cod.includes('POS');
-                  if (catDef.codigo === 'BILLETERAS') return c.includes('BILLETERA') || c.includes('NEQUI') || c.includes('DAVI') || cod.includes('DIG');
-                  if (catDef.codigo === 'CREDITO') return c.includes('CRED') || cod.includes('CRE') || inst.diasCredito !== undefined;
-                  return !c.includes('EFECTIVO') && !c.includes('BANCO') && !c.includes('TARJETA') && !c.includes('BILLETERA') && !c.includes('CRED') && !cod.includes('CRE');
-                });
-
-                return (
-                  <div
-                    key={catDef.codigo}
-                    className="border border-slate-800 rounded-xl bg-slate-900/60 overflow-hidden shadow-sm transition-all"
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const param = parametros.find((p) => p.clave === 'denominaciones_efectivo');
+                      if (param) {
+                        setParametroTarget(param);
+                      } else {
+                        setParametroTarget({
+                          uuid: 'param-denominaciones',
+                          clave: 'denominaciones_efectivo',
+                          valorJson: JSON.stringify({
+                            monedaBase: 'COP',
+                            denominaciones: [
+                              { valor: 100000, etiqueta: '$100.000', tipo: 'BILLETE', activa: true },
+                              { valor: 50000, etiqueta: '$50.000', tipo: 'BILLETE', activa: true },
+                              { valor: 20000, etiqueta: '$20.000', tipo: 'BILLETE', activa: true },
+                              { valor: 10000, etiqueta: '$10.000', tipo: 'BILLETE', activa: true },
+                              { valor: 5000, etiqueta: '$5.000', tipo: 'BILLETE', activa: true },
+                              { valor: 2000, etiqueta: '$2.000', tipo: 'BILLETE', activa: true },
+                              { valor: 1000, etiqueta: '$1.000', tipo: 'BILLETE', activa: true },
+                              { valor: 500, etiqueta: '$500', tipo: 'MONEDA', activa: true },
+                              { valor: 200, etiqueta: '$200', tipo: 'MONEDA', activa: true },
+                              { valor: 100, etiqueta: '$100', tipo: 'MONEDA', activa: true },
+                              { valor: 50, etiqueta: '$50', tipo: 'MONEDA', activa: true },
+                            ],
+                          }),
+                          descripcion: 'Denominaciones de efectivo para arqueo y cierre',
+                          categoria: 'Tesorería',
+                        });
+                      }
+                    }}
                   >
-                    {/* Rama Padre (Categoría) con toggle expandible */}
-                    <div
-                      onClick={() => toggleCategoriaExpandida(catDef.codigo)}
-                      className="p-3.5 bg-slate-950/90 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 cursor-pointer hover:bg-slate-900/80 transition-colors select-none"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-slate-400 text-xs w-4 text-center font-bold">
-                          {estaExpandido ? '▼' : '▶'}
-                        </span>
-                        <span className="text-lg">{catDef.icono}</span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-white text-sm">{catDef.nombre}</span>
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">
-                              Rama: {catDef.codigo}
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-slate-400 block mt-0.5">{catDef.desc}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
-                          {instrumentosCat.length} hijos
-                        </span>
-                        {catDef.codigo === 'EFECTIVO' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const param = parametros.find((p) => p.clave === 'denominaciones_efectivo');
-                              if (param) setParametroTarget(param);
-                            }}
-                            className="text-[11px] text-amber-400 hover:underline cursor-pointer font-semibold"
-                          >
-                            Monedas ➔
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNuevoInstrumento({
-                              codigoCategoria: catDef.codigo,
-                              codigo: '',
-                              nombre: '',
-                              requiereReferencia: catDef.codigo !== 'EFECTIVO',
-                              diasCredito: catDef.codigo === 'CREDITO' ? 30 : undefined,
-                              isDefault: false,
-                            });
-                            setMostrarModalInstrumento(true);
-                          }}
-                          className="px-2 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 rounded font-semibold transition-colors cursor-pointer"
-                        >
-                          + Añadir a {catDef.codigo}
-                        </button>
-                      </div>
+                    💵 Monedas de Caja
+                  </Button>
+                </div>
+              </div>
+            }
+            search={{
+              value: busquedaMediosPago,
+              onChange: setBusquedaMediosPago,
+              placeholder: 'Buscar forma principal o hijo (ej: Efectivo, Bold, 30 días, Cheque)...',
+            }}
+            onClearSearch={() => setBusquedaMediosPago('')}
+            onRefresh={() => cargarSubCatalogo('medios_pago')}
+            isRefreshing={loadingMediosPago}
+            loading={loadingMediosPago}
+            data={mediosPagoCategorias.filter((cat) => {
+              if (!busquedaMediosPago.trim()) return true;
+              const q = busquedaMediosPago.toLowerCase();
+              return (
+                cat.nombre.toLowerCase().includes(q) ||
+                cat.codigo.toLowerCase().includes(q) ||
+                (cat.descripcion && cat.descripcion.toLowerCase().includes(q)) ||
+                cat.instrumentos.some((h) => h.nombre.toLowerCase().includes(q) || h.codigo.toLowerCase().includes(q))
+              );
+            })}
+            keyExtractor={(cat) => cat.codigo}
+            columns={[
+              {
+                key: 'forma',
+                header: 'Forma Principal (Padre)',
+                render: (cat) => (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-xl shadow-inner shrink-0">
+                      {cat.icono || '💳'}
                     </div>
-
-                    {/* Hijos (Hojas / Instrumentos de la Rama) */}
-                    {estaExpandido && (
-                      <div className="p-3 bg-slate-950/40">
-                        {instrumentosCat.length === 0 ? (
-                          <div className="text-xs text-slate-500 py-3 px-4 text-center italic border border-dashed border-slate-800 rounded-lg">
-                            No hay instrumentos configurados en esta rama. Haga clic en "+ Añadir a {catDef.codigo}" para registrar el primero.
-                          </div>
-                        ) : (
-                          <div className="space-y-1.5 pl-4 border-l-2 border-indigo-500/30 ml-3 my-1">
-                            {instrumentosCat.map((inst, idx) => {
-                              const esUltimo = idx === instrumentosCat.length - 1;
-                              return (
-                                <div
-                                  key={inst.uuid}
-                                  className="relative py-2 px-3 flex flex-wrap items-center justify-between gap-2 bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 rounded-lg transition-colors"
-                                >
-                                  {/* Conector visual de rama */}
-                                  <span className="text-indigo-400/50 font-mono text-xs select-none mr-1">
-                                    {esUltimo ? '└─' : '├─'}
-                                  </span>
-
-                                  <div className="flex flex-wrap items-center gap-2.5 flex-1">
-                                    <span className="font-mono font-bold text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                      {inst.codigo}
-                                    </span>
-                                    <span className="text-xs font-semibold text-white">{inst.nombre}</span>
-
-                                    {(catDef.codigo === 'CREDITO' || inst.diasCredito) && (
-                                      <span className="text-[11px] font-bold text-yellow-300 bg-yellow-950/60 px-2 py-0.5 rounded border border-yellow-700/50">
-                                        ⏱ Plazo: {inst.diasCredito || 30} días de crédito
-                                      </span>
-                                    )}
-
-                                    {(inst.isDefault || inst.esPorDefecto) && (
-                                      <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/50 flex items-center gap-1">
-                                        ★ Por Defecto
-                                      </span>
-                                    )}
-
-                                    {inst.requiereReferencia ? (
-                                      <span className="text-[10px] text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-700/40">
-                                        Exige Referencia / Voucher
-                                      </span>
-                                    ) : (
-                                      <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                                        Cobro Directo
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <div className="flex items-center gap-2">
-                                    {!(inst.isDefault || inst.esPorDefecto) && inst.activo && (
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          try {
-                                            await catalogosApi.setMedioPagoDefault(inst.uuid, token);
-                                            setSuccessMsg(`"${inst.nombre}" establecido como medio de pago por defecto.`);
-                                            cargarSubCatalogo('medios_pago');
-                                          } catch (err: unknown) {
-                                            setErrorMsg((err as Error).message || 'Error al cambiar medio por defecto');
-                                          }
-                                        }}
-                                        className="text-[11px] text-slate-400 hover:text-emerald-300 px-2 py-0.5 rounded hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors cursor-pointer"
-                                        title="Establecer como medio de pago por defecto"
-                                      >
-                                        Hacer por defecto
-                                      </button>
-                                    )}
-                                    <Badge variant={inst.activo ? 'success' : 'neutral'}>
-                                      {inst.activo ? 'Activo' : 'Inactivo'}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm">{cat.nombre}</span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-700/50">
+                          {cat.codigo}
+                        </span>
                       </div>
+                      <span className="text-xs text-slate-400 block mt-0.5">{cat.descripcion}</span>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'reglas',
+                header: 'Reglas de Campos Requeridos',
+                render: (cat) => (
+                  <div className="flex flex-wrap gap-1.5 max-w-xs">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded border font-medium ${
+                        cat.requiereReferencia
+                          ? 'bg-amber-950/50 text-amber-300 border-amber-700/60'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}
+                      title="Indica si al cobrar con sus hijos se exige obligatoriamente número de comprobante o voucher"
+                    >
+                      {cat.requiereReferencia ? '📄 Ref. Obligatoria' : '📄 Ref. Opcional'}
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded border font-medium ${
+                        cat.validaEnCierre
+                          ? 'bg-emerald-950/50 text-emerald-300 border-emerald-700/60'
+                          : 'bg-blue-950/40 text-blue-300 border-blue-700/50'
+                      }`}
+                      title="Indica si valida en el arqueo del turno de caja o genera cuenta por cobrar comercial"
+                    >
+                      {cat.validaEnCierre ? '🏦 Valida en Arqueo' : '⏱️ Cartera / CxC'}
+                    </span>
+                    {cat.permiteCredito && (
+                      <span className="text-[10px] px-2 py-0.5 rounded border font-medium bg-purple-950/50 text-purple-300 border-purple-700/60">
+                        📅 Plazo en Días
+                      </span>
+                    )}
+                    {cat.requiereProveedor && (
+                      <span className="text-[10px] px-2 py-0.5 rounded border font-medium bg-cyan-950/50 text-cyan-300 border-cyan-700/60">
+                        🏢 Bold / Red
+                      </span>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                ),
+              },
+              {
+                key: 'hijos',
+                header: 'Instrumentos Hijos',
+                render: (cat) => {
+                  const activos = cat.instrumentos.filter((i) => i.activo).length;
+                  const total = cat.instrumentos.length;
+                  return (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
+                            activos > 0
+                              ? 'bg-slate-800 text-emerald-400 border border-slate-700'
+                              : 'bg-red-950/40 text-red-400 border border-red-800/40'
+                          }`}
+                        >
+                          {activos} de {total} activos
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {cat.instrumentos.slice(0, 4).map((h) => (
+                          <span
+                            key={h.uuid}
+                            className={`text-[10px] px-1.5 py-0.5 rounded border truncate max-w-[120px] ${
+                              h.activo
+                                ? 'bg-slate-800/90 text-slate-300 border-slate-700'
+                                : 'bg-slate-900/40 text-slate-500 border-slate-800 line-through'
+                            }`}
+                            title={`${h.nombre} (${h.activo ? 'Activo' : 'Inactivo'})`}
+                          >
+                            {h.nombre}
+                          </span>
+                        ))}
+                        {cat.instrumentos.length > 4 && (
+                          <span className="text-[10px] text-slate-400 px-1 py-0.5 font-mono">
+                            +{cat.instrumentos.length - 4} más
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                },
+              },
+              {
+                key: 'estado',
+                header: 'Estado',
+                render: (cat) => (
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleCategoriaActiva(cat)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        cat.activo ? 'bg-emerald-600' : 'bg-slate-700'
+                      }`}
+                      title={`Clic para ${cat.activo ? 'Inactivar' : 'Activar'} la forma de pago`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          cat.activo ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <Badge variant={cat.activo ? 'success' : 'neutral'}>
+                      {cat.activo ? 'Activa' : 'Inactiva'}
+                    </Badge>
+                  </div>
+                ),
+              },
+              {
+                key: 'acciones',
+                header: 'Acciones',
+                render: (cat) => (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleAbrirGestionHijos(cat)}
+                      className="text-xs flex items-center gap-1.5 bg-indigo-950/40 hover:bg-indigo-900/50 text-indigo-300 border border-indigo-800/60"
+                      title="Ver y administrar instrumentos hijos"
+                    >
+                      <span>🌿</span> Hijos ({cat.instrumentos.length})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleAbrirEditarCategoria(cat)}
+                      className="text-xs flex items-center gap-1 bg-slate-800 hover:bg-slate-700 border-slate-700"
+                      title="Configurar reglas de campos y requerimientos"
+                    >
+                      <span>⚙️</span> Reglas
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       )}
 
@@ -3730,102 +3895,455 @@ export const ModuloAdmin: React.FC<ModuloAdminProps> = ({
         </form>
       </Modal>
 
-      {/* Modal 9: Nuevo Instrumento de Pago */}
+      {/* Modal 9.1: Configuración de Reglas de la Forma de Pago Principal */}
+      <Modal
+        isOpen={mostrarModalEditarCategoria}
+        onClose={() => setMostrarModalEditarCategoria(false)}
+        title={categoriaEditando ? `Reglas & Configuración: ${categoriaEditando.nombre}` : 'Configuración de Forma de Pago'}
+        size="md"
+      >
+        {categoriaEditando && (
+          <form onSubmit={handleGuardarReglasCategoria} className="space-y-4 p-4">
+            <div className="flex items-center gap-3 p-3 bg-slate-900/90 border border-slate-800 rounded-xl">
+              <span className="text-3xl">{categoriaEditando.icono || '💳'}</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-white text-base">{categoriaEditando.nombre}</span>
+                  <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
+                    {categoriaEditando.codigo}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-400 mt-0.5 block">{categoriaEditando.descripcion}</span>
+              </div>
+            </div>
+
+            <Input
+              label="Nombre de la Forma de Pago Principal"
+              required
+              value={categoriaEditando.nombre}
+              onChange={(e) => setCategoriaEditando({ ...categoriaEditando, nombre: e.target.value })}
+              fullWidth
+            />
+
+            <Input
+              label="Descripción / Guía para Operación"
+              value={categoriaEditando.descripcion || ''}
+              onChange={(e) => setCategoriaEditando({ ...categoriaEditando, descripcion: e.target.value })}
+              fullWidth
+            />
+
+            <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg">
+              <div>
+                <span className="text-xs font-semibold text-white block">Estado de la Forma Principal</span>
+                <span className="text-[11px] text-slate-400">Si se inactiva, ningún instrumento de esta forma estará disponible para cobros</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCategoriaEditando({ ...categoriaEditando, activo: !categoriaEditando.activo })}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  categoriaEditando.activo ? 'bg-emerald-600' : 'bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    categoriaEditando.activo ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* SECCIÓN DE REGLAS DINÁMICAS HEREDADAS */}
+            <div className="border border-indigo-950/80 bg-indigo-950/20 rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">⚙️</span>
+                <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
+                  Reglas de Campos Obligatorios (Heredadas para Hijos)
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Estas reglas aplican dinámicamente a todos los instrumentos hijos pertenecientes a esta forma principal y validan su captura en cobros:
+              </p>
+
+              <div className="space-y-2.5 pt-1">
+                <label className="flex items-start gap-3 p-2 bg-slate-900/80 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={categoriaEditando.requiereReferencia}
+                    onChange={(e) => setCategoriaEditando({ ...categoriaEditando, requiereReferencia: e.target.checked })}
+                    className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-white block">
+                      Exigir número de comprobante, voucher o referencia obligatoria
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Al cobrar, el cajero debe ingresar el consecutivo bancario o número de aprobación.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-2 bg-slate-900/80 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={categoriaEditando.validaEnCierre}
+                    onChange={(e) => setCategoriaEditando({ ...categoriaEditando, validaEnCierre: e.target.checked })}
+                    className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-white block">
+                      Validar y conciliar en el Arqueo / Cierre de Caja del Turno
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Indica si los cobros de esta forma deben registrarse en el cuadre físico/electrónico de caja (desactivar para cuentas por cobrar comerciales).
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-2 bg-slate-900/80 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={categoriaEditando.permiteCredito}
+                    onChange={(e) => setCategoriaEditando({ ...categoriaEditando, permiteCredito: e.target.checked })}
+                    className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-white block">
+                      Habilitar plazos de Crédito Comercial (Cuentas por Cobrar)
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Permite asociar plazos en días (15, 30, 60, 90, 120 días) para cálculo de cartera y vencimientos.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-2 bg-slate-900/80 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800/60 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(categoriaEditando.requiereProveedor)}
+                    onChange={(e) => setCategoriaEditando({ ...categoriaEditando, requiereProveedor: e.target.checked })}
+                    className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-0 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-white block">
+                      Exigir proveedor / red de procesamiento (ej: Bold, Redeban)
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Habilita la asignación de la entidad o pasarela que procesa la transacción.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button variant="secondary" type="button" onClick={() => setMostrarModalEditarCategoria(false)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" type="submit" disabled={guardandoMedio}>
+                {guardandoMedio ? 'Guardando...' : 'Guardar Reglas'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Modal 9.2: Gestión de Instrumentos Hijos de la Categoría */}
+      <Modal
+        isOpen={mostrarModalGestionHijos}
+        onClose={() => setMostrarModalGestionHijos(false)}
+        title={categoriaParaHijos ? `Medios Hijos: ${categoriaParaHijos.nombre}` : 'Instrumentos Hijos'}
+        size="xl"
+      >
+        {categoriaParaHijos && (
+          <div className="space-y-4 p-4">
+            {/* Cabecera con resumen y botón + Nuevo */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{categoriaParaHijos.icono || '💳'}</span>
+                <div>
+                  <h4 className="font-bold text-white text-sm">
+                    Instrumentos habilitados para {categoriaParaHijos.nombre}
+                  </h4>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="text-[11px] text-slate-400">
+                      Reglas heredadas:
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                      {categoriaParaHijos.requiereReferencia ? 'Exige comprobante' : 'Sin comprobante'}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                      {categoriaParaHijos.validaEnCierre ? 'Valida en caja' : 'Cartera CxC'}
+                    </span>
+                    {categoriaParaHijos.permiteCredito && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 font-mono">
+                        Plazo en días
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => handleAbrirCrearHijo(categoriaParaHijos.codigo)}
+                className="text-xs flex items-center gap-1.5 shadow-md"
+              >
+                <span>+</span> Nuevo Medio Hijo
+              </Button>
+            </div>
+
+            {/* Listado de hijos */}
+            {categoriaParaHijos.instrumentos.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 bg-slate-950/40 border border-dashed border-slate-800 rounded-xl">
+                No hay instrumentos hijos registrados para esta categoría. Haga clic en "+ Nuevo Medio Hijo" para registrar el primero.
+              </div>
+            ) : (
+              <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60 shadow-inner">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">Código</th>
+                      <th className="py-2.5 px-3">Nombre del Medio</th>
+                      <th className="py-2.5 px-3">Proveedor / Plazo</th>
+                      <th className="py-2.5 px-3 text-center">Por Defecto</th>
+                      <th className="py-2.5 px-3 text-center">Estado</th>
+                      <th className="py-2.5 px-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {categoriaParaHijos.instrumentos.map((inst) => {
+                      const esPorDefecto = Boolean(inst.isDefault || inst.esPorDefecto);
+                      return (
+                        <tr
+                          key={inst.uuid}
+                          className={`hover:bg-slate-900/60 transition-colors ${
+                            !inst.activo ? 'opacity-60 bg-slate-950/40' : ''
+                          }`}
+                        >
+                          <td className="py-2.5 px-3 font-mono font-bold text-amber-300">
+                            {inst.codigo}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="font-semibold text-white block">{inst.nombre}</span>
+                            <span className="text-[10px] text-slate-400">
+                              {inst.requiereReferencia ? 'Exige comprobante / voucher' : 'Cobro directo'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {inst.proveedor && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+                                  {inst.proveedor}
+                                </span>
+                              )}
+                              {inst.diasCredito !== undefined && inst.diasCredito > 0 && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-950 text-yellow-300 border border-yellow-800">
+                                  ⏱ {inst.diasCredito} días
+                                </span>
+                              )}
+                              {!inst.proveedor && inst.diasCredito === undefined && (
+                                <span className="text-slate-500 text-[11px]">-</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            {esPorDefecto ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700/60 inline-flex items-center gap-1">
+                                ★ Predeterminado
+                              </span>
+                            ) : (
+                              inst.activo && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetDefaultInstrumento(inst)}
+                                  className="text-[11px] text-slate-400 hover:text-emerald-400 hover:underline cursor-pointer"
+                                  title="Marcar como predeterminado para cobros rápidos"
+                                >
+                                  Establecer
+                                </button>
+                              )
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleActivoInstrumento(inst)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  inst.activo ? 'bg-emerald-600' : 'bg-slate-700'
+                                }`}
+                                title={`Clic para ${inst.activo ? 'Inactivar' : 'Activar'} este medio de pago`}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                                    inst.activo ? 'translate-x-4' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                              <span className={`text-[11px] font-semibold ${inst.activo ? 'text-emerald-400' : 'text-slate-500'}`}>
+                                {inst.activo ? 'Activo' : 'Inactivo'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleAbrirEditarHijo(inst)}
+                                className="p-1 px-2 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+                                title="Editar nombre o propiedades"
+                              >
+                                ✏️ Editar
+                              </button>
+                              {!esPorDefecto && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleEliminarInstrumento(inst)}
+                                  className="p-1 px-2 text-[11px] rounded bg-red-950/40 hover:bg-red-900/50 text-red-300 border border-red-800/50 cursor-pointer"
+                                  title="Inactivar medio de pago"
+                                >
+                                  Inactivar
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end">
+              <Button variant="secondary" onClick={() => setMostrarModalGestionHijos(false)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal 9.3: Crear o Editar Instrumento Hijo */}
       <Modal
         isOpen={mostrarModalInstrumento}
         onClose={() => setMostrarModalInstrumento(false)}
-        title="Nuevo Instrumento de Pago"
+        title={instrumentoEditando ? `Editar Medio: ${instrumentoEditando.nombre}` : 'Nuevo Instrumento de Pago'}
         size="md"
       >
-        <form onSubmit={handleCrearInstrumento} className="space-y-4 p-4">
+        <form onSubmit={handleGuardarInstrumento} className="space-y-4 p-4">
           <Select
-            label="Categoría Base (Rama del Árbol)"
-            value={nuevoInstrumento.codigoCategoria}
+            label="Categoría Principal (Forma Padre)"
+            value={formInstrumento.codigoCategoria}
             onChange={(val: any) => {
               const v = typeof val === 'string' ? val : val?.target?.value;
-              setNuevoInstrumento({
-                ...nuevoInstrumento,
+              const catObj = mediosPagoCategorias.find((c) => c.codigo === v);
+              setFormInstrumento({
+                ...formInstrumento,
                 codigoCategoria: v,
-                diasCredito: v === 'CREDITO' ? (nuevoInstrumento.diasCredito || 30) : undefined,
-                requiereReferencia: v !== 'EFECTIVO',
+                proveedor: v === 'TRANSFERENCIA' || v === 'TARJETA' ? 'Bold' : '',
+                diasCredito: v === 'CREDITO' ? (formInstrumento.diasCredito || 30) : 0,
+                requiereReferencia: catObj?.requiereReferencia ?? false,
               });
             }}
             options={[
-              { label: 'Efectivo & Caja Menor', value: 'EFECTIVO' },
-              { label: 'Consignación / Transferencia Bancaria', value: 'BANCOS' },
-              { label: 'Tarjeta Débito / Crédito (Datáfono)', value: 'TARJETAS' },
-              { label: 'Billetera Digital (Nequi / Daviplata)', value: 'BILLETERAS' },
-              { label: 'Crédito Comercial (Plazo en Días)', value: 'CREDITO' },
-              { label: 'Otro Medio / Papelería', value: 'OTROS' },
+              { label: 'Efectivo', value: 'EFECTIVO' },
+              { label: 'Transferencia bancaria y Consignaciones', value: 'TRANSFERENCIA' },
+              { label: 'Tarjetas débito y Crédito (Datáfono)', value: 'TARJETA' },
+              { label: 'Créditos comerciales (Cuentas por cobrar)', value: 'CREDITO' },
+              { label: 'Otros (Cheques, etc.)', value: 'OTROS' },
             ]}
             fullWidth
-          />
-          <Input
-            label="Código del Instrumento"
-            required
-            placeholder="Ej: DAVIPLATA, CRED-30D"
-            value={nuevoInstrumento.codigo}
-            onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, codigo: e.target.value.toUpperCase() })}
-            fullWidth
-          />
-          <Input
-            label="Nombre Descriptivo"
-            required
-            placeholder="Ej: Billetera Daviplata, Crédito 30 Días"
-            value={nuevoInstrumento.nombre}
-            onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, nombre: e.target.value })}
-            fullWidth
+            disabled={Boolean(instrumentoEditando)}
           />
 
-          {nuevoInstrumento.codigoCategoria === 'CREDITO' && (
-            <div style={{ background: '#020617', border: '1px solid #334155', borderRadius: '8px', padding: '12px' }} className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              label="Código Único"
+              required
+              placeholder="Ej: BOLD_DATA, CRED_45"
+              value={formInstrumento.codigo}
+              onChange={(e) => setFormInstrumento({ ...formInstrumento, codigo: e.target.value.toUpperCase() })}
+              fullWidth
+              disabled={Boolean(instrumentoEditando)}
+            />
+            <Input
+              label="Nombre del Medio"
+              required
+              placeholder="Ej: Bold Datáfono, Crédito 45 días"
+              value={formInstrumento.nombre}
+              onChange={(e) => setFormInstrumento({ ...formInstrumento, nombre: e.target.value })}
+              fullWidth
+            />
+          </div>
+
+          {(formInstrumento.codigoCategoria === 'TRANSFERENCIA' || formInstrumento.codigoCategoria === 'TARJETA') && (
+            <Input
+              label="Proveedor / Red de Procesamiento"
+              placeholder="Ej: Bold, Redeban, Bancolombia"
+              value={formInstrumento.proveedor}
+              onChange={(e) => setFormInstrumento({ ...formInstrumento, proveedor: e.target.value })}
+              fullWidth
+            />
+          )}
+
+          {formInstrumento.codigoCategoria === 'CREDITO' && (
+            <div className="p-3 bg-yellow-950/30 border border-yellow-800/40 rounded-xl space-y-2">
               <Input
-                label="Días de Crédito Disponibles *"
+                label="Plazo de Crédito Otorgado (en Días) *"
                 type="number"
                 min={1}
                 max={365}
                 required
-                value={nuevoInstrumento.diasCredito ?? 30}
-                onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, diasCredito: parseInt(e.target.value, 10) || 0 })}
+                value={formInstrumento.diasCredito}
+                onChange={(e) => setFormInstrumento({ ...formInstrumento, diasCredito: parseInt(e.target.value, 10) || 0 })}
                 fullWidth
               />
-              <p className="text-[11px] text-amber-300">
-                Define el número máximo de días calendario otorgados al cliente para cancelar el saldo pendiente de la factura.
+              <p className="text-[11px] text-yellow-300">
+                Define el número máximo de días calendario otorgados al cliente para cancelar el saldo pendiente de la cuenta por cobrar.
               </p>
             </div>
           )}
 
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="checkbox"
-              id="reqRef"
-              checked={nuevoInstrumento.requiereReferencia}
-              onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, requiereReferencia: e.target.checked })}
-              className="rounded border-gray-700 text-primary-600 focus:ring-0 cursor-pointer"
-            />
-            <label htmlFor="reqRef" className="text-xs text-gray-300 cursor-pointer">
-              Exige comprobante o referencia de transacción
-            </label>
+          <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg">
+            <div>
+              <span className="text-xs font-semibold text-white block">Estado del Medio</span>
+              <span className="text-[11px] text-slate-400">Si está inactivo no se mostrará para seleccionar en cobros</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormInstrumento({ ...formInstrumento, activo: !formInstrumento.activo })}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                formInstrumento.activo ? 'bg-emerald-600' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  formInstrumento.activo ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
+          <label className="flex items-center gap-2 pt-1 cursor-pointer">
             <input
               type="checkbox"
-              id="isDefaultPm"
-              checked={nuevoInstrumento.isDefault}
-              onChange={(e) => setNuevoInstrumento({ ...nuevoInstrumento, isDefault: e.target.checked })}
-              className="rounded border-gray-700 text-emerald-500 focus:ring-0 cursor-pointer"
+              checked={formInstrumento.isDefault}
+              onChange={(e) => setFormInstrumento({ ...formInstrumento, isDefault: e.target.checked })}
+              className="rounded border-slate-700 text-emerald-500 focus:ring-0 cursor-pointer"
             />
-            <label htmlFor="isDefaultPm" className="text-xs text-emerald-300 font-semibold cursor-pointer">
-              Establecer como forma de pago por defecto (única y predeterminada)
-            </label>
-          </div>
+            <span className="text-xs text-emerald-300 font-semibold">
+              Establecer como medio de pago por defecto (predeterminado para la caja)
+            </span>
+          </label>
+
           <div className="pt-3 flex justify-end gap-2">
             <Button variant="secondary" type="button" onClick={() => setMostrarModalInstrumento(false)}>
               Cancelar
             </Button>
-            <Button variant="primary" type="submit">
-              Crear Instrumento
+            <Button variant="primary" type="submit" disabled={guardandoMedio}>
+              {guardandoMedio ? 'Guardando...' : instrumentoEditando ? 'Actualizar Medio' : 'Crear Medio Hijo'}
             </Button>
           </div>
         </form>

@@ -70,11 +70,12 @@ export default function AdminApprovals({ token }: { token?: string }) {
       setApprovals((prev) => prev.filter((a) => a.id !== actionModal.item.id));
       setActionModal(null);
       await loadApprovals();
-    } catch {
-      // Local optimistic update
-      setApprovals((prev) => prev.filter((a) => a.id !== actionModal.item.id));
-      toast.success(actionModal.type === 'APROBAR' ? 'Aprobado localmente' : 'Rechazado localmente');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      const msg = e?.response?.data?.message || e?.message || 'La solicitud de aprobación ya no está disponible o fue modificada.';
+      toast.error(msg);
       setActionModal(null);
+      await loadApprovals();
     } finally {
       setProcessing(false);
     }

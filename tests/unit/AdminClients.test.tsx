@@ -10,6 +10,17 @@ vi.mock('@/lib/api-client', () => ({
   ]),
 }));
 
+vi.mock('@/services/catalogosApi', () => ({
+  catalogosApi: {
+    getTiposDocumentoIdentidad: vi.fn().mockResolvedValue({
+      tipos: [
+        { uuid: 'doc-cc', codigo: 'CC', nombre: 'Cédula de Ciudadanía', aplicaPersona: 'NATURAL', activo: true },
+        { uuid: 'doc-nit', codigo: 'NIT', nombre: 'NIT / Empresa', aplicaPersona: 'JURIDICA', activo: true },
+      ],
+    }),
+  },
+}));
+
 describe('AdminClients Component', () => {
   it('renders directory title and client list', async () => {
     render(<AdminClients token="test-token" />);

@@ -1398,6 +1398,12 @@ button { cursor: pointer; }
   width: 100%;
 }
 
+.page-content:has(> .list-page-layout),
+.page-content:has(> * > .list-page-layout) {
+  padding: 0 !important;
+  max-width: none !important;
+}
+
 .page-heading {
   display: flex;
   align-items: flex-end;

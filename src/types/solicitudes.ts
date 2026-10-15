@@ -89,6 +89,7 @@ export interface RegistroRapidoClienteRequest {
   numeroDocumento: string;
   nombreRazonSocial: string;
   telefono?: string;
+  email?: string;
 }
 
 export interface AutorizarExcepcionRequest {

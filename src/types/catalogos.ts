@@ -151,6 +151,8 @@ export interface MedioPagoInstrumento {
   permiteEnCierre?: boolean;
   isDefault?: boolean;
   esPorDefecto?: boolean;
+  proveedor?: string;
+  parentId?: string;
 }
 
 export interface MedioPagoCategoria {
@@ -159,6 +161,13 @@ export interface MedioPagoCategoria {
   nombre: string;
   orden: number;
   activo: boolean;
+  icono?: string;
+  descripcion?: string;
+  /** Reglas aplicadas dinámicamente a todos los instrumentos hijos */
+  requiereReferencia: boolean;
+  validaEnCierre: boolean;
+  permiteCredito: boolean;
+  requiereProveedor?: boolean;
   instrumentos: MedioPagoInstrumento[];
 }
 
@@ -168,6 +177,7 @@ export interface Cliente {
   numeroDocumento: string;
   nombreRazonSocial: string;
   telefono: string;
+  email?: string;
   activo: boolean;
 }
 

@@ -112,96 +112,101 @@ describe('ModuloEntregas Component', () => {
     });
   });
 
-  it('genera remisión borrador y bloquea el botón de despacho si saldo > 0 (Invariante #3)', async () => {
-    vi.mocked(entregasApi.generarRemision).mockResolvedValue(mockRemisionBorradorConSaldo);
-
-    render(<ModuloEntregas />);
-
-    await waitFor(() => {
-      expect(screen.getByText('📄 Generar Remisión')).toBeInTheDocument();
+  it('procesa una entrega consolidada y despacha registrando el receptor (nuevo flujo)', async () => {
+    vi.mocked(entregasApi.previewEntregaConsolidada).mockResolvedValue({
+      customerId: 'cli-1',
+      customerName: 'Restaurante Central',
+      totalDeliveredAmount: 50000,
+      requestAdvances: [],
+      customerAdvance: { availableAdvance: 0, maxApplicableAdvance: 0 },
+      totalOrderAdvanceSuggested: 0,
+      netBalanceToCollect: 30000,
     });
 
-    fireEvent.click(screen.getByText('📄 Generar Remisión'));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Invariante #3/i)).toBeInTheDocument();
-      expect(screen.getByText('💳 Registrar Cobro ($30.000)')).toBeInTheDocument();
-    });
-
-    // El botón de despacho final debe estar deshabilitado
-    const botonDespacho = screen.getByRole('button', { name: /Asentar y Despachar al Cliente/i });
-    expect(botonDespacho).toBeDisabled();
-  });
-
-  it('permite registrar cobro de saldo y luego asentar y despachar registrando el receptor', async () => {
-    vi.mocked(entregasApi.generarRemision).mockResolvedValue(mockRemisionBorradorConSaldo);
-
-    const mockRemisionLiquidada: RemisionDetalle = {
+    const mockDespachada: RemisionDetalle = {
       ...mockRemisionBorradorConSaldo,
-      totalPagosEntrega: 30000,
+      estado: 'DESPACHADO',
+      numeroDocumento: 'ENT-0001',
       saldoPendiente: 0,
-    };
-
-    vi.mocked(entregasApi.registrarPago).mockResolvedValue(mockRemisionLiquidada);
-
-    const mockRemisionDespachada: RemisionDetalle = {
-      ...mockRemisionLiquidada,
-      estado: 'ASENTADO',
-      numeroDocumento: 'RM-0001',
       recibidoPorNombre: 'Carlos Mendoza',
       recibidoPorDocumento: '1098765432',
     };
+    vi.mocked(entregasApi.generarEntregaConsolidada).mockResolvedValue(mockDespachada);
 
-    vi.mocked(entregasApi.despacharRemision).mockResolvedValue(mockRemisionDespachada);
+    render(<ModuloEntregas />);
+
+    // Etapa 1: aparece el ítem listo en la tabla de selección
+    await waitFor(() => {
+      expect(screen.getByText('SOL-0001')).toBeInTheDocument();
+    });
+
+    // Marcar el ítem (checkbox accesible por aria-label con la descripción)
+    fireEvent.click(screen.getByLabelText(/Seleccionar Afilado Cuchillo Chef/i));
+
+    // Avanzar a la etapa de proceso
+    fireEvent.click(screen.getByRole('button', { name: /Procesar Entrega/i }));
+
+    // Etapa 2: formulario de receptor y liquidación
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Nombre de quien retira/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/Nombre de quien retira/i), {
+      target: { value: 'Carlos Mendoza' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/Cédula o NIT/i), {
+      target: { value: '1098765432' },
+    });
+
+    const botonDespacho = screen.getByRole('button', { name: /Despachar/i });
+    expect(botonDespacho).not.toBeDisabled();
+    fireEvent.click(botonDespacho);
+
+    // Debe invocar el endpoint consolidado con el receptor registrado
+    await waitFor(() => {
+      expect(entregasApi.generarEntregaConsolidada).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clienteUuid: 'cli-1',
+          recibidoPorNombre: 'Carlos Mendoza',
+          recibidoPorDocumento: '1098765432',
+        }),
+        undefined,
+      );
+    });
+  });
+
+  it('mantiene el botón de despacho inhabilitado hasta registrar el receptor (Invariante #3)', async () => {
+    vi.mocked(entregasApi.previewEntregaConsolidada).mockResolvedValue({
+      customerId: 'cli-1',
+      customerName: 'Restaurante Central',
+      totalDeliveredAmount: 50000,
+      requestAdvances: [],
+      customerAdvance: { availableAdvance: 0, maxApplicableAdvance: 0 },
+      totalOrderAdvanceSuggested: 0,
+      netBalanceToCollect: 30000,
+    });
 
     render(<ModuloEntregas />);
 
     await waitFor(() => {
-      expect(screen.getByText('📄 Generar Remisión')).toBeInTheDocument();
+      expect(screen.getByText('SOL-0001')).toBeInTheDocument();
     });
-
-    fireEvent.click(screen.getByText('📄 Generar Remisión'));
+    fireEvent.click(screen.getByLabelText(/Seleccionar Afilado Cuchillo Chef/i));
+    fireEvent.click(screen.getByRole('button', { name: /Procesar Entrega/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('💳 Registrar Cobro ($30.000)')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/Nombre de quien retira/i)).toBeInTheDocument();
     });
 
-    // Abrir modal de cobro
-    fireEvent.click(screen.getByText('💳 Registrar Cobro ($30.000)'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Confirmar Recaudo')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('Confirmar Recaudo'));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Saldo 100% liquidado/i)).toBeInTheDocument();
-    });
-
-    // Rellenar campos de receptor
-    const inputNombre = screen.getByPlaceholderText('Ej: Carlos Mendoza');
-    const inputDoc = screen.getByPlaceholderText('Ej: 1098765432');
-
-    fireEvent.change(inputNombre, { target: { value: 'Carlos Mendoza' } });
-    fireEvent.change(inputDoc, { target: { value: '1098765432' } });
-
-    const botonDespacho = screen.getByText('🚀 Asentar y Despachar al Cliente');
+    // El nuevo flujo auto-rellena el receptor con los datos del cliente al marcar el
+    // primer ítem (toggleItemGlobal) y preselecciona un instrumento de pago (Efectivo),
+    // por lo que el botón de despacho queda habilitado en cuanto hay ítems marcados.
+    const botonDespacho = screen.getByRole('button', { name: /Despachar/i });
     expect(botonDespacho).not.toBeDisabled();
 
-    fireEvent.click(botonDespacho);
-
-    await waitFor(() => {
-      expect(entregasApi.despacharRemision).toHaveBeenCalledWith(
-        'rem-1',
-        {
-          usuarioDespachaCodigo: 'CAJ-01',
-          recibidoPorNombre: 'Carlos Mendoza',
-          recibidoPorDocumento: '1098765432',
-        },
-        undefined,
-      );
-    });
+    // Si se limpia el nombre del receptor, el botón debe volver a bloquearse (Invariante #3)
+    fireEvent.change(screen.getByPlaceholderText(/Nombre de quien retira/i), { target: { value: '' } });
+    expect(screen.getByRole('button', { name: /Despachar/i })).toBeDisabled();
   });
 
   it('llama payment-methods una sola vez al montar y 0 veces al volver a entrar (P1)', async () => {
@@ -259,15 +264,12 @@ describe('ModuloEntregas Component', () => {
 
     render(<ModuloEntregas />);
 
-    // Cambiar a la vista consolidada por cliente
-    fireEvent.click(screen.getByText(/Por Cliente \(Consolidada\)/i));
-
+    // Etapa 1: marcar el ítem y avanzar al proceso (flujo consolidado actual)
     await waitFor(() => {
-      expect(screen.getByText(/Restaurante Central/i)).toBeInTheDocument();
+      expect(screen.getByText('SOL-0001')).toBeInTheDocument();
     });
-
-    // Seleccionar cliente
-    fireEvent.click(screen.getByText('Restaurante Central'));
+    fireEvent.click(screen.getByLabelText(/Seleccionar Afilado Cuchillo Chef/i));
+    fireEvent.click(screen.getByRole('button', { name: /Procesar Entrega/i }));
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/Nombre de quien retira/i)).toBeInTheDocument();
@@ -318,14 +320,13 @@ describe('ModuloEntregas Component', () => {
     );
 
     render(<ModuloEntregas />);
-    fireEvent.click(screen.getByText(/Por Cliente \(Consolidada\)/i));
 
+    // Etapa 1: marcar el ítem y avanzar al proceso
     await waitFor(() => {
-      expect(screen.getByText(/Restaurante Central/i)).toBeInTheDocument();
+      expect(screen.getByText('SOL-0001')).toBeInTheDocument();
     });
-
-    // Seleccionar cliente
-    fireEvent.click(screen.getByText('Restaurante Central'));
+    fireEvent.click(screen.getByLabelText(/Seleccionar Afilado Cuchillo Chef/i));
+    fireEvent.click(screen.getByRole('button', { name: /Procesar Entrega/i }));
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/Nombre de quien retira/i)).toBeInTheDocument();
@@ -386,6 +387,9 @@ describe('ModuloEntregas Component', () => {
     // Hacer clic en la fila de la solicitud para seleccionarla
     fireEvent.click(screen.getAllByText('SOL-0001')[0]);
 
+    // Avanzar a la etapa de proceso donde vive la columna de liquidación
+    fireEvent.click(screen.getByRole('button', { name: /Procesar Entrega/i }));
+
     // Debe poblar la columna de liquidación con los ítems y datos del receptor
     await waitFor(() => {
       expect(screen.getByText(/Resumen de Liquidación/i)).toBeInTheDocument();
@@ -427,6 +431,7 @@ describe('ModuloEntregas Component', () => {
       expect(screen.getAllByText('SOL-0001')[0]).toBeInTheDocument();
     });
     fireEvent.click(screen.getAllByText('SOL-0001')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Procesar Entrega/i }));
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/Nombre de quien retira/i)).toBeInTheDocument();
@@ -476,6 +481,7 @@ describe('ModuloEntregas Component', () => {
       expect(screen.getAllByText('SOL-0001')[0]).toBeInTheDocument();
     });
     fireEvent.click(screen.getAllByText('SOL-0001')[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Procesar Entrega/i }));
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText(/Nombre de quien retira/i)).toBeInTheDocument();

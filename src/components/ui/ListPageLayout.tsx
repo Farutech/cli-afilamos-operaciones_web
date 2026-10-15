@@ -69,7 +69,7 @@ export const ListPageLayout: React.FC<ListPageLayoutProps> = ({
   footer,
 }) => {
   return (
-    <div className="w-full space-y-4">
+    <div className="list-page-layout w-full space-y-4 px-6 md:px-9 py-6 max-w-[1720px] mx-auto">
       {/* 1. Encabezado de Página */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2 border-b border-slate-800/80">
         <div className="space-y-1">

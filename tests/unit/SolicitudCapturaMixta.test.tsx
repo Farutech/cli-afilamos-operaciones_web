@@ -156,12 +156,12 @@ describe('SolicitudCapturaMixta Component', () => {
     expect(alertInvariante1).toHaveTextContent(/Invariante #1/i)
     expect(alertInvariante1).toHaveTextContent(/debe estar pagado al 100%/i)
 
-    // El botón de asentar debe estar deshabilitado
-    const asentarBtn = screen.getByRole('button', { name: /Asentar Solicitud/i })
+    // El botón de asentar (Confirmar Solicitud) debe estar deshabilitado
+    const asentarBtn = screen.getByRole('button', { name: /Confirmar Solicitud/i })
     expect(asentarBtn).toBeDisabled()
 
     // Autorizar VoBo de supervisor para asentar con excepción de inventario
-    fireEvent.click(screen.getByRole('button', { name: /Solicitar VoBo Supervisor/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Aprobar Inmediatamente/i }))
     fireEvent.change(screen.getByLabelText(/Código de Supervisor/i), { target: { value: 'SUPERVISOR_01' } })
     fireEvent.change(screen.getByLabelText(/PIN de Autorización/i), { target: { value: '9999' } })
     fireEvent.change(screen.getByLabelText(/Justificación Obligatoria/i), { target: { value: 'Entrega autorizada por gerencia' } })
@@ -197,7 +197,7 @@ describe('SolicitudCapturaMixta Component', () => {
 
     // Debe mostrar advertencia de anticipo insuficiente (40% de 20.000 = 8.000)
     expect(screen.getByText(/Anticipo Insuficiente/i)).toBeInTheDocument()
-    const asentarBtn = screen.getByRole('button', { name: /Asentar Solicitud/i })
+    const asentarBtn = screen.getByRole('button', { name: /Confirmar Solicitud/i })
     expect(asentarBtn).toBeDisabled()
 
     // Imputar el anticipo suficiente
@@ -231,7 +231,7 @@ describe('SolicitudCapturaMixta Component', () => {
     const inputAnticipo = screen.getByLabelText(/Anticipo para Afilado Cuchillo/i)
     fireEvent.change(inputAnticipo, { target: { value: '5000' } })
 
-    const asentarBtn = screen.getByRole('button', { name: /Asentar Solicitud/i })
+    const asentarBtn = screen.getByRole('button', { name: /Confirmar Solicitud/i })
     expect(asentarBtn).toBeDisabled()
 
     // Solicitar y aprobar VoBo de Supervisor (para autorizar el menor monto de anticipo de 5000 en vez de 8000)
@@ -272,7 +272,7 @@ describe('SolicitudCapturaMixta Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /\+ Agregar Línea/i }))
 
     // Abrir modal de VoBo
-    fireEvent.click(screen.getByRole('button', { name: /Solicitar VoBo Supervisor/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Aprobar Inmediatamente/i }))
 
     expect(screen.getByText('VoBo Excepción Anticipo')).toBeInTheDocument()
 
@@ -288,7 +288,7 @@ describe('SolicitudCapturaMixta Component', () => {
     })
 
     // Botón de asentar ahora habilitado sin haber pagado anticipo
-    const asentarBtn = screen.getByRole('button', { name: /Asentar Solicitud/i })
+    const asentarBtn = screen.getByRole('button', { name: /Confirmar Solicitud/i })
     expect(asentarBtn).not.toBeDisabled()
   })
 
@@ -304,7 +304,7 @@ describe('SolicitudCapturaMixta Component', () => {
 
     // Cabecera: Título y Botón Registrar Abono
     expect(screen.getByText('MEDIOS DE PAGO Y ABONOS DE LA SOLICITUD')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /\+ Registrar Abono/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Registrar Abono/i })).toBeInTheDocument()
 
     // Fila 1: Instrumento de pago y Monto
     expect(screen.getByLabelText(/Instrumento de pago/i)).toBeInTheDocument()

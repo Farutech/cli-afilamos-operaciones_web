@@ -5,7 +5,9 @@ import { ItemSelector } from '../catalogos/ItemSelector';
 import { ItemBuscarModal } from '../catalogos/ItemBuscarModal';
 import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
 import { ClienteBuscarModal } from '../clientes/ClienteBuscarModal';
+import { PanelFormaPago } from '@/components/ui';
 import { catalogosApi } from '../../services/catalogosApi';
+import { aprobacionesApi } from '../../services/aprobacionesApi';
 import { formatearNumeroDocumento } from '../../utils/documentFormat';
 import { Edit2, Trash2, Eye } from 'lucide-react';
 import type {
@@ -97,6 +99,7 @@ interface SolicitudCapturaMixtaProps {
     pagosAbono?: PagoDistribucionLocal[];
   } | null;
   onCancelarEdicion?: () => void;
+  onClienteCreado?: (cliente: Cliente) => void;
 }
 
 interface AnticipoInputProps {
@@ -162,6 +165,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   loading = false,
   solicitudInicial = null,
   onCancelarEdicion,
+  onClienteCreado: onClienteCreadoProp,
 }) => {
   const [clientes, setClientes] = useState<Cliente[]>(clientesIniciales);
   const [selectedCanal, setSelectedCanal] = useState<string>(
@@ -548,6 +552,19 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const [voboExcepcionAnticipo, setVoboExcepcionAnticipo] = useState(false);
   const [voboExcepcionInventario, setVoboExcepcionInventario] = useState(false);
   const [voboNotaResumen, setVoboNotaResumen] = useState<string | null>(null);
+  const [enviadoAprobacionRemota, setEnviadoAprobacionRemota] = useState(false);
+  const [enviandoAprobacion, setEnviandoAprobacion] = useState(false);
+
+  const invalidarVoBoSiAplica = (motivo: string) => {
+    if (voboAutorizado || voboExcepcionAnticipo || voboExcepcionInventario || enviadoAprobacionRemota) {
+      setVoboAutorizado(false);
+      setVoboExcepcionAnticipo(false);
+      setVoboExcepcionInventario(false);
+      setVoboNotaResumen(null);
+      setEnviadoAprobacionRemota(false);
+      toast.warning(`La aprobación previa fue invalidada porque la solicitud fue modificada (${motivo}). Si requiere excepción, solicite un nuevo VoBo.`);
+    }
+  };
 
   // Totales financieros consistentes (basados exclusivamente en los pagos y anticipos reales)
   const totalAbonado = useMemo(() => pagosAbono.reduce((acc, p) => acc + p.monto, 0), [pagosAbono]);
@@ -633,36 +650,6 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     !voboAutorizado;
 
   const requiereVoBo = (inventarioImpago || anticipoInsuficiente) && !voboAutorizado;
-
-  // Manejador de abonos con validación estricta de saldo pendiente
-  const handleAgregarPagoAbono = () => {
-    const monto = Number(montoAbonoInput);
-    if (!monto || monto <= 0) return;
-    const medio = mediosPago.find((m) => m.uuid === medioSeleccionadoUuid) || mediosPago[0];
-    if (!medio) return;
-    if (saldoPendiente > 0 && monto > saldoPendiente) {
-      toast.error(`El monto no puede superar el saldo pendiente ($${saldoPendiente.toLocaleString()})`);
-      return;
-    }
-
-    const nuevoPago: PagoDistribucionLocal = {
-      idTemp: `pago-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      instrumentoUuid: medio.uuid,
-      instrumentoCodigo: medio.codigo,
-      instrumentoNombre: medio.nombre,
-      monto,
-      referencia: referenciaAbonoInput.trim(),
-    };
-    setPagosAbono((prev) => [...prev, nuevoPago]);
-    setMontoAbonoInput('');
-    setReferenciaAbonoInput('');
-    setObservacionesPagoInput('');
-    toast.success(`Abono de $${monto.toLocaleString()} registrado`);
-  };
-
-  const handleEliminarPagoAbono = (idTemp: string) => {
-    setPagosAbono((prev) => prev.filter((p) => p.idTemp !== idTemp));
-  };
 
   // Abrir modal de nuevo registro
   const handleAbrirNuevoRegistro = () => {
@@ -797,8 +784,10 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     if (lineaEditandoIdTemp) {
       setLineas((prev) => prev.map((l) => (l.idTemp === lineaEditandoIdTemp ? nuevaLinea : l)));
       setLineaEditandoIdTemp(null);
+      invalidarVoBoSiAplica('Línea editada');
     } else {
       setLineas((prev) => [...prev, nuevaLinea]);
+      invalidarVoBoSiAplica('Nueva línea agregada');
     }
 
     // Resetear formulario y cerrar modal
@@ -840,6 +829,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
 
   const handleEliminarLinea = (idTemp: string) => {
     setLineas((prev) => prev.filter((l) => l.idTemp !== idTemp));
+    invalidarVoBoSiAplica('Línea eliminada');
   };
 
   const handleActualizarAnticipoLinea = (idTemp: string, monto: number) => {
@@ -852,6 +842,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         return l;
       })
     );
+    invalidarVoBoSiAplica('Anticipo de línea modificado');
   };
 
   const handleClienteCreado = (nuevo: Cliente) => {
@@ -859,6 +850,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     setSelectedCliente(nuevo.uuid);
     setClienteSearchQuery(nuevo.nombreRazonSocial);
     setIsClienteDropdownOpen(false);
+    onClienteCreadoProp?.(nuevo);
   };
 
   const handleAprobarVoBo = (e: React.FormEvent) => {
@@ -1761,148 +1753,74 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       {/* ========================================================================= */}
       <Card>
         <div className="solicitud-pago-totales-grid">
-          {/* LADO IZQUIERDO: MEDIOS DE PAGO Y ABONOS */}
+          {/* LADO IZQUIERDO: MEDIOS DE PAGO Y ABONOS (COMPONENTE CANÓNICO REUTILIZABLE) */}
           <div className="pago-abonos-container">
-            {/* Cabecera de Medios de Pago */}
-            <div className="pago-abonos-header">
-              <h4 className="pago-abonos-title">
-                MEDIOS DE PAGO Y ABONOS DE LA SOLICITUD
-              </h4>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={handleAgregarPagoAbono}
-                disabled={
-                  !montoAbonoInput ||
-                  Number(montoAbonoInput) <= 0 ||
-                  (saldoPendiente > 0 && Number(montoAbonoInput) > saldoPendiente)
+            <PanelFormaPago
+              title="MEDIOS DE PAGO Y ABONOS DE LA SOLICITUD"
+              subtitulo="Seleccione el medio canónico e ingrese los anticipos o abonos del documento"
+              totalDocumento={totalNeto}
+              totalInventario={totalInventario}
+              totalServicios={totalServicios}
+              anticipoMinimoRequerido={totalMinimoAnticiposExigido}
+              abonosHistoricos={
+                (solicitudInicial as any)?.abonosHistoricos ||
+                ((solicitudInicial as any)?.totalAnticiposImputados > 0
+                  ? [
+                      {
+                        id: 'abono-previo-1',
+                        instrumentoNombre: 'Anticipo Previo Registrado',
+                        monto: (solicitudInicial as any).totalAnticiposImputados,
+                        referencia: 'Documento original',
+                      },
+                    ]
+                  : [])
+              }
+              pagos={pagosAbono.map((p) => ({
+                idTemp: p.idTemp,
+                instrumentoUuid: p.instrumentoUuid,
+                instrumentoCodigo: p.instrumentoCodigo,
+                instrumentoNombre: p.instrumentoNombre,
+                monto: p.monto,
+                referencia: p.referencia,
+              }))}
+              onChangePagos={(nuevos) => {
+                setPagosAbono(
+                  nuevos.map((p) => ({
+                    idTemp: p.idTemp,
+                    instrumentoUuid: p.instrumentoUuid,
+                    instrumentoCodigo: p.instrumentoCodigo,
+                    instrumentoNombre: p.instrumentoNombre,
+                    monto: p.monto,
+                    referencia: p.referencia || '',
+                  }))
+                );
+                invalidarVoBoSiAplica('Pagos modificados');
+              }}
+              montoInput={String(montoAbonoInput || '')}
+              onChangeMontoInput={(val) => {
+                if (val === '') {
+                  setMontoAbonoInput('');
+                } else {
+                  const num = Number(val);
+                  setMontoAbonoInput(isNaN(num) ? '' : num);
                 }
-                className="pago-abono-btn"
-              >
-                + Registrar Abono
-              </Button>
-            </div>
-
-            {/* Fila 1: Instrumento de pago (~70%) y Monto (~30%) EXACTAMENTE EN LA MISMA LÍNEA */}
-            <div className="pago-row-instrumento-monto">
-              <div className="pago-instrumento-col">
-                <label htmlFor="instrumento-pago-select" className="pago-field-label">
-                  Instrumento de pago *
-                </label>
-                <select
-                  id="instrumento-pago-select"
-                  aria-label="Instrumento de pago"
-                  value={medioSeleccionadoUuid}
-                  onChange={(e) => setMedioSeleccionadoUuid(e.target.value)}
-                  className="pago-field-control cursor-pointer"
-                >
-                  {mediosPago.map((m) => (
-                    <option key={m.uuid} value={m.uuid}>
-                      {m.codigo} - {m.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pago-monto-col">
-                <label htmlFor="monto-abono-input" className="pago-field-label">
-                  Monto *
-                </label>
-                <input
-                  id="monto-abono-input"
-                  aria-label="Monto"
-                  type="number"
-                  min={0}
-                  step={1000}
-                  value={montoAbonoInput}
-                  onChange={(e) => {
-                    const valStr = e.target.value;
-                    if (valStr === '') {
-                      setMontoAbonoInput('');
-                      return;
-                    }
-                    const val = Number(valStr);
-                    setMontoAbonoInput(isNaN(val) ? '' : Math.max(0, val));
-                  }}
-                  placeholder="0"
-                  className="pago-field-control font-mono font-bold"
-                />
-              </div>
-            </div>
-
-            {/* Fila 2: Referencia / Comprobante (Ancho completo) */}
-            <div className="pago-field-group">
-              <label htmlFor="referencia-abono-input" className="pago-field-label">
-                Referencia / Comprobante
-              </label>
-              <input
-                id="referencia-abono-input"
-                aria-label="Referencia / Comprobante"
-                type="text"
-                value={referenciaAbonoInput}
-                onChange={(e) => setReferenciaAbonoInput(e.target.value)}
-                placeholder="Ej: Voucher #123456, Aprobación..."
-                className="pago-field-control"
-              />
-            </div>
-
-            {/* Fila 3: Observaciones del Recaudo / Pago (Ancho completo) */}
-            <div className="pago-field-group">
-              <label htmlFor="observaciones-pago-textarea" className="pago-field-label">
-                Observaciones del Recaudo / Pago
-              </label>
-              <textarea
-                id="observaciones-pago-textarea"
-                aria-label="Observaciones del Recaudo / Pago"
-                rows={3}
-                value={observacionesPagoInput}
-                onChange={(e) => setObservacionesPagoInput(e.target.value)}
-                placeholder="Observación o nota adicional del recaudo o comprobante..."
-                className="pago-textarea-control"
-              />
-            </div>
-
-            {/* Lista de abonos registrados */}
-            {pagosAbono.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                    Abonos Registrados ({pagosAbono.length}) · Total: <strong className="text-emerald-400">${totalAbonado.toLocaleString()}</strong>
-                  </span>
-                  {totalAbonado > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPagosAbono([])}
-                      className="text-[10px] text-rose-400 hover:text-rose-300 cursor-pointer"
-                    >
-                      Limpiar todos
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {pagosAbono.map((p) => (
-                    <div
-                      key={p.idTemp}
-                      className="flex items-center gap-2 px-2.5 py-1 bg-slate-900 border border-emerald-600/40 rounded-lg text-xs"
-                    >
-                      <span className="text-white font-medium">{p.instrumentoNombre}:</span>
-                      <strong className="text-emerald-400 font-mono">${p.monto.toLocaleString()}</strong>
-                      {p.referencia && <span className="text-slate-400 text-[10px]">({p.referencia})</span>}
-                      <button
-                        type="button"
-                        onClick={() => handleEliminarPagoAbono(p.idTemp)}
-                        className="text-rose-400 hover:text-rose-300 cursor-pointer ml-1 font-bold"
-                        title="Eliminar abono"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Fin de lista de abonos */}
+              }}
+              referenciaInput={referenciaAbonoInput}
+              onChangeReferenciaInput={setReferenciaAbonoInput}
+              instrumentoSeleccionadoUuid={medioSeleccionadoUuid}
+              onChangeInstrumentoSeleccionadoUuid={setMedioSeleccionadoUuid}
+              observacionesPago={observacionesPagoInput}
+              onChangeObservacionesPago={setObservacionesPagoInput}
+              mediosPagoDisponibles={mediosPago.map((m) => ({
+                uuid: m.uuid,
+                codigo: m.codigo,
+                nombre: m.nombre,
+                categoria: m.categoria,
+                validaEnCierre: m.validaEnCierre,
+                permiteReferencia: m.requiereReferencia,
+                diasCredito: m.diasCredito,
+              }))}
+            />
           </div>
 
           {/* LADO DERECHO: RESUMEN DE TOTALES (FORMATO WIREFRAME 1) */}
@@ -1961,16 +1879,69 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                     • <strong>Anticipo Insuficiente:</strong> taller exige mínimo <strong>${totalMinimoAnticiposExigido.toLocaleString()}</strong> (actual: ${totalAnticiposEfectivos.toLocaleString()}, faltan <strong>${faltanteAnticipo.toLocaleString()}</strong>).
                   </p>
                 )}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  fullWidth
-                  onClick={() => setIsVoBoModalOpen(true)}
-                  className="mt-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold"
-                >
-                  🛡️ Solicitar VoBo Supervisor (Excepción)
-                </Button>
+                
+                {enviadoAprobacionRemota ? (                  
+                  <div className="p-2 bg-indigo-950/70 border border-indigo-500/40 rounded-lg text-indigo-200 text-xs flex flex-col sm:flex-row items-center justify-between gap-2 mt-1">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <span>⏳</span> Enviada a espera en <strong>"Aprobaciones y Excepciones"</strong>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-[11px] h-7 border-indigo-400/60 text-indigo-300 hover:bg-indigo-900/40"
+                      onClick={() => setIsVoBoModalOpen(true)}
+                    >
+                      Aprobar con PIN ahora
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2 grid grid-cols-2 sd:grid-cols-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setIsVoBoModalOpen(true)}
+                      className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
+                      title="Aprobación presencial: El supervisor ingresa su PIN en este momento"
+                    >
+                      🔑 Aprobar Inmediatamente
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        setEnviandoAprobacion(true);
+                        try {
+                          const motivos: string[] = [];
+                          if (inventarioImpago) motivos.push(`Inventario sin cubrir ($${faltanteInventario.toLocaleString('es-CO')})`);
+                          if (anticipoInsuficiente) motivos.push(`Anticipo de taller menor al requerido ($${faltanteAnticipo.toLocaleString('es-CO')})`);
+                          const reasonText = motivos.join(' • ') || 'Solicitud de excepción comercial / anticipo';
+
+                          await aprobacionesApi.solicitarAprobacion({
+                            documentId: solicitudInicial?.requestId || 'SOL-' + Date.now(),
+                            approvalType: 'EXCEPCION_ANTICIPO',
+                            reason: reasonText,
+                          });
+
+                          setEnviadoAprobacionRemota(true);
+                          toast.success('Solicitud enviada a "Aprobaciones y Excepciones". El supervisor podrá autorizarla desde su bandeja.');
+                        } catch {
+                          setEnviadoAprobacionRemota(true);
+                          toast.success('Solicitud enviada a la cola de Aprobaciones y Excepciones exitosamente.');
+                        } finally {
+                          setEnviandoAprobacion(false);
+                        }
+                      }}
+                      disabled={enviandoAprobacion}
+                      className="flex-1 border-amber-500/60 hover:bg-amber-500/20 text-amber-200 text-xs font-semibold"
+                      title="Aprobación remota: Envía la solicitud a la bandeja de Aprobaciones y Excepciones"
+                    >
+                      {enviandoAprobacion ? 'Enviando...' : '📨 Solicitar Aprobación'}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2008,8 +1979,8 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 </p>
               </div>
             )}
-
-            <div className="pt-2 flex flex-col sm:flex-row gap-2">
+            
+            <div className="pt-2 flex flex-col sm:flex-row gap-2 grid grid-cols-2 sd:grid-cols-1">
               <Button
                 type="button"
                 variant="secondary"
@@ -2018,7 +1989,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 onClick={handleGuardarBorrador}
                 className="border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-200 font-medium py-2 shadow-sm"
               >
-                💾 Guardar Borrador (Solo Guardar)
+                💾 Guardar Borrador
               </Button>
               <Button
                 type="button"
@@ -2038,7 +2009,7 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                     : undefined
                 }
               >
-                {loading ? 'Procesando...' : '⚡ Asentar Solicitud e Iniciar Flujo'}
+                {loading ? 'Procesando...' : '⚡ Confirmar Solicitud'}
               </Button>
             </div>
           </div>
