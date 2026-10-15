@@ -5,12 +5,15 @@ import {
   obtenerTurnoActivo,
   registrarEgreso,
   declararArqueoCiego,
+  forzarCierreTurno,
   obtenerDetalleSupervisor,
   procesarVoBo
 } from '../../services/cajaApi';
 import { catalogosApi } from '../../services/catalogosApi';
 import type { DenominacionEfectivo, Caja } from '../../types/catalogos';
 import { Badge, Button, Card, Input } from '@farutech/design-system';
+import { RotateCcw } from 'lucide-react';
+import { ListPageLayout, CurrencyInput } from '../../components/ui';
 
 /** Planilla de conteo por denominación (cantidad + subtotal calculado). */
 interface ConteoDenominacion {
@@ -47,12 +50,19 @@ interface ModuloCajaProps {
   codigoCajaDefault?: string;
   userRole?: string;
   token?: string;
+  usuarioActual?: {
+    name?: string;
+    role?: string;
+    publicId?: string;
+    codigo?: string;
+  };
 }
 
 export const ModuloCaja: React.FC<ModuloCajaProps> = ({
   codigoCajaDefault = 'CAJA-01',
   userRole = 'Cajero',
   token,
+  usuarioActual,
 }) => {
   const [codigoCajaSeleccionada, setCodigoCajaSeleccionada] = useState<string>(codigoCajaDefault);
   const [cajasDisponibles, setCajasDisponibles] = useState<Caja[]>([]);
@@ -60,6 +70,21 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
   const [cargando, setCargando] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const esAdmin = Boolean(
+    userRole && (
+      userRole.toUpperCase().includes('ADMIN') ||
+      userRole.toUpperCase().includes('SUPERVISOR')
+    )
+  );
+
+  const esMiTurno = Boolean(
+    !turno ||
+    !usuarioActual?.name ||
+    turno.nombreCajero?.toLowerCase().trim() === usuarioActual.name?.toLowerCase().trim() ||
+    turno.nombreCajero?.toLowerCase().includes(usuarioActual.name?.toLowerCase()) ||
+    usuarioActual.name?.toLowerCase().includes(turno.nombreCajero?.toLowerCase())
+  );
 
   // Cargar catálogo de cajas configuradas en la base de datos
   useEffect(() => {
@@ -163,7 +188,8 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
       if (data && data.estado === 'PENDIENTE_VOBO') {
         try {
-          const det = await obtenerDetalleSupervisor(data.id, token);
+          const targetId = data.id ?? data.publicId;
+          const det = token ? await obtenerDetalleSupervisor(targetId, token) : await obtenerDetalleSupervisor(targetId);
           setDetalleSupervisor(det);
         } catch {
           // El usuario actual puede no ser supervisor aún
@@ -197,10 +223,17 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     setSuccessMsg(null);
 
     try {
-      const nuevoTurno = await abrirTurno({
+      const payload: { codigoCaja: string; baseInicial: number; idUsuario?: number } = {
         codigoCaja: codigoCajaSeleccionada,
-        baseInicial: monto
-      }, token);
+        baseInicial: monto,
+      };
+      if (usuarioActual?.publicId) {
+        payload.idUsuario = Number(usuarioActual.publicId.replace(/\D/g, '')) || 1;
+      }
+      const nuevoTurno = await abrirTurno(payload, token);
+      if (usuarioActual?.name && nuevoTurno) {
+        nuevoTurno.nombreCajero = usuarioActual.name;
+      }
       setTurno(nuevoTurno);
       setSuccessMsg(`Turno ${nuevoTurno.codigo} abierto exitosamente con base de $${monto.toLocaleString('es-CO')}`);
     } catch (err: unknown) {
@@ -263,11 +296,18 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     setErrorMsg(null);
 
     try {
-      const res = await declararArqueoCiego(turno.id, {
-        declaradoEfectivo: ef,
-        declaradoTarjeta: tar,
-        declaradoTransferencia: trans
-      });
+      const targetShiftId = turno.id ?? turno.publicId;
+      const res = token
+        ? await declararArqueoCiego(targetShiftId, {
+            declaradoEfectivo: ef,
+            declaradoTarjeta: tar,
+            declaradoTransferencia: trans
+          }, token)
+        : await declararArqueoCiego(targetShiftId, {
+            declaradoEfectivo: ef,
+            declaradoTarjeta: tar,
+            declaradoTransferencia: trans
+          });
       setSuccessMsg(`Arqueo ciego registrado. Turno ${res.codigoTurno} enviado a VoBo de Supervisor.`);
       setMostrarModalArqueo(false);
       await cargarTurno();
@@ -279,12 +319,49 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     }
   };
 
+  const handleForzarCierreAdmin = async () => {
+    if (!turno) return;
+
+    const ef = parseFloat(declEfectivo) || 0;
+    const tar = parseFloat(declTarjeta) || 0;
+    const trans = parseFloat(declTransferencia) || 0;
+
+    if (ef < 0 || tar < 0 || trans < 0) {
+      setErrorMsg('Los montos declarados no pueden ser negativos');
+      return;
+    }
+
+    setGuardandoArqueo(true);
+    setErrorMsg(null);
+
+    try {
+      const targetShiftId = turno.publicId || turno.id;
+      await forzarCierreTurno(targetShiftId, {
+        declaradoEfectivo: ef,
+        declaradoTarjeta: tar,
+        declaradoTransferencia: trans,
+        observacion: 'Cierre forzado y auditado por Administrador'
+      }, token);
+      setSuccessMsg('🛡️ Turno cerrado exitosamente por el Administrador. Caja liquidada y lista para nueva apertura.');
+      setMostrarModalArqueo(false);
+      await cargarTurno();
+    } catch (err: unknown) {
+      const e = err as Error;
+      setErrorMsg(e.message || 'Error al forzar cierre de turno');
+    } finally {
+      setGuardandoArqueo(false);
+    }
+  };
+
   const handleCargarDetalleSupervisor = async () => {
     if (!turno) return;
     setCargandoDetalle(true);
     setErrorMsg(null);
     try {
-      const det = await obtenerDetalleSupervisor(turno.id, token);
+      const targetShiftId = turno.id ?? turno.publicId;
+      const det = token
+        ? await obtenerDetalleSupervisor(targetShiftId, token)
+        : await obtenerDetalleSupervisor(targetShiftId);
       setDetalleSupervisor(det);
     } catch (err: unknown) {
       const e = err as Error;
@@ -294,9 +371,9 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     }
   };
 
-  const handleProcesarVoBo = async (decision: 'APROBADO' | 'RECHAZADO') => {
+  const handleProcesarVoBo = async (decision: 'APROBADO' | 'RECHAZADO', esCierreDirectoAdmin: boolean = false) => {
     if (!turno) return;
-    if (!pinSupervisor.trim() || pinSupervisor.length < 4) {
+    if (!esCierreDirectoAdmin && (!pinSupervisor.trim() || pinSupervisor.length < 4)) {
       setErrorMsg('Debe ingresar un PIN de supervisor válido (mínimo 4 dígitos)');
       return;
     }
@@ -305,10 +382,11 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
     setErrorMsg(null);
 
     try {
-      const res = await procesarVoBo(turno.id, {
-        pin: pinSupervisor.trim(),
+      const targetShiftId = turno.id ?? turno.publicId;
+      const res = await procesarVoBo(targetShiftId, {
+        pin: pinSupervisor.trim() || (esCierreDirectoAdmin ? 'ADMIN' : ''),
         decision,
-        observacion: observacionVoBo.trim()
+        observacion: observacionVoBo.trim() || (esCierreDirectoAdmin ? 'Aprobación directa por Administrador' : '')
       }, token);
       setSuccessMsg(`Turno ${res.codigo} procesado como ${res.estado} exitosamente.`);
       setPinSupervisor('');
@@ -323,58 +401,72 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-white/10">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <span>💰</span> Gestión de Caja y Turnos
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Control de aperturas con base monetaria obligatoria, arqueos ciegos y VoBo de supervisor.
-          </p>
-        </div>
-        <div className="mt-4 sm:mt-0 flex items-center gap-2">
-          <span className="text-xs font-semibold px-2.5 py-1 rounded bg-gray-800 text-gray-300 border border-white/10">
-            Rol: {userRole}
-          </span>
-          {cajasDisponibles.length > 0 ? (
-            <select
-              value={codigoCajaSeleccionada}
-              onChange={(e) => setCodigoCajaSeleccionada(e.target.value)}
-              className="text-xs font-semibold uppercase px-2.5 py-1 rounded bg-blue-950 text-blue-200 border border-blue-700/60 focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
-              title="Seleccionar Terminal de Caja Operativa"
-            >
-              {cajasDisponibles.map((c) => (
-                <option key={c.uuid || c.codigoCaja} value={c.codigoCaja} className="bg-gray-900 text-white">
-                  {c.codigoCaja} - {c.nombre} {!c.activa ? '(Inactiva)' : ''}
-                </option>
-              ))}
-            </select>
+    <ListPageLayout
+      title="Caja y Turnos"
+      eyebrow="OPERACIÓN · TESORERÍA"
+      description="Control de aperturas con base monetaria obligatoria, arqueos ciegos y control por roles."
+      actions={
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* Terminal / Caja selector: Solo Administrador puede ver y seleccionar todas las cajas */}
+          {esAdmin && cajasDisponibles.length > 0 ? (
+            <div className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-indigo-700/60 shadow-sm">
+              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">Caja:</span>
+              <select
+                value={codigoCajaSeleccionada}
+                onChange={(e) => setCodigoCajaSeleccionada(e.target.value)}
+                className="text-xs font-semibold uppercase bg-transparent text-white focus:outline-none cursor-pointer"
+                title="Administrador: Seleccionar Terminal de Caja Operativa"
+              >
+                {cajasDisponibles.map((c) => (
+                  <option key={c.uuid || c.codigoCaja} value={c.codigoCaja} className="bg-slate-900 text-white">
+                    {c.codigoCaja} — {c.nombre} {!c.activa ? '(Inactiva)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
           ) : (
-            <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded bg-blue-950 text-blue-300 border border-blue-800/40">
-              {codigoCajaSeleccionada}
+            <span className="text-xs font-mono font-bold uppercase px-2.5 py-1 rounded-lg bg-indigo-950/60 text-indigo-300 border border-indigo-700/40">
+              Terminal: {codigoCajaSeleccionada}
             </span>
           )}
+
+          {/* Badge de Rol */}
+          <span className="text-xs font-semibold px-2 py-1 rounded-lg bg-slate-800 text-slate-300 border border-white/10">
+            Rol: {userRole}
+          </span>
+
+          {/* Badge de Estado del Turno */}
           {turno ? (
             <span
-              className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${
+              className={`text-xs font-bold uppercase px-2.5 py-1 rounded-lg ${
                 turno.estado === 'ABIERTO'
-                  ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-500/50'
+                  ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'
                   : turno.estado === 'PENDIENTE_VOBO'
-                  ? 'bg-amber-900/50 text-amber-300 border border-amber-500/50 animate-pulse'
-                  : 'bg-gray-800 text-gray-300 border border-white/10'
+                  ? 'bg-amber-950/60 text-amber-300 border border-amber-500/40 animate-pulse'
+                  : 'bg-slate-800 text-slate-300 border border-white/10'
               }`}
             >
               ● {turno.estado}
             </span>
           ) : (
-            <span className="text-xs font-bold uppercase px-3 py-1 rounded-full bg-rose-950/60 text-rose-300 border border-rose-800/50">
-              ● SIN TURNO ACTIVO
+            <span className="text-xs font-bold uppercase px-2.5 py-1 rounded-lg bg-rose-950/60 text-rose-300 border border-rose-800/40">
+              ● SIN TURNO
             </span>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={cargarTurno}
+            disabled={cargando}
+            className="h-8 px-2.5 border-slate-700 bg-slate-900 text-slate-200"
+            title="Refrescar estado de caja"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
-      </div>
+      }
+    >
 
       {/* Alertas */}
       {errorMsg && (
@@ -460,16 +552,16 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                     ${Number(baseInicial || 0).toLocaleString('es-CO')} COP
                   </span>
                 </div>
-                <Input
-                  type="number"
-                  min="0"
-                  step="1000"
+                <CurrencyInput
+                  id="base-inicial-caja-input"
                   required
-                  value={baseInicial}
-                  onChange={(e) => setBaseInicial(e.target.value)}
+                  value={baseInicial ? Number(baseInicial) : undefined}
+                  onChange={(val) => setBaseInicial(val !== undefined ? String(val) : '')}
                   placeholder="100000"
-                  helperText="Monto físico contado entregado en la gaveta para cambio."
                 />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Monto físico contado entregado en la gaveta para cambio.
+                </p>
               </div>
 
               <Button
@@ -488,79 +580,118 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
           </Card>
         </div>
       ) : turno.estado === 'ABIERTO' ? (
-        /* Panel Turno Abierto */
-        <div className="space-y-6">
-          {/* Métricas Principales */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm">
-              <span className="text-xs font-semibold text-gray-400 uppercase">Turno Actual</span>
-              <p className="text-lg font-bold text-white mt-1">{turno.codigo}</p>
-              <p className="text-xs text-gray-400 mt-0.5">Cajero: {turno.nombreCajero}</p>
+        !esAdmin && !esMiTurno ? (
+          /* Caja abierta por otro usuario: vista restringida para cajeros no administradores */
+          <Card className="p-8 text-center bg-slate-900/80 border border-slate-800 rounded-2xl max-w-xl mx-auto space-y-4 my-6 shadow-xl">
+            <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-lg">
+              🔒
             </div>
-            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm">
-              <span className="text-xs font-semibold text-gray-400 uppercase">Base Inicial</span>
-              <p className="text-xl font-bold text-emerald-400 mt-1">
-                ${turno.baseInicial.toLocaleString('es-CO')}
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">Efectivo de arranque</p>
+            <h3 className="text-lg font-bold text-white">Terminal Operada por Otro Cajero</h3>
+            <p className="text-xs text-slate-300">
+              La terminal <strong className="text-white font-mono">{codigoCajaSeleccionada}</strong> está siendo operada actualmente por <strong className="text-indigo-400">{turno.nombreCajero}</strong> (Turno: {turno.codigo}).
+            </p>
+            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5 text-xs text-slate-400 text-left space-y-1.5">
+              <div>• <strong>Segregación de Cajas:</strong> Como cajero solo puedes visualizar y operar la caja que tú abriste.</div>
+              <div>• <strong>Control de Administrador:</strong> Solo el Administrador tiene autorización para auditar movimientos o cerrar turnos ajenos.</div>
             </div>
-            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm">
-              <span className="text-xs font-semibold text-gray-400 uppercase">Movimientos</span>
-              <p className="text-xl font-bold text-white mt-1">{turno.movimientos.length}</p>
-              <p className="text-xs text-gray-400 mt-0.5">Entradas y salidas</p>
-            </div>
-            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm">
-              <span className="text-xs font-semibold text-gray-400 uppercase">Apertura</span>
-              <p className="text-sm font-semibold text-gray-200 mt-1">
-                {new Date(turno.fechaAperturaUtc).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {new Date(turno.fechaAperturaUtc).toLocaleDateString('es-CO')}
-              </p>
-            </div>
-          </div>
+            <p className="text-[11px] text-slate-500">
+              Para operar, solicita a un Administrador que cierre el turno anterior o asigna tu terminal correspondiente.
+            </p>
+          </Card>
+        ) : (
+          /* Panel Turno Abierto (Admin o Dueño del Turno) */
+          <div className="space-y-5">
+            {/* Métricas Principales en una sola línea horizontal (5 Columnas) */}
+            <div className="grid grid-cols-5 sm:grid-cols-2 md:grid-cols-5 lg:grid-cols-5 gap-3">
+              {/* 1. Turno Actual */}
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 shadow-sm flex flex-col justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Turno Actual</span>
+                <p className="text-base font-bold text-white font-mono mt-0.5 truncate">{turno.codigo}</p>
+                <p className="text-[11px] text-slate-400 truncate">Cajero: {turno.nombreCajero}</p>
+              </div>
 
-          {/* Tarjetas de Ingresos por Formas de Pago */}
-          {turno.totalesPorMetodoPago && turno.totalesPorMetodoPago.length > 0 && (
-            <div className="bg-gray-900/80 p-4 rounded-xl border border-white/10 shadow-sm space-y-3">
-              <span className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                <span>💳</span> Recaudos por Forma de Pago en el Turno
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {turno.totalesPorMetodoPago.map((tp) => (
-                  <div key={tp.metodoPagoId || tp.codigo} className="bg-gray-950/70 p-3 rounded-lg border border-white/5">
-                    <span className="text-[11px] font-semibold text-gray-400 block truncate">{tp.nombre}</span>
-                    <p className="text-lg font-bold text-emerald-400 mt-0.5">
-                      ${tp.total.toLocaleString('es-CO')}
-                    </p>
-                    <span className="text-[10px] text-gray-500 font-mono">{tp.cantidad} recaudo(s)</span>
-                  </div>
-                ))}
+              {/* 2. Base Inicial */}
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 shadow-sm flex flex-col justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Base Inicial</span>
+                <p className="text-base font-bold text-emerald-400 font-mono mt-0.5">
+                  ${turno.baseInicial.toLocaleString('es-CO')}
+                </p>
+                <p className="text-[11px] text-slate-400">Efectivo de arranque</p>
+              </div>
+
+              {/* 3. Movimientos */}
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 shadow-sm flex flex-col justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Movimientos</span>
+                <p className="text-base font-bold text-white font-mono mt-0.5">{turno.movimientos.length}</p>
+                <p className="text-[11px] text-slate-400">Entradas y salidas</p>
+              </div>
+
+              {/* 4. Apertura */}
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 shadow-sm flex flex-col justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Apertura</span>
+                <p className="text-xs font-semibold text-slate-200 mt-0.5">
+                  {new Date(turno.fechaAperturaUtc).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {new Date(turno.fechaAperturaUtc).toLocaleDateString('es-CO')}
+                </p>
+              </div>
+
+              {/* 5. Recaudos por Forma de Pago en el Turno */}
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-white/10 shadow-sm flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Recaudos en Turno</span>
+                  <span className="text-[10px] font-mono text-indigo-400">
+                    {turno.totalesPorMetodoPago?.reduce((acc, m) => acc + (m.cantidad || 0), 0) || 0} rec.
+                  </span>
+                </div>
+                <p className="text-base font-bold text-emerald-400 font-mono mt-0.5">
+                  ${(turno.totalesPorMetodoPago?.reduce((acc, m) => acc + (m.total || 0), 0) || 0).toLocaleString('es-CO')}
+                </p>
+                <div className="flex items-center gap-1 overflow-x-auto text-[10px] text-slate-400">
+                  {turno.totalesPorMetodoPago && turno.totalesPorMetodoPago.length > 0 ? (
+                    turno.totalesPorMetodoPago.map((tp) => (
+                      <span
+                        key={tp.metodoPagoId || tp.codigo}
+                        className="px-1 py-0.5 rounded bg-slate-950 border border-white/5 font-mono text-[9px] text-slate-300 truncate"
+                        title={`${tp.nombre}: $${tp.total.toLocaleString('es-CO')} (${tp.cantidad} pagos)`}
+                      >
+                        {tp.nombre.slice(0, 4)}: ${tp.total.toLocaleString('es-CO')}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[10px] text-slate-500">Sin recaudos aún</span>
+                  )}
+                </div>
               </div>
             </div>
-          )}
 
-          {/* Acciones Rápidas */}
-          <div className="flex flex-wrap gap-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setMostrarModalEgreso(true)}
-            >
-              <span>💸</span> Registrar Egreso Menor (Caja Menor)
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              style={{ backgroundColor: '#d97706' }}
-              onClick={() => setMostrarModalArqueo(true)}
-            >
-              <span>🔒</span> Cerrar Turno (Arqueo Ciego)
-            </Button>
-          </div>
+            {/* Acciones Rápidas */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setMostrarModalEgreso(true)}
+              >
+                <span>💸</span> Registrar Egreso Menor (Caja Menor)
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                style={{ backgroundColor: '#d97706' }}
+                onClick={() => setMostrarModalArqueo(true)}
+              >
+                <span>🔒</span> {esAdmin ? 'Cerrar Turno (Administrador)' : 'Cerrar Turno (Arqueo Ciego)'}
+              </Button>
+              {esAdmin && (
+                <span className="text-xs text-amber-400 font-medium ml-1">
+                  🛡️ Modo Administrador: Autorizado para auditar y forzar cierre de cualquier caja.
+                </span>
+              )}
+            </div>
 
-          {/* Tabla de Movimientos del Turno */}
-          <div className="bg-gray-900/80 rounded-xl shadow-sm border border-white/10 overflow-hidden">
+            {/* Tabla de Movimientos del Turno */}
+            <div className="bg-gray-900/80 rounded-xl shadow-sm border border-white/10 overflow-hidden">
             <div className="px-6 py-4 border-b border-white/10 bg-gray-950/40 flex items-center justify-between">
               <h2 className="font-bold text-white text-sm uppercase tracking-wide">
                 Movimientos Inmutables del Turno (RF-6.4, T052)
@@ -631,29 +762,30 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
             </div>
           </div>
         </div>
-      ) : (
-        /* Panel Turno PENDIENTE_VOBO */
+      )
+    ) : (
+      /* Panel Turno PENDIENTE_VOBO */
         <div className="space-y-6">
-          <div className="bg-amber-50 border-l-4 border-amber-500 p-6 rounded-xl text-amber-900 space-y-2">
-            <h2 className="text-lg font-bold flex items-center gap-2">
+          <div className="bg-amber-950/30 border-l-4 border-amber-500 p-6 rounded-xl text-amber-200 space-y-2">
+            <h2 className="text-lg font-bold flex items-center gap-2 text-amber-300">
               <span>⏳</span> Turno {turno.codigo} en espera de VoBo de Supervisor (RF-6.7)
             </h2>
-            <p className="text-sm text-amber-800">
+            <p className="text-sm text-amber-300/80">
               El cajero ha declarado los valores de cierre a ciegas. Un supervisor con rol autorizado debe ingresar su PIN para verificar las diferencias y aprobar o rechazar el cierre.
             </p>
           </div>
 
           {/* Comparativo de Supervisión */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
+          <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-800 p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-800">
+              <h3 className="text-base font-bold text-white">
                 Detalle de Auditoría y Saldos Teóricos
               </h3>
               {!detalleSupervisor && (
                 <button
                   onClick={handleCargarDetalleSupervisor}
                   disabled={cargandoDetalle}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded shadow"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded border border-white/10 shadow"
                 >
                   {cargandoDetalle ? 'Consultando...' : '🔍 Cargar Saldos de Supervisión'}
                 </button>
@@ -662,8 +794,8 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
             {detalleSupervisor ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-700">
-                  <thead className="bg-slate-100 text-xs uppercase text-slate-500 border-b border-slate-200">
+                <table className="w-full text-left text-sm text-slate-300">
+                  <thead className="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
                     <tr>
                       <th className="px-4 py-2">Medio</th>
                       <th className="px-4 py-2 text-right">Declarado (Cajero)</th>
@@ -671,46 +803,46 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                       <th className="px-4 py-2 text-right">Diferencia</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-800/60">
                     <tr>
-                      <td className="px-4 py-2 font-medium">Efectivo</td>
+                      <td className="px-4 py-2 font-medium text-white">Efectivo</td>
                       <td className="px-4 py-2 text-right">${detalleSupervisor.declarado.efectivo.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-2 text-right font-medium">${detalleSupervisor.teorico.efectivo.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-2 text-right font-bold">
+                      <td className="px-4 py-2 text-right font-medium text-slate-300">${detalleSupervisor.teorico.efectivo.toLocaleString('es-CO')}</td>
+                      <td className="px-4 py-2 text-right font-bold text-white">
                         ${(detalleSupervisor.declarado.efectivo - detalleSupervisor.teorico.efectivo).toLocaleString('es-CO')}
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-2 font-medium">Tarjeta / Datáfono</td>
+                      <td className="px-4 py-2 font-medium text-white">Tarjeta / Datáfono</td>
                       <td className="px-4 py-2 text-right">${detalleSupervisor.declarado.tarjeta.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-2 text-right font-medium">${detalleSupervisor.teorico.tarjeta.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-2 text-right font-bold">
+                      <td className="px-4 py-2 text-right font-medium text-slate-300">${detalleSupervisor.teorico.tarjeta.toLocaleString('es-CO')}</td>
+                      <td className="px-4 py-2 text-right font-bold text-white">
                         ${(detalleSupervisor.declarado.tarjeta - detalleSupervisor.teorico.tarjeta).toLocaleString('es-CO')}
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-2 font-medium">Transferencia Bancaria</td>
+                      <td className="px-4 py-2 font-medium text-white">Transferencia Bancaria</td>
                       <td className="px-4 py-2 text-right">${detalleSupervisor.declarado.transferencia.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-2 text-right font-medium">${detalleSupervisor.teorico.transferencia.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-2 text-right font-bold">
+                      <td className="px-4 py-2 text-right font-medium text-slate-300">${detalleSupervisor.teorico.transferencia.toLocaleString('es-CO')}</td>
+                      <td className="px-4 py-2 text-right font-bold text-white">
                         ${(detalleSupervisor.declarado.transferencia - detalleSupervisor.teorico.transferencia).toLocaleString('es-CO')}
                       </td>
                     </tr>
-                    <tr className="bg-slate-50 font-bold border-t-2 border-slate-200">
-                      <td className="px-4 py-2.5">Total General</td>
-                      <td className="px-4 py-2.5 text-right text-slate-900">
+                    <tr className="bg-slate-950/80 font-bold border-t-2 border-slate-700">
+                      <td className="px-4 py-2.5 text-white">Total General</td>
+                      <td className="px-4 py-2.5 text-right text-white">
                         ${detalleSupervisor.declarado.total.toLocaleString('es-CO')}
                       </td>
-                      <td className="px-4 py-2.5 text-right text-slate-900">
+                      <td className="px-4 py-2.5 text-right text-white">
                         ${detalleSupervisor.teorico.total.toLocaleString('es-CO')}
                       </td>
                       <td
                         className={`px-4 py-2.5 text-right ${
                           detalleSupervisor.diferencia < 0
-                            ? 'text-rose-600'
+                            ? 'text-rose-400'
                             : detalleSupervisor.diferencia > 0
-                            ? 'text-blue-600'
-                            : 'text-emerald-600'
+                            ? 'text-sky-400'
+                            : 'text-emerald-400'
                         }`}
                       >
                         ${detalleSupervisor.diferencia.toLocaleString('es-CO')}
@@ -726,10 +858,10 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
             )}
 
             {/* Formulario VoBo */}
-            <div className="pt-4 border-t border-slate-200 space-y-4 max-w-md">
-              <h4 className="text-sm font-bold text-slate-800">Autorización con PIN de Supervisor (T054)</h4>
+            <div className="pt-4 border-t border-slate-800 space-y-4 max-w-md">
+              <h4 className="text-sm font-bold text-white">Autorización con PIN de Supervisor (T054)</h4>
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                   PIN de Seguridad *
                 </label>
                 <input
@@ -738,14 +870,14 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                   value={pinSupervisor}
                   onChange={(e) => setPinSupervisor(e.target.value)}
                   placeholder="••••"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-center tracking-widest text-lg font-bold"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-center tracking-widest text-lg font-bold text-white focus:outline-none focus:border-indigo-500"
                 />
                 <span className="text-xs text-slate-400">
                   Invariante #7: El supervisor no puede ser el mismo cajero del turno.
                 </span>
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                   Observaciones / Justificación de Cierre
                 </label>
                 <input
@@ -753,23 +885,44 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                   value={observacionVoBo}
                   onChange={(e) => setObservacionVoBo(e.target.value)}
                   placeholder="Ej: Conteo conforme / Justificación de descuadre"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
+              {esAdmin && (
+                <div className="p-3 bg-indigo-950/50 border border-indigo-700/60 rounded-xl space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-300">
+                    <span>🛡️</span> Modo Administrador: Aprobación Directa
+                  </div>
+                  <p className="text-[11px] text-slate-300">
+                    Como Administrador puedes validar y cerrar el turno directamente sin ingresar PIN secundario de supervisor.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 font-bold"
+                    disabled={procesandoVoBo}
+                    onClick={() => handleProcesarVoBo('APROBADO', true)}
+                  >
+                    {procesandoVoBo ? 'Procesando...' : '⚡ Aprobar y Cerrar Turno Directo (Admin)'}
+                  </Button>
+                </div>
+              )}
+
               <div className="flex gap-3">
                 <button
                   type="button"
                   disabled={procesandoVoBo}
                   onClick={() => handleProcesarVoBo('APROBADO')}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg shadow text-sm transition-colors"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow text-sm transition-colors"
                 >
-                  {procesandoVoBo ? 'Procesando...' : '✓ Aprobar Cierre'}
+                  {procesandoVoBo ? 'Procesando...' : '✓ Aprobar Cierre con PIN'}
                 </button>
                 <button
                   type="button"
                   disabled={procesandoVoBo}
                   onClick={() => handleProcesarVoBo('RECHAZADO')}
-                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg shadow text-sm transition-colors"
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg shadow text-sm transition-colors"
                 >
                   {procesandoVoBo ? 'Procesando...' : '✕ Rechazar Cierre'}
                 </button>
@@ -781,28 +934,38 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
       {/* Modal Egreso Menor */}
       {mostrarModalEgreso && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <span>💸</span> Comprobante de Egreso (Caja Menor)
-            </h3>
-            <p className="text-xs text-slate-500">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>💸</span> Comprobante de Egreso (Caja Menor)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setMostrarModalEgreso(false)}
+                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-lg"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-400">
               Registra salidas de dinero autorizadas con asignación de folio consecutivo automático (RF-6.10).
             </p>
 
             <form onSubmit={handleRegistrarEgreso} className="space-y-4">
-              <Input
-                label="Monto a Retirar (COP) *"
-                type="number"
-                min="1"
-                step="100"
-                required
-                value={egresoMonto}
-                onChange={(e) => setEgresoMonto(e.target.value)}
-                placeholder="15000"
-              />
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                  Monto a Retirar (COP) *
+                </label>
+                <CurrencyInput
+                  required
+                  value={egresoMonto ? Number(egresoMonto) : undefined}
+                  onChange={(val) => setEgresoMonto(val !== undefined ? String(val) : '')}
+                  placeholder="15000"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                   Motivo / Justificación *
                 </label>
                 <textarea
@@ -811,10 +974,10 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                   value={egresoMotivo}
                   onChange={(e) => setEgresoMotivo(e.target.value)}
                   placeholder="Ej: Compra de insumos de limpieza para mostrador"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                 />
               </div>
-              <div className="flex gap-2 justify-end pt-2">
+              <div className="flex gap-2 justify-end pt-2 border-t border-slate-800">
                 <Button
                   type="button"
                   variant="outline"
@@ -857,6 +1020,16 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
             <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl text-xs text-amber-200">
               <strong>Atención — Arqueo Ciego:</strong> Ingrese los valores reales que contó físicamente en su gaveta y datáfono. Los saldos teóricos del sistema están ocultos para asegurar integridad.
             </div>
+
+            {esAdmin && (
+              <div className="p-3 bg-indigo-950/60 border border-indigo-600/50 rounded-xl text-xs text-indigo-200 flex items-start gap-2">
+                <span className="text-base">🛡️</span>
+                <div>
+                  <strong className="text-white block font-bold">Modo Administrador de Cierre:</strong>
+                  Como Administrador puedes enviar este arqueo a <strong>VoBo de Supervisión</strong> para auditoría previa, o presionar <strong>⚡ Forzar Cierre Definitivo (Admin)</strong> para cerrar la caja de inmediato en la base de datos sin requerir PIN adicional.
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleDeclararArqueoCiego} className="space-y-4">
               {/* Sección Efectivo: Selector de Modo (Desglose vs Directo) */}
@@ -1030,7 +1203,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                 <span>Los pagos a crédito comercial (15, 30, 60, 90 y 120 días) representan cobro diferido; no requieren arqueo físico ni afectan el cuadre de este turno.</span>
               </div>
 
-              <div className="flex gap-2 justify-end pt-3 border-t border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800">
                 <Button
                   type="button"
                   variant="outline"
@@ -1039,20 +1212,36 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                 >
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="sm"
-                  style={{ backgroundColor: '#d97706' }}
-                  disabled={guardandoArqueo}
-                >
-                  {guardandoArqueo ? 'Registrando...' : 'Declarar y Enviar a VoBo'}
-                </Button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {esAdmin && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      style={{ backgroundColor: '#dc2626' }}
+                      disabled={guardandoArqueo}
+                      onClick={handleForzarCierreAdmin}
+                      title="Administrador: Registra conteo y fuerza el cierre inmediato del turno en la base de datos"
+                    >
+                      {guardandoArqueo ? 'Cerrando Turno...' : '⚡ Forzar Cierre Definitivo (Admin)'}
+                    </Button>
+                  )}
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    style={{ backgroundColor: '#d97706' }}
+                    disabled={guardandoArqueo}
+                  >
+                    {guardandoArqueo ? 'Registrando...' : 'Declarar y Enviar a VoBo'}
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </ListPageLayout>
   );
 };

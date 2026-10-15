@@ -8,6 +8,7 @@ import type {
   ItemOperacionDto,
 } from '../types/solicitudes';
 import type { Cliente } from '../types/catalogos';
+import { securePin } from './pinSecurity';
 
 function mapRequestDetails(res: any): SolicitudDetalleDto {
   const items: ItemOperacionDto[] = (res?.items || []).map((it: any) => ({
@@ -155,10 +156,11 @@ export const solicitudesApi = {
     data: AutorizarExcepcionRequest,
     token?: string,
   ): Promise<SolicitudDetalleDto> {
+    const encryptedPin = await securePin(data.supervisorPin);
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
       initialPayments: [],
-      supervisorPin: data.supervisorPin,
+      supervisorPin: encryptedPin,
     }, token);
     return mapRequestDetails(res);
   },
@@ -173,10 +175,11 @@ export const solicitudesApi = {
     },
     token?: string,
   ): Promise<SolicitudDetalleDto> {
+    const encryptedPin = data?.supervisorPin ? await securePin(data.supervisorPin) : null;
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
       initialPayments: data?.initialPayments || [],
-      supervisorPin: data?.supervisorPin || null,
+      supervisorPin: encryptedPin,
     }, token);
     return mapRequestDetails(res);
   },
@@ -189,6 +192,7 @@ export const solicitudesApi = {
       code: data.numeroDocumento,
       name: data.nombreRazonSocial,
       phone: data.telefono,
+      email: data.email,
     }, token);
     return {
       uuid: res.id,
@@ -202,6 +206,7 @@ export const solicitudesApi = {
       numeroDocumento: res.code,
       nombreRazonSocial: res.name,
       telefono: res.phone || '',
+      email: res.email || data.email || '',
       activo: true,
     };
   },

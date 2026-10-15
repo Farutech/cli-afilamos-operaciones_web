@@ -9,6 +9,7 @@ import type {
   DetalleSupervisorCierreDto,
   ProcesarVoBoRequest,
 } from '../types/caja';
+import { securePin } from './pinSecurity';
 
 function getToken(): string | undefined {
   return localStorage.getItem('ordeon_token') ?? undefined;
@@ -211,7 +212,8 @@ export async function registrarEgreso(
   };
 }
 
-export async function declararArqueoCiego(turnoId: number, req: DeclararArqueoCiegoRequest, token?: string): Promise<DeclaracionCierreResponse> {
+export async function declararArqueoCiego(turnoId: number | string, req: DeclararArqueoCiegoRequest, token?: string): Promise<DeclaracionCierreResponse> {
+  const authToken = token ?? getToken();
   try {
     await apiClient<any>(
       `/cash/shifts/${turnoId}/counts`,
@@ -220,12 +222,13 @@ export async function declararArqueoCiego(turnoId: number, req: DeclararArqueoCi
         body: JSON.stringify({
           declaredAmount: req.declaradoEfectivo,
           countMethod: 'BLIND_COUNT',
+          observation: 'Arqueo ciego para cierre de turno',
         }),
       },
-      token ?? getToken(),
+      authToken,
     );
-  } catch {
-    // Si la API falla, continuar localmente
+  } catch (err) {
+    console.warn('[cajaApi] Aviso al registrar conteo:', err);
   }
 
   return {
@@ -235,7 +238,75 @@ export async function declararArqueoCiego(turnoId: number, req: DeclararArqueoCi
   };
 }
 
-export async function obtenerDetalleSupervisor(turnoId: number, token?: string): Promise<DetalleSupervisorCierreDto> {
+export async function forzarCierreTurno(
+  turnoId: number | string,
+  req: {
+    declaradoEfectivo: number;
+    declaradoTarjeta?: number;
+    declaradoTransferencia?: number;
+    observacion?: string;
+    supervisorPin?: string;
+  },
+  token?: string,
+): Promise<TurnoDto> {
+  const authToken = token ?? getToken();
+
+  // 1. Declarar conteo físico previo
+  try {
+    await apiClient<any>(
+      `/cash/shifts/${turnoId}/counts`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          declaredAmount: req.declaradoEfectivo,
+          countMethod: 'BLIND_COUNT',
+          observation: req.observacion || 'Arqueo físico - Cierre forzado Administrador',
+        }),
+      },
+      authToken,
+    );
+  } catch (err: unknown) {
+    console.warn('[cajaApi] Conteo previo a cierre forzado:', err);
+  }
+
+  const encryptedPin = req.supervisorPin ? await securePin(req.supervisorPin) : undefined;
+
+  // 2. Cerrar turno directamente como Administrador
+  await apiClient<any>(
+    `/cash/shifts/${turnoId}/close`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        closeReason: req.observacion || 'Cierre forzado y auditado por Administrador',
+        discrepancyReason: req.observacion || 'Aprobado directamente por Administrador',
+        supervisorPin: encryptedPin,
+        forceClose: true,
+        forzarCierre: true,
+      }),
+    },
+    authToken,
+  );
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('ordeon_turno_CAJA-01');
+  }
+
+  return {
+    id: typeof turnoId === 'number' ? turnoId : 1,
+    publicId: String(turnoId),
+    codigo: `TURNO-0${turnoId}`,
+    codigoCaja: 'CAJA-01',
+    nombreCaja: 'Caja Mostrador',
+    idUsuarioApertura: 1,
+    nombreCajero: 'Cajero Principal',
+    fechaAperturaUtc: new Date().toISOString(),
+    baseInicial: 100000,
+    estado: 'CERRADO',
+    movimientos: [],
+  };
+}
+
+export async function obtenerDetalleSupervisor(turnoId: number | string, token?: string): Promise<DetalleSupervisorCierreDto> {
   try {
     const res = await apiClient<any>(
       `/reports/cash-closure/${turnoId}`,
@@ -293,12 +364,13 @@ export async function aprobarTurnoCaja(
   req: { supervisorPin: string; reason?: string },
   token?: string,
 ): Promise<any> {
+  const encryptedPin = await securePin(req.supervisorPin);
   return apiClient<any>(
     `/cash/shifts/${turnoId}/approve`,
     {
       method: 'POST',
       body: JSON.stringify({
-        supervisorPin: req.supervisorPin,
+        supervisorPin: encryptedPin,
         reason: req.reason || 'Aprobación de arqueo ciego y cierre de turno por supervisor',
       }),
     },
@@ -306,37 +378,36 @@ export async function aprobarTurnoCaja(
   );
 }
 
-export async function procesarVoBo(turnoId: number, req: ProcesarVoBoRequest, token?: string): Promise<TurnoDto> {
-  try {
-    if (req.decision === 'APROBADO') {
-      await aprobarTurnoCaja(
-        turnoId,
-        {
-          supervisorPin: req.pin,
-          reason: req.observacion || 'Aprobado por supervisor',
-        },
-        token,
-      );
-    } else {
-      await apiClient<any>(
-        `/cash/shifts/${turnoId}/close`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            closeReason: req.observacion || 'Cierre rechazado por supervisor',
-            supervisorPin: req.pin,
-            discrepancyReason: req.observacion,
-          }),
-        },
-        token ?? getToken(),
-      );
-    }
-  } catch {
-    // Continuar localmente en caso de fallback
+export async function procesarVoBo(turnoId: number | string, req: ProcesarVoBoRequest, token?: string): Promise<TurnoDto> {
+  const authToken = token ?? getToken();
+  if (req.decision === 'APROBADO') {
+    await aprobarTurnoCaja(
+      turnoId,
+      {
+        supervisorPin: req.pin,
+        reason: req.observacion || 'Aprobado por supervisor',
+      },
+      authToken,
+    );
+  } else {
+    const encryptedPin = await securePin(req.pin);
+    await apiClient<any>(
+      `/cash/shifts/${turnoId}/close`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          closeReason: req.observacion || 'Cierre rechazado por supervisor',
+          supervisorPin: encryptedPin,
+          discrepancyReason: req.observacion,
+          forceClose: true,
+        }),
+      },
+      authToken,
+    );
   }
 
   const turnoCerrado: TurnoDto = {
-    id: turnoId,
+    id: typeof turnoId === 'number' ? turnoId : 1,
     publicId: String(turnoId),
     codigo: `TURNO-0${turnoId}`,
     codigoCaja: 'CAJA-01',

@@ -13,6 +13,8 @@ import {
 import { toast } from 'sonner';
 import { Modal, Button, Badge } from '@farutech/design-system';
 import { ListPageLayout, StandardDataTable, type ColumnDef, type StandardRowAction } from '@/components/ui';
+import { RegistroClienteModal } from '@/features/clientes/RegistroClienteModal';
+import type { Cliente } from '@/types/catalogos';
 import { ordeonRequest } from '@/lib/api-client';
 
 export type Customer = {
@@ -184,6 +186,26 @@ export default function AdminClients({ token }: { token: string }) {
       setSaving(false);
     }
   }
+
+  const handleNuevoClienteCreado = (nuevo: Cliente) => {
+    const newCustomer: Customer = {
+      id: nuevo.uuid,
+      code: nuevo.numeroDocumento,
+      name: nuevo.nombreRazonSocial,
+      phone: nuevo.telefono || null,
+      email: nuevo.email || null,
+      isActive: nuevo.activo,
+      ordersCount: 0,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    setCustomers((prev) => [newCustomer, ...prev]);
+    setTotalItems((prev) => prev + 1);
+    setModal(null);
+    toast.success('Cliente creado correctamente', {
+      description: `${nuevo.nombreRazonSocial} ha sido dado de alta en Ordeon.`,
+    });
+    void loadCustomers();
+  };
 
   async function toggleStatus(customer: Customer) {
     setError('');
@@ -450,16 +472,22 @@ export default function AdminClients({ token }: { token: string }) {
         )}
       </Modal>
 
-      {/* Modal 2: NUEVO / EDITAR CLIENTE (Usando Modal del Design System) */}
-      <Modal
-        isOpen={!!modal}
+      {/* Modal 2: NUEVO CLIENTE (Reutiliza exactamente el mismo componente que Solicitudes) */}
+      <RegistroClienteModal
+        isOpen={modal === 'new'}
         onClose={() => setModal(null)}
-        title={modal === 'new' ? 'Nuevo cliente' : 'Editar cliente'}
-        subtitle={
-          modal === 'new'
-            ? 'Diligencie los campos requeridos para dar de alta un cliente en Ordeon'
-            : `Modificando información de ${modal?.name || 'cliente'}`
-        }
+        onClienteCreado={handleNuevoClienteCreado}
+        title="Nuevo cliente"
+        subtitle="Diligencie los campos requeridos para dar de alta un cliente en Ordeon"
+        submitLabel="Crear cliente"
+      />
+
+      {/* Modal 3: EDITAR CLIENTE EXISTENTE */}
+      <Modal
+        isOpen={!!modal && modal !== 'new'}
+        onClose={() => setModal(null)}
+        title="Editar cliente"
+        subtitle={modal && modal !== 'new' ? `Modificando información de ${modal.name || 'cliente'}` : ''}
         icon={<Users className="w-5 h-5 text-violet-400" />}
         size="md"
         footer={
@@ -492,13 +520,13 @@ export default function AdminClients({ token }: { token: string }) {
                 disabled={saving}
                 className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold whitespace-nowrap transition-colors shadow-sm"
               >
-                {saving ? 'Guardando…' : modal === 'new' ? 'Crear cliente' : 'Guardar cambios'}
+                {saving ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </div>
           </div>
         }
       >
-        {modal && (
+        {modal && modal !== 'new' && (
           <form id="customer-edit-form" onSubmit={saveCustomer}>
             <div className="client-modal-grid">
               <div className="form-field">
@@ -510,7 +538,7 @@ export default function AdminClients({ token }: { token: string }) {
                   name="code"
                   className="form-input font-mono"
                   placeholder="Ej: 900123456-1 o 1020304050"
-                  defaultValue={modal === 'new' ? '' : modal.code || ''}
+                  defaultValue={modal.code || ''}
                   required
                 />
               </div>
@@ -524,7 +552,7 @@ export default function AdminClients({ token }: { token: string }) {
                   name="name"
                   className="form-input"
                   placeholder="Ej: Afilados del Valle S.A.S."
-                  defaultValue={modal === 'new' ? '' : modal.name || ''}
+                  defaultValue={modal.name || ''}
                   required
                 />
               </div>
@@ -539,7 +567,7 @@ export default function AdminClients({ token }: { token: string }) {
                   type="tel"
                   className="form-input"
                   placeholder="Ej: +57 300 123 4567"
-                  defaultValue={modal === 'new' ? '' : modal.phone || ''}
+                  defaultValue={modal.phone || ''}
                 />
               </div>
 
@@ -553,7 +581,7 @@ export default function AdminClients({ token }: { token: string }) {
                   type="email"
                   className="form-input"
                   placeholder="Ej: contacto@empresa.com"
-                  defaultValue={modal === 'new' ? '' : modal.email || ''}
+                  defaultValue={modal.email || ''}
                 />
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { api } from './api';
+import { securePin } from './pinSecurity';
 
 export interface AprobacionDto {
   id: string;
@@ -86,9 +87,10 @@ export const aprobacionesApi = {
   },
 
   async aprobar(id: string, supervisorPin: string, reason?: string, token?: string): Promise<void> {
+    const encryptedPin = await securePin(supervisorPin);
     await api.post<void>(
       `/approvals/${id}/approve`,
-      { supervisorPin, reason: reason || 'Aprobado por supervisor' },
+      { supervisorPin: encryptedPin, reason: reason || 'Aprobado por supervisor' },
       token,
     );
   },

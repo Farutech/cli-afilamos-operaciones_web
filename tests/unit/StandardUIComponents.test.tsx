@@ -149,14 +149,21 @@ describe('Standard UI Components Suite', () => {
         />
       );
 
-      expect(screen.getByText('$ 100.000')).toBeDefined();
-      expect(screen.getByText('$ 20.000')).toBeDefined();
-      expect(screen.getByText('$ 80.000')).toBeDefined();
+      // Tras el rediseño, PanelFormaPago ya no imprime el "Total Documento" como
+      // texto plano: expone el saldo en el botón "Saldo ($ X)" y el total abonado
+      // en "Abonos de la Sesión (n) Total: $ Y". El símbolo y el número viven en
+      // nodos hermanos, por eso se usa un regex tolerante a espacios.
+      // Saldo a cubrir: total 100.000 - abonos previos 20.000 = 80.000
+      expect(screen.getByText(/^\$\s*80\.000$/)).toBeDefined();
+      // Total abonado en la sesión antes de registrar: $ 0
+      expect(screen.getByText(/^\$\s*0$/)).toBeDefined();
+      // Referencia a los abonos previos (20.000) sigue presente en el desglose
+      expect(screen.getAllByText(/20\.000/).length).toBeGreaterThanOrEqual(1);
 
       const inputMonto = screen.getByPlaceholderText('Monto a abonar...');
       fireEvent.change(inputMonto, { target: { value: '50000' } });
 
-      const addBtn = screen.getByText('Agregar Pago');
+      const addBtn = screen.getByRole('button', { name: /\+ Registrar Abono/i });
       fireEvent.click(addBtn);
 
       expect(handleChange).toHaveBeenCalledTimes(1);

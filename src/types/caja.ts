@@ -76,7 +76,7 @@ export interface ValoresDesgloseDto {
 }
 
 export interface DetalleSupervisorCierreDto {
-  idTurno: number;
+  idTurno: number | string;
   codigoTurno: string;
   cajero: string;
   declarado: ValoresDesgloseDto;

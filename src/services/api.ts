@@ -12,7 +12,7 @@ const API_URLS = {
   qa: 'https://api-ops.qa.afilamoshermanos.com/api/v1',
   staging: 'https://api-ops.staging.afilamoshermanos.com/api/v1',
   prod: 'https://api-ops.afilamoshermanos.com/api/v1',
-  local: 'http://api-ops.afilamoshermanos.local/api/v1',
+  local: '/api/v1',
 } as const
 
 type ApiEnvironment = keyof typeof API_URLS
@@ -52,13 +52,14 @@ const getBaseUrl = (): string => {
 
   // 4. Detección zero-config por hostname del frontend
   if (typeof window !== 'undefined') {
-    const { hostname, protocol } = window.location
+    const { hostname } = window.location
 
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return `http://${hostname}:5005/api/v1`
     }
 
     if (hostname.includes('afilamoshermanos.local') || hostname.endsWith('.local')) {
+      const protocol = typeof window !== 'undefined' && window.location?.protocol ? window.location.protocol : 'https:'
       return `${protocol}//api-ops.afilamoshermanos.local/api/v1`
     }
 

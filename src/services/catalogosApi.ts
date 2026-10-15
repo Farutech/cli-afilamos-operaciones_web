@@ -40,7 +40,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     },
   },
   {
-    uuid: 'srv-1',
+    uuid: 'b05d0d80-6013-4335-a8e1-783f8eac9191',
     codigoReferencia: 'AFIL-CUCH-01',
     nombre: 'Afilado Cuchillo Profesional / Chef',
     descripcion: 'Afilado artesanal al agua con rectificado de filo y pulido espejo.',
@@ -49,7 +49,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     stockReferencial: null,
     activo: true,
     unidadPresentacion: {
-      uuid: '8f647d36-b43d-4f21-aa1a-005ad16ce290',
+      uuid: 'e0981dc3-ad2d-4bd4-864c-5a44628adf08',
       codigo: 'SRV',
       nombre: 'Servicio',
       abreviatura: 'SRV',
@@ -57,7 +57,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     },
   },
   {
-    uuid: 'srv-2',
+    uuid: 'b05d0d80-6013-4335-a8e1-783f8eac9192',
     codigoReferencia: 'REC-CUCH-30',
     nombre: 'Rectificado Cuchilla Cepillo 30cm',
     descripcion: 'Rectificado plano de precisión con refrigeración y tolerancias micrométricas.',
@@ -66,7 +66,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     stockReferencial: null,
     activo: true,
     unidadPresentacion: {
-      uuid: '8f647d36-b43d-4f21-aa1a-005ad16ce290',
+      uuid: 'e0981dc3-ad2d-4bd4-864c-5a44628adf08',
       codigo: 'SRV',
       nombre: 'Servicio',
       abreviatura: 'SRV',
@@ -74,7 +74,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     },
   },
   {
-    uuid: 'srv-3',
+    uuid: 'b05d0d80-6013-4335-a8e1-783f8eac9193',
     codigoReferencia: 'AFIL-FRES-CNC',
     nombre: 'Vaciado y Calibración Fresa CNC',
     descripcion: 'Afilado helicoidal de geometrías complejas para centros de mecanizado.',
@@ -83,7 +83,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     stockReferencial: null,
     activo: true,
     unidadPresentacion: {
-      uuid: '8f647d36-b43d-4f21-aa1a-005ad16ce290',
+      uuid: 'e0981dc3-ad2d-4bd4-864c-5a44628adf08',
       codigo: 'SRV',
       nombre: 'Servicio',
       abreviatura: 'SRV',
@@ -92,7 +92,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
   },
   // Productos / Materiales con unidades UND, KG, LT
   {
-    uuid: 'prd-1',
+    uuid: 'c05d0d80-6013-4335-a8e1-783f8eac9201',
     codigoReferencia: 'MAT-WID-42',
     nombre: 'Diente Widia K20 4.2mm',
     descripcion: 'Plaquita de carburo de tungsteno grano medio para discos de corte.',
@@ -101,7 +101,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     stockReferencial: 140,
     activo: true,
     unidadPresentacion: {
-      uuid: '28ef0c77-3ec8-46af-bae5-7646a650af67',
+      uuid: 'a4c0bd8b-d293-4b33-84ef-7909e9517345',
       codigo: 'UND',
       nombre: 'Unidad',
       abreviatura: 'UND',
@@ -109,7 +109,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     },
   },
   {
-    uuid: 'prd-2',
+    uuid: 'c05d0d80-6013-4335-a8e1-783f8eac9202',
     codigoReferencia: 'MAT-MUE-125',
     nombre: 'Muela Diamantada Resinoide 125mm',
     descripcion: 'Disco abrasivo de acabado para afilado de herramientas en húmedo.',
@@ -118,7 +118,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     stockReferencial: 8,
     activo: true,
     unidadPresentacion: {
-      uuid: '28ef0c77-3ec8-46af-bae5-7646a650af67',
+      uuid: 'a4c0bd8b-d293-4b33-84ef-7909e9517345',
       codigo: 'UND',
       nombre: 'Unidad',
       abreviatura: 'UND',
@@ -126,7 +126,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     },
   },
   {
-    uuid: 'prd-3',
+    uuid: 'c05d0d80-6013-4335-a8e1-783f8eac9203',
     codigoReferencia: 'MAT-SOL-PL45',
     nombre: 'Soldadura de Plata 45% (Tira / KG)',
     descripcion: 'Varilla para brasaje fuerte de plaquitas de corte con fundente.',
@@ -135,7 +135,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     stockReferencial: 25,
     activo: true,
     unidadPresentacion: {
-      uuid: 'bb41ad8f-1fb8-4b02-9652-7124853d7649',
+      uuid: 'd19fc028-0237-459c-bbed-bfe65ec62036',
       codigo: 'KG',
       nombre: 'Kilogramo',
       abreviatura: 'KG',
@@ -143,7 +143,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     },
   },
   {
-    uuid: 'prd-4',
+    uuid: 'c05d0d80-6013-4335-a8e1-783f8eac9204',
     codigoReferencia: 'MAT-TAL-GAL',
     nombre: 'Refrigerante Sintético Taladrina (Galón / LT)',
     descripcion: 'Fluido emulsionable biodegradable para refrigeración de rectificadoras.',
@@ -152,7 +152,7 @@ export const CATALOGO_ITEMS_SEED: ItemCatalogo[] = [
     stockReferencial: 30,
     activo: true,
     unidadPresentacion: {
-      uuid: '915fda04-7175-4b2a-b577-d09648599bed',
+      uuid: '5dc334cc-e7ba-4e9e-95f9-b47c9fb62fbd',
       codigo: 'LT',
       nombre: 'Litro',
       abreviatura: 'LT',
@@ -614,31 +614,51 @@ export const catalogosApi = {
     pendingMediosPagoArbolPromise = (async () => {
       try {
         paymentMethodsFetchCount++;
-        const res = await api.get<any>('/catalogs/payment-methods', token);
-        const raw = Array.isArray(res) ? res : (res?.paymentMethods || res?.items || []);
+        // Cargar reglas personalizadas guardadas
+        let reglasGuardadas: Record<string, Partial<MedioPagoCategoria>> = {};
+        try {
+          const rawReglas = localStorage.getItem('ordeon_reglas_formas_pago');
+          if (rawReglas) reglasGuardadas = JSON.parse(rawReglas);
+        } catch {
+          // ignore
+        }
+
+        const res = await api.get<any>('/catalogs/payment-methods?includeInactive=true', token);
+        const raw = Array.isArray(res) ? res : (res?.paymentMethods || res?.items || res?.instrumentos || []);
         const instrumentos: MedioPagoInstrumento[] = raw.map((m: any) => {
           const cod = String(m.code || m.codigo || '').toUpperCase();
           const esCredito = cod.startsWith('CRED');
           const esValidaEnCierre = m.validaEnCierre !== undefined ? Boolean(m.validaEnCierre) : !esCredito;
+          const cat = cod.includes('EFECTIVO') || cod === 'CASH'
+            ? 'EFECTIVO'
+            : (cod.includes('TRANSF') || cod.includes('BANCO') || cod.includes('CONSIGN') || cod.includes('NEQUI') || cod.includes('DAVI'))
+            ? 'TRANSFERENCIA'
+            : (cod.includes('TARJ') || cod.includes('DATA'))
+            ? 'TARJETA'
+            : esCredito
+            ? 'CREDITO'
+            : 'OTROS';
+
+          let proveedor: string | undefined = undefined;
+          if (cat === 'TRANSFERENCIA' || cat === 'TARJETA') {
+            proveedor = m.nombre?.includes('Bold') || cod.includes('BOLD') ? 'Bold' : (cod.includes('REDE') ? 'Redeban' : 'Bold');
+          }
+
           return {
             uuid: m.id || m.uuid,
             codigo: cod,
             nombre: m.name || m.nombre,
-            categoria: cod.includes('EFECTIVO')
-              ? 'EFECTIVO'
-              : (cod.includes('TRANSF') || cod.includes('BANCO') || cod.includes('CONSIGN') || cod.includes('NEQUI') || cod.includes('DAVI'))
-              ? 'TRANSFERENCIA'
-              : (cod.includes('TARJ') || cod.includes('DATA'))
-              ? 'TARJETA'
-              : 'OTROS',
+            categoria: cat,
             esHoja: true,
-            requiereReferencia: !cod.includes('EFECTIVO') && !esCredito,
+            requiereReferencia: m.requiereReferencia !== undefined ? Boolean(m.requiereReferencia) : (!cod.includes('EFECTIVO') && !esCredito),
             diasCredito: esCredito ? (m.diasCredito || (cod.includes('15') ? 15 : cod.includes('30') ? 30 : cod.includes('60') ? 60 : cod.includes('90') ? 90 : cod.includes('120') ? 120 : 30)) : undefined,
             validaEnCierre: esValidaEnCierre,
             permiteEnCierre: esValidaEnCierre,
             isDefault: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
             esPorDefecto: Boolean(m.isDefault ?? m.esPorDefecto ?? m.is_default ?? false),
-            activo: m.active ?? true,
+            activo: m.active !== undefined ? Boolean(m.active) : (m.activo !== undefined ? Boolean(m.activo) : true),
+            proveedor,
+            parentId: m.parentId || m.paymentMethodParentId,
           };
         });
 
@@ -646,10 +666,11 @@ export const catalogosApi = {
         const asegurarInstrumento = (
           codigo: string,
           nombre: string,
-          categoria: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'OTROS',
+          categoria: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'CREDITO' | 'OTROS',
           validaEnCierre: boolean,
           requiereRef: boolean,
-          diasCred?: number
+          diasCred?: number,
+          proveedor?: string
         ) => {
           const existe = instrumentos.find((i) => i.codigo === codigo);
           if (!existe) {
@@ -666,55 +687,124 @@ export const catalogosApi = {
               activo: true,
               isDefault: codigo === 'EFECTIVO',
               esPorDefecto: codigo === 'EFECTIVO',
+              proveedor,
             });
           }
         };
 
         asegurarInstrumento('EFECTIVO', 'Efectivo', 'EFECTIVO', true, false);
-        asegurarInstrumento('TRANSFERENCIA', 'Transferencia Bancaria', 'TRANSFERENCIA', true, true);
-        asegurarInstrumento('CONSIGNACION', 'Consignación Bancaria', 'TRANSFERENCIA', true, true);
-        asegurarInstrumento('TARJETA', 'Datáfono / Tarjeta', 'TARJETA', true, true);
+        asegurarInstrumento('TRANSFERENCIA', 'Bold (Transferencias y Consignaciones)', 'TRANSFERENCIA', true, true, undefined, 'Bold');
+        asegurarInstrumento('TARJETA', 'Bold (Datáfono Tarjetas)', 'TARJETA', true, true, undefined, 'Bold');
+        asegurarInstrumento('CRED_15', 'Crédito a 15 días', 'CREDITO', false, false, 15);
+        asegurarInstrumento('CRED_30', 'Crédito a 30 días', 'CREDITO', false, false, 30);
+        asegurarInstrumento('CRED_60', 'Crédito a 60 días', 'CREDITO', false, false, 60);
+        asegurarInstrumento('CRED_90', 'Crédito a 90 días', 'CREDITO', false, false, 90);
+        asegurarInstrumento('CRED_120', 'Crédito a 120 días', 'CREDITO', false, false, 120);
         asegurarInstrumento('CHEQUE', 'Cheque', 'OTROS', true, true);
-        asegurarInstrumento('CRED_15', 'Crédito a 15 días', 'OTROS', false, false, 15);
-        asegurarInstrumento('CRED_30', 'Crédito a 30 días', 'OTROS', false, false, 30);
-        asegurarInstrumento('CRED_60', 'Crédito a 60 días', 'OTROS', false, false, 60);
-        asegurarInstrumento('CRED_90', 'Crédito a 90 días', 'OTROS', false, false, 90);
-        asegurarInstrumento('CRED_120', 'Crédito a 120 días', 'OTROS', false, false, 120);
 
-        const categorias: MedioPagoCategoria[] = [
+        // Estructura oficial de 5 categorías macro con sus reglas dinámicas
+        const categoriasBase: MedioPagoCategoria[] = [
           {
             uuid: 'cat-efectivo',
             codigo: 'EFECTIVO',
             nombre: 'Efectivo',
             orden: 1,
+            icono: '💵',
+            descripcion: 'Conteo físico por denominación en arqueos y cierres Z',
             activo: true,
-            instrumentos: instrumentos.filter((i) => i.categoria === 'EFECTIVO'),
+            requiereReferencia: false,
+            validaEnCierre: true,
+            permiteCredito: false,
+            requiereProveedor: false,
+            instrumentos: [],
           },
           {
             uuid: 'cat-transferencia',
             codigo: 'TRANSFERENCIA',
-            nombre: 'Transferencia bancaria o consignaciones',
+            nombre: 'Transferencia bancaria y Consignaciones',
             orden: 2,
+            icono: '🏦',
+            descripcion: 'Transferencias y consignaciones con validación de comprobante / Bold',
             activo: true,
-            instrumentos: instrumentos.filter((i) => i.categoria === 'TRANSFERENCIA'),
+            requiereReferencia: true,
+            validaEnCierre: true,
+            permiteCredito: false,
+            requiereProveedor: true,
+            instrumentos: [],
           },
           {
             uuid: 'cat-tarjeta',
             codigo: 'TARJETA',
-            nombre: 'Datáfono o tarjeta',
+            nombre: 'Tarjetas débito y Crédito (Datáfono)',
             orden: 3,
+            icono: '💳',
+            descripcion: 'Vouchers y autorizaciones electrónicas de datáfono / Bold',
             activo: true,
-            instrumentos: instrumentos.filter((i) => i.categoria === 'TARJETA'),
+            requiereReferencia: true,
+            validaEnCierre: true,
+            permiteCredito: false,
+            requiereProveedor: true,
+            instrumentos: [],
+          },
+          {
+            uuid: 'cat-credito',
+            codigo: 'CREDITO',
+            nombre: 'Créditos comerciales (Cuentas por cobrar)',
+            orden: 4,
+            icono: '⏱️',
+            descripcion: 'Otorgamiento de plazo de pago en días con control de cartera',
+            activo: true,
+            requiereReferencia: false,
+            validaEnCierre: false,
+            permiteCredito: true,
+            requiereProveedor: false,
+            instrumentos: [],
           },
           {
             uuid: 'cat-otros',
             codigo: 'OTROS',
             nombre: 'Otros',
-            orden: 4,
+            orden: 5,
+            icono: '📄',
+            descripcion: 'Cheques y otros instrumentos especiales',
             activo: true,
-            instrumentos: instrumentos.filter((i) => i.categoria === 'OTROS'),
+            requiereReferencia: true,
+            validaEnCierre: true,
+            permiteCredito: false,
+            requiereProveedor: false,
+            instrumentos: [],
           },
         ];
+
+        // Mezclar con las reglas guardadas y asignar hijos dinámicamente
+        const categorias: MedioPagoCategoria[] = categoriasBase.map((cat) => {
+          const custom = reglasGuardadas[cat.codigo];
+          const catMerged: MedioPagoCategoria = {
+            ...cat,
+            ...(custom || {}),
+            instrumentos: [],
+          };
+
+          // Filtrar los instrumentos que corresponden a esta categoría
+          const hijos = instrumentos.filter((i) => {
+            if (cat.codigo === 'EFECTIVO') return i.categoria === 'EFECTIVO';
+            if (cat.codigo === 'TRANSFERENCIA') return i.categoria === 'TRANSFERENCIA';
+            if (cat.codigo === 'TARJETA') return i.categoria === 'TARJETA';
+            if (cat.codigo === 'CREDITO') return i.categoria === 'CREDITO';
+            return i.categoria === 'OTROS';
+          }).map((h) => ({
+            ...h,
+            // Las reglas del padre aplican dinámicamente a todos los hijos
+            requiereReferencia: catMerged.requiereReferencia,
+            validaEnCierre: catMerged.validaEnCierre,
+            permiteEnCierre: catMerged.validaEnCierre,
+            // Si la categoría padre está inactiva, sus hijos también se apagan
+            activo: catMerged.activo ? h.activo : false,
+          }));
+
+          catMerged.instrumentos = hijos;
+          return catMerged;
+        });
 
         const result = { categorias };
         cachedMediosPagoArbol = result;
@@ -729,6 +819,26 @@ export const catalogosApi = {
     return pendingMediosPagoArbolPromise;
   },
 
+  async actualizarCategoriaMedioPago(
+    codigoCategoria: string,
+    cambios: Partial<MedioPagoCategoria>,
+    _token?: string
+  ): Promise<void> {
+    try {
+      let reglas: Record<string, Partial<MedioPagoCategoria>> = {};
+      const raw = localStorage.getItem('ordeon_reglas_formas_pago');
+      if (raw) reglas = JSON.parse(raw);
+      reglas[codigoCategoria] = {
+        ...(reglas[codigoCategoria] || {}),
+        ...cambios,
+      };
+      localStorage.setItem('ordeon_reglas_formas_pago', JSON.stringify(reglas));
+      cachedMediosPagoArbol = null; // invalidar cache
+    } catch (e) {
+      console.warn('Error guardando reglas de categoria en localStorage:', e);
+    }
+  },
+
   async getMediosPagoInstrumentos(token?: string, forceRefresh = false): Promise<{ instrumentos: MedioPagoInstrumento[] }> {
     const arbol = await this.getMediosPagoArbol(token, forceRefresh);
     const instrumentos = arbol.categorias.flatMap((c) => c.instrumentos);
@@ -739,14 +849,46 @@ export const catalogosApi = {
     codigoCategoria: string;
     codigo: string;
     nombre: string;
-    requiereReferencia: boolean;
+    requiereReferencia?: boolean;
+    diasCredito?: number;
+    proveedor?: string;
     isDefault?: boolean;
     esPorDefecto?: boolean;
-  }): Promise<MedioPagoInstrumento> {
-    return api.post<MedioPagoInstrumento>('/catalogs/payment-methods', dto);
+    activo?: boolean;
+  }, token?: string): Promise<MedioPagoInstrumento> {
+    cachedMediosPagoArbol = null;
+    return api.post<MedioPagoInstrumento>('/catalogs/payment-methods', dto, token);
+  },
+
+  async actualizarMedioPagoInstrumento(
+    uuid: string,
+    dto: {
+      nombre: string;
+      codigo?: string;
+      diasCredito?: number;
+      proveedor?: string;
+      requiereReferencia?: boolean;
+      activo?: boolean;
+      isDefault?: boolean;
+    },
+    token?: string
+  ): Promise<MedioPagoInstrumento> {
+    cachedMediosPagoArbol = null;
+    return api.put<MedioPagoInstrumento>(`/catalogs/payment-methods/${uuid}`, dto, token);
+  },
+
+  async setMedioPagoActivo(uuid: string, activo: boolean, token?: string): Promise<{ activo: boolean }> {
+    cachedMediosPagoArbol = null;
+    return api.patch<{ activo: boolean }>(`/catalogs/payment-methods/${uuid}/active`, { activo }, token);
+  },
+
+  async eliminarMedioPagoInstrumento(uuid: string, token?: string): Promise<void> {
+    cachedMediosPagoArbol = null;
+    return api.delete(`/catalogs/payment-methods/${uuid}`, token);
   },
 
   async setMedioPagoDefault(uuid: string, token?: string): Promise<MedioPagoInstrumento> {
+    cachedMediosPagoArbol = null;
     return api.patch<MedioPagoInstrumento>(`/catalogs/payment-methods/${uuid}/default`, {}, token);
   },
 
