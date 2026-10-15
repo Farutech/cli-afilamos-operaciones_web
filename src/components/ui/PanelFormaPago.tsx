@@ -444,83 +444,86 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
               </div>
             </div>
 
-            {/* Instrumento de pago * (X disp.) */}
-            <div className="flex items-center gap-2 flex-1 justify-start lg:justify-end min-w-0">
-              <label htmlFor="instrumento-pago-select" className="text-[11px] font-semibold text-slate-300 uppercase shrink-0 whitespace-nowrap">
-                Instrumento de pago * ({instrumentosEnCategoria.length} disp.):
-              </label>
-              <select
-                id="instrumento-pago-select"
-                aria-label="Instrumento de pago"
-                value={instrumentoSeleccionadoUuid}
-                onChange={(e) => setInstrumentoSeleccionadoUuid(e.target.value)}
-                className="h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-medium text-slate-100 focus:outline-none focus:border-primary-500 cursor-pointer flex-1 max-w-[210px]"
-              >
-                {instrumentosEnCategoria.map((i) => (
-                  <option key={i.uuid} value={i.uuid}>
-                    {i.nombre} {i.diasCredito ? `(${i.diasCredito}d)` : ''}
-                  </option>
-                ))}
-              </select>
-
-              {/* Badge sutil de validación en cierre */}
-              <div className="text-[11px] font-medium shrink-0 hidden sm:block">
-                {instrumentoActual.validaEnCierre ? (
-                  <span className="text-emerald-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                    Caja
-                  </span>
-                ) : (
-                  <span className="text-amber-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                    Cartera
-                  </span>
-                )}
+            {/* Línea Unificada: Instrumento, Monto, Saldo, Referencia (misma fila) */}
+            <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-slate-800/60">
+              {/* Instrumento de pago */}
+              <div className="flex flex-col gap-0.5 shrink-0 min-w-[150px]">
+                <label htmlFor="instrumento-pago-select" className="text-[10px] font-semibold text-slate-400 uppercase shrink-0">
+                  Instrumento de pago * ({instrumentosEnCategoria.length} disp.)
+                </label>
+                <select
+                  id="instrumento-pago-select"
+                  aria-label="Instrumento de pago"
+                  value={instrumentoSeleccionadoUuid}
+                  onChange={(e) => setInstrumentoSeleccionadoUuid(e.target.value)}
+                  className="h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-medium text-slate-100 focus:outline-none focus:border-primary-500 cursor-pointer flex-1 max-w-[220px]"
+                >
+                  {instrumentosEnCategoria.map((i) => (
+                    <option key={i.uuid} value={i.uuid}>
+                      {i.nombre} {i.diasCredito ? `(${i.diasCredito}d)` : ''}
+                    </option>
+                  ))}
+                </select>
+                {/* Badge sutil de validación en cierre */}
+                <div className="text-[9px] font-medium shrink-0">
+                  {instrumentoActual.validaEnCierre ? (
+                    <span className="text-emerald-400 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                      Caja
+                    </span>
+                  ) : (
+                    <span className="text-amber-400 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                      Cartera
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Barra de Acción Unificada: Monto, Saldo Rápido, Ref y Botón */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1 border-t border-slate-800/60">
-            {/* Input de Monto */}
-            <div className="relative w-full sm:w-44 shrink-0">
-              <label htmlFor="monto-abono-input" className="sr-only">Monto *</label>
-              <CurrencyInput
-                id="monto-abono-input"
-                aria-label="Monto"
-                value={montoInput ? Number(montoInput) : undefined}
-                onChange={(val) => setMontoInput(val !== undefined ? String(val) : '')}
-                onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
-                placeholder="Monto a abonar..."
-                className="font-mono font-bold text-xs h-9"
-              />
-            </div>
+              {/* Monto */}
+              <div className="flex flex-col gap-0.5 shrink-0 min-w-[110px]">
+                <label htmlFor="monto-abono-input" className="text-[10px] font-semibold text-slate-400 uppercase shrink-0">
+                  Monto *
+                </label>
+                <CurrencyInput
+                  id="monto-abono-input"
+                  aria-label="Monto"
+                  value={montoInput ? Number(montoInput) : undefined}
+                  onChange={(val) => setMontoInput(val !== undefined ? String(val) : '')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
+                  placeholder="0"
+                  className="font-mono font-bold text-xs h-8 w-full"
+                />
+              </div>
 
-            {/* Botón Rápido de Saldo */}
-            {saldoRestante > 0 && (
-              <button
-                type="button"
-                onClick={handlePagarSaldoCompleto}
-                className="h-9 px-2.5 text-xs font-semibold text-primary-300 hover:text-primary-200 bg-primary-950/60 border border-primary-800/80 rounded-lg transition-colors whitespace-nowrap cursor-pointer shrink-0"
-                title="Copiar saldo restante al monto"
-              >
-                Saldo ({formatCOP(saldoRestante)})
-              </button>
-            )}
+              {/* Botón Rápido de Saldo */}
+              {saldoRestante > 0 && (
+                <button
+                  type="button"
+                  onClick={handlePagarSaldoCompleto}
+                  className="h-8 px-2.5 text-[10px] font-semibold text-primary-300 hover:text-primary-200 bg-primary-950/60 border border-primary-800/80 rounded-lg transition-colors whitespace-nowrap cursor-pointer shrink-0"
+                  title="Copiar saldo restante al monto"
+                >
+                  Saldo
+                </button>
+              )}
 
-            {/* Input de Referencia */}
-            <div className="flex-1 min-w-[130px]">
-              <label htmlFor="referencia-abono-input" className="sr-only">Referencia / Comprobante</label>
-              <input
-                id="referencia-abono-input"
-                aria-label="Referencia / Comprobante"
-                type="text"
-                value={referenciaInput}
-                onChange={(e) => setReferenciaInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
-                placeholder={instrumentoActual.permiteReferencia ? "N° Comprobante / Ref..." : "Ref. opcional..."}
-                className="w-full h-9 px-3 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-primary-500"
-              />
+              {/* Referencia / Comprobante */}
+              <div className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+                <label htmlFor="referencia-abono-input" className="text-[10px] font-semibold text-slate-400 uppercase shrink-0">
+                  Referencia / Comprobante
+                </label>
+                <input
+                  id="referencia-abono-input"
+                  aria-label="Referencia / Comprobante"
+                  type="text"
+                  value={referenciaInput}
+                  onChange={(e) => setReferenciaInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
+                  placeholder={instrumentoActual.permiteReferencia ? "N° Comprobante / Ref..." : "Ref. opcional..."}
+                  className="w-full h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-primary-500"
+                />
+              </div>
             </div>
           </div>
 
