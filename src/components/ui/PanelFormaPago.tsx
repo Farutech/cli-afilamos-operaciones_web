@@ -283,14 +283,14 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
 
   return (
     <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 sm:p-4 space-y-3 shadow-lg backdrop-blur-md">
-      {/* 1. Header Compacto */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+      {/* 1. Header con Título a la izquierda y Botón '+ Registrar Abono' a la derecha */}
+      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-800/80">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-primary-950/80 border border-primary-800/60 text-primary-400 shrink-0">
             <DollarSign className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-xs sm:text-sm font-bold text-slate-100 uppercase tracking-wide m-0">
+            <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wide m-0">
               {title}
             </h3>
             {subtitulo && (
@@ -299,18 +299,20 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
               </p>
             )}
           </div>
-          {/* Botón Primario para Registrar Abono */}
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={handleAgregarPago}
-              disabled={!montoInput || Number(montoInput) <= 0}
-              className="h-9 px-3.5 flex items-center gap-1.5 text-xs font-semibold cursor-pointer shrink-0 whitespace-nowrap"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Registrar Abono</span>
-            </Button>
         </div>
+        {!soloLectura && (
+          <Button
+            type="button"
+            size="sm"
+            variant="primary"
+            onClick={handleAgregarPago}
+            disabled={!montoInput || Number(montoInput) <= 0}
+            className="h-8 sm:h-9 px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-md rounded-lg"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Registrar Abono</span>
+          </Button>
+        )}
       </div>
 
       {/* 2. Banner Específico de Modo Entrega (solo si aplica) */}
@@ -332,7 +334,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
         </div>
       )}
 
-      {/* 3. Acordeón Colapsable: Regla de Prelación Financiera (Ahorro de Espacio) */}
+      {/* 3. Acordeón Colapsable: Regla de Prelación Financiera (si aplica) */}
       {subInv > 0 && subServ > 0 && (
         <div className="rounded-lg border border-slate-800/80 bg-slate-950/40 overflow-hidden">
           <button
@@ -372,7 +374,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
       )}
 
       {/* 4. Acordeón Colapsable: Abonos Históricos Previos (Solo Lectura) */}
-      {abonosHistoricos && abonosHistoricos.length > 0 && (
+      {((abonosHistoricos && abonosHistoricos.length > 0) || totalAbonosHistoricos > 0) && (
         <div className="rounded-lg border border-slate-800/80 bg-slate-950/40 overflow-hidden">
           <button
             type="button"
@@ -381,7 +383,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
           >
             <span className="flex items-center gap-1.5 font-medium text-slate-300 text-[11px]">
               <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>Abonos Históricos Previos ({abonosHistoricos.length})</span>
+              <span>Abonos Históricos Previos ({abonosHistoricos ? abonosHistoricos.length : 1})</span>
               <span className="text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.2 rounded font-normal">
                 Solo lectura
               </span>
@@ -412,150 +414,91 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
         </div>
       )}
 
-      {/* 5. Selector Ergonómico de Medios de Pago & Barra de Acción */}
+      {/* 5. Campos de Captura Directa según Imagen */}
       {!soloLectura && (
-        <div className="bg-slate-950/60 border border-slate-800/90 rounded-xl p-2.5 sm:p-3 space-y-2.5">
-          {/* Fila Única: 1. Opción General de Pago + Instrumento de Pago específico */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pb-0.5">
-            {/* 1. Opción General de Pago */}
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 whitespace-nowrap">
-                1. Opción General de Pago:
-              </span>
-              <div className="flex items-center gap-1 p-0.5 bg-slate-900/90 border border-slate-800 rounded-lg overflow-x-auto">
-                {CATEGORIAS.map((cat) => {
-                  const activo = categoriaSeleccionada === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setCategoriaSeleccionada(cat.id)}
-                      className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                        activo
-                          ? 'bg-primary-600 text-white shadow-sm'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                      }`}
-                    >
-                      <span>{cat.icon}</span>
-                      <span>{cat.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+        <div className="space-y-3">
+          {/* Fila 1: Instrumento de pago y Monto */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div className="md:col-span-8">
+              <label htmlFor="instrumento-pago-select" className="block text-xs font-semibold text-slate-300 mb-1">
+                Instrumento de pago *
+              </label>
+              <select
+                id="instrumento-pago-select"
+                aria-label="Instrumento de pago"
+                value={instrumentoSeleccionadoUuid}
+                onChange={(e) => setInstrumentoSeleccionadoUuid(e.target.value)}
+                className="w-full h-9 px-3 bg-slate-950 border border-slate-700/80 rounded-lg text-xs font-medium text-slate-100 focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                {listaOpciones.map((i) => (
+                  <option key={i.uuid} value={i.uuid}>
+                    {i.codigo} - {i.nombre} {i.diasCredito ? `(${i.diasCredito}d)` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Línea Unificada: Instrumento, Monto, Saldo, Referencia (misma fila) */}
-            <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-slate-800/60">
-              {/* Instrumento de pago */}
-              <div className="flex flex-col gap-0.5 shrink-0 min-w-[150px]">
-                <label htmlFor="instrumento-pago-select" className="text-[10px] font-semibold text-slate-400 uppercase shrink-0">
-                  Instrumento de pago * ({instrumentosEnCategoria.length} disp.)
+            <div className="md:col-span-4">
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="monto-abono-input" className="block text-xs font-semibold text-slate-300">
+                  {modo === 'entrega' ? 'Monto a cobrar *' : 'Monto *'}
                 </label>
-                <select
-                  id="instrumento-pago-select"
-                  aria-label="Instrumento de pago"
-                  value={instrumentoSeleccionadoUuid}
-                  onChange={(e) => setInstrumentoSeleccionadoUuid(e.target.value)}
-                  className="h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs font-medium text-slate-100 focus:outline-none focus:border-primary-500 cursor-pointer flex-1 max-w-[220px]"
-                >
-                  {instrumentosEnCategoria.map((i) => (
-                    <option key={i.uuid} value={i.uuid}>
-                      {i.nombre} {i.diasCredito ? `(${i.diasCredito}d)` : ''}
-                    </option>
-                  ))}
-                </select>
-                {/* Badge sutil de validación en cierre */}
-                <div className="text-[9px] font-medium shrink-0">
-                  {instrumentoActual.validaEnCierre ? (
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                      Caja
-                    </span>
-                  ) : (
-                    <span className="text-amber-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
-                      Cartera
-                    </span>
-                  )}
-                </div>
+                {saldoRestante > 0 && (
+                  <button
+                    type="button"
+                    onClick={handlePagarSaldoCompleto}
+                    className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline cursor-pointer flex items-center gap-1"
+                    title="Copiar saldo restante al monto"
+                  >
+                    <span>Saldo</span>
+                    <span className="font-mono">{formatCOP(saldoRestante)}</span>
+                  </button>
+                )}
               </div>
-
-              {/* Monto */}
-              <div className="flex flex-col gap-0.5 shrink-0 min-w-[110px]">
-                <label htmlFor="monto-abono-input" className="text-[10px] font-semibold text-slate-400 uppercase shrink-0">
-                  Monto *
-                </label>
-                <CurrencyInput
-                  id="monto-abono-input"
-                  aria-label="Monto"
-                  value={montoInput ? Number(montoInput) : undefined}
-                  onChange={(val) => setMontoInput(val !== undefined ? String(val) : '')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
-                  placeholder="0"
-                  className="font-mono font-bold text-xs h-8 w-full"
-                />
-              </div>
-
-              {/* Botón Rápido de Saldo */}
-              {saldoRestante > 0 && (
-                <button
-                  type="button"
-                  onClick={handlePagarSaldoCompleto}
-                  className="h-8 px-2.5 text-[10px] font-semibold text-primary-300 hover:text-primary-200 bg-primary-950/60 border border-primary-800/80 rounded-lg transition-colors whitespace-nowrap cursor-pointer shrink-0"
-                  title="Copiar saldo restante al monto"
-                >
-                  Saldo
-                </button>
-              )}
-
-              {/* Referencia / Comprobante */}
-              <div className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
-                <label htmlFor="referencia-abono-input" className="text-[10px] font-semibold text-slate-400 uppercase shrink-0">
-                  Referencia / Comprobante
-                </label>
-                <input
-                  id="referencia-abono-input"
-                  aria-label="Referencia / Comprobante"
-                  type="text"
-                  value={referenciaInput}
-                  onChange={(e) => setReferenciaInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
-                  placeholder={instrumentoActual.permiteReferencia ? "N° Comprobante / Ref..." : "Ref. opcional..."}
-                  className="w-full h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-primary-500"
-                />
-              </div>
+              <CurrencyInput
+                id="monto-abono-input"
+                aria-label={modo === 'entrega' ? 'Monto a cobrar' : 'Monto'}
+                value={montoInput ? Number(montoInput) : undefined}
+                onChange={(val) => setMontoInput(val !== undefined ? String(val) : '')}
+                onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
+                placeholder={modo === 'entrega' ? '0' : 'Monto a abonar...'}
+                className="font-mono font-bold text-xs h-9 w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 text-white"
+              />
             </div>
           </div>
 
-          {/* Observaciones del Recaudo: Accesible y Compacto */}
-          {onChangeObservacionesPago && (
-            <div className="pt-0.5">
-              <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold mb-0.5">
-                <label htmlFor="observaciones-pago-textarea" className="cursor-pointer flex items-center gap-1">
-                  <FileText className="w-3 h-3" />
-                  <span>Observaciones del Recaudo / Pago</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsNotasOpen(!isNotasOpen)}
-                  className="text-[10px] text-primary-400 hover:text-primary-300 font-medium cursor-pointer"
-                >
-                  {isNotasOpen ? 'Contraer' : '+ Desplegar'}
-                </button>
-              </div>
-              <textarea
-                id="observaciones-pago-textarea"
-                aria-label="Observaciones del Recaudo / Pago"
-                rows={isNotasOpen ? 2 : 1}
-                value={observacionesPago}
-                onChange={(e) => onChangeObservacionesPago(e.target.value)}
-                placeholder="Nota adicional o comprobante de la transacción (opcional)..."
-                className={`w-full px-3 py-1 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-primary-500 resize-none transition-all ${
-                  isNotasOpen ? 'h-14' : 'h-7 text-[11px]'
-                }`}
-              />
-            </div>
-          )}
+          {/* Fila 2: Referencia / Comprobante */}
+          <div>
+            <label htmlFor="referencia-abono-input" className="block text-xs font-semibold text-slate-300 mb-1">
+              Referencia / Comprobante
+            </label>
+            <input
+              id="referencia-abono-input"
+              aria-label="Referencia / Comprobante"
+              type="text"
+              value={referenciaInput}
+              onChange={(e) => setReferenciaInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
+              placeholder="Ej: Voucher #123456, Aprobación..."
+              className="w-full h-9 px-3 bg-slate-950 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          {/* Fila 3: Observaciones del Recaudo / Pago */}
+          <div>
+            <label htmlFor="observaciones-pago-textarea" className="block text-xs font-semibold text-slate-300 mb-1">
+              Observaciones del Recaudo / Pago
+            </label>
+            <textarea
+              id="observaciones-pago-textarea"
+              aria-label="Observaciones del Recaudo / Pago"
+              rows={2}
+              value={observacionesPago}
+              onChange={(e) => onChangeObservacionesPago && onChangeObservacionesPago(e.target.value)}
+              placeholder="Observación o nota adicional del recaudo o comprobante..."
+              className="w-full min-h-[60px] px-3 py-2 bg-slate-950 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
+            />
+          </div>
         </div>
       )}
 

@@ -1987,9 +1987,9 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                 fullWidth
                 disabled={loading || lineas.length === 0}
                 onClick={handleGuardarBorrador}
-                className="border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-200 font-medium py-2 shadow-sm"
+                className="border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-200 font-medium py-2 shadow-sm text-xs"
               >
-                💾 Guardar Borrador
+                💾 Guardar Borrador (Solo Guardar)
               </Button>
               <Button
                 type="button"
@@ -2002,14 +2002,14 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
                   (!voboAutorizado && (inventarioImpago || anticipoInsuficiente))
                 }
                 onClick={handleAsentar}
-                className="bg-indigo-600 hover:bg-indigo-500 font-bold shadow-md shadow-indigo-950 py-2"
+                className="bg-indigo-600 hover:bg-indigo-500 font-bold shadow-md shadow-indigo-950 py-2 text-xs"
                 title={
                   anticiposSuperanPago
                     ? `El valor pagado ($${valorPagadoEfectivo.toLocaleString()}) es menor a los anticipos registrados ($${totalAnticiposRegistros.toLocaleString()})`
                     : undefined
                 }
               >
-                {loading ? 'Procesando...' : '⚡ Confirmar Solicitud'}
+                {loading ? 'Procesando...' : '⚡ Asentar Solicitud e Iniciar Flujo'}
               </Button>
             </div>
           </div>

@@ -119,7 +119,9 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
   const [mostrarModalArqueo, setMostrarModalArqueo] = useState<boolean>(false);
   const [declEfectivo, setDeclEfectivo] = useState<string>('0');
   const [declTarjeta, setDeclTarjeta] = useState<string>('0');
+  const [declCantidadTarjeta, setDeclCantidadTarjeta] = useState<string>('');
   const [declTransferencia, setDeclTransferencia] = useState<string>('0');
+  const [declCantidadTransferencia, setDeclCantidadTransferencia] = useState<string>('');
   const [guardandoArqueo, setGuardandoArqueo] = useState<boolean>(false);
   const [modoDesgloseEfectivo, setModoDesgloseEfectivo] = useState<boolean>(true);
 
@@ -297,17 +299,23 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
     try {
       const targetShiftId = turno.id ?? turno.publicId;
+      const payload: DeclararArqueoCiegoRequest = {
+        declaradoEfectivo: ef,
+        declaradoTarjeta: tar,
+        declaradoTransferencia: trans,
+      };
+      const cantTar = parseInt(declCantidadTarjeta);
+      if (!isNaN(cantTar) && cantTar > 0) {
+        payload.cantidadTransaccionesTarjeta = cantTar;
+      }
+      const cantTrans = parseInt(declCantidadTransferencia);
+      if (!isNaN(cantTrans) && cantTrans > 0) {
+        payload.cantidadTransaccionesTransferencia = cantTrans;
+      }
+
       const res = token
-        ? await declararArqueoCiego(targetShiftId, {
-            declaradoEfectivo: ef,
-            declaradoTarjeta: tar,
-            declaradoTransferencia: trans
-          }, token)
-        : await declararArqueoCiego(targetShiftId, {
-            declaradoEfectivo: ef,
-            declaradoTarjeta: tar,
-            declaradoTransferencia: trans
-          });
+        ? await declararArqueoCiego(targetShiftId, payload, token)
+        : await declararArqueoCiego(targetShiftId, payload);
       setSuccessMsg(`Arqueo ciego registrado. Turno ${res.codigoTurno} enviado a VoBo de Supervisor.`);
       setMostrarModalArqueo(false);
       await cargarTurno();
@@ -813,19 +821,63 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-2 font-medium text-white">Tarjeta / Datáfono</td>
-                      <td className="px-4 py-2 text-right">${detalleSupervisor.declarado.tarjeta.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-2 text-right font-medium text-slate-300">${detalleSupervisor.teorico.tarjeta.toLocaleString('es-CO')}</td>
+                      <td className="px-4 py-2 font-medium text-white">
+                        <div>Tarjeta / Datáfono</div>
+                        {(detalleSupervisor.declarado.cantidadTarjeta !== undefined || detalleSupervisor.teorico.cantidadTarjeta !== undefined) && (
+                          <div className="text-[10px] text-slate-400 font-normal">
+                            Vouchers: {detalleSupervisor.declarado.cantidadTarjeta ?? 0} decl. vs {detalleSupervisor.teorico.cantidadTarjeta ?? 0} sist.
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <div>${detalleSupervisor.declarado.tarjeta.toLocaleString('es-CO')}</div>
+                        {detalleSupervisor.declarado.cantidadTarjeta !== undefined && (
+                          <div className="text-[10px] text-slate-400 font-mono">{detalleSupervisor.declarado.cantidadTarjeta} vouchers</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right font-medium text-slate-300">
+                        <div>${detalleSupervisor.teorico.tarjeta.toLocaleString('es-CO')}</div>
+                        {detalleSupervisor.teorico.cantidadTarjeta !== undefined && (
+                          <div className="text-[10px] text-slate-400 font-mono">{detalleSupervisor.teorico.cantidadTarjeta} trans.</div>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-right font-bold text-white">
-                        ${(detalleSupervisor.declarado.tarjeta - detalleSupervisor.teorico.tarjeta).toLocaleString('es-CO')}
+                        <div>${(detalleSupervisor.declarado.tarjeta - detalleSupervisor.teorico.tarjeta).toLocaleString('es-CO')}</div>
+                        {detalleSupervisor.diferenciaCantidadTarjeta !== undefined && (
+                          <div className={`text-[10px] font-mono ${detalleSupervisor.diferenciaCantidadTarjeta !== 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+                            {detalleSupervisor.diferenciaCantidadTarjeta > 0 ? `+${detalleSupervisor.diferenciaCantidadTarjeta}` : detalleSupervisor.diferenciaCantidadTarjeta} vouchers
+                          </div>
+                        )}
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-2 font-medium text-white">Transferencia Bancaria</td>
-                      <td className="px-4 py-2 text-right">${detalleSupervisor.declarado.transferencia.toLocaleString('es-CO')}</td>
-                      <td className="px-4 py-2 text-right font-medium text-slate-300">${detalleSupervisor.teorico.transferencia.toLocaleString('es-CO')}</td>
+                      <td className="px-4 py-2 font-medium text-white">
+                        <div>Transferencia Bancaria</div>
+                        {(detalleSupervisor.declarado.cantidadTransferencia !== undefined || detalleSupervisor.teorico.cantidadTransferencia !== undefined) && (
+                          <div className="text-[10px] text-slate-400 font-normal">
+                            Comprobantes: {detalleSupervisor.declarado.cantidadTransferencia ?? 0} decl. vs {detalleSupervisor.teorico.cantidadTransferencia ?? 0} sist.
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <div>${detalleSupervisor.declarado.transferencia.toLocaleString('es-CO')}</div>
+                        {detalleSupervisor.declarado.cantidadTransferencia !== undefined && (
+                          <div className="text-[10px] text-slate-400 font-mono">{detalleSupervisor.declarado.cantidadTransferencia} comp.</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right font-medium text-slate-300">
+                        <div>${detalleSupervisor.teorico.transferencia.toLocaleString('es-CO')}</div>
+                        {detalleSupervisor.teorico.cantidadTransferencia !== undefined && (
+                          <div className="text-[10px] text-slate-400 font-mono">{detalleSupervisor.teorico.cantidadTransferencia} trans.</div>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-right font-bold text-white">
-                        ${(detalleSupervisor.declarado.transferencia - detalleSupervisor.teorico.transferencia).toLocaleString('es-CO')}
+                        <div>${(detalleSupervisor.declarado.transferencia - detalleSupervisor.teorico.transferencia).toLocaleString('es-CO')}</div>
+                        {detalleSupervisor.diferenciaCantidadTransferencia !== undefined && (
+                          <div className={`text-[10px] font-mono ${detalleSupervisor.diferenciaCantidadTransferencia !== 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+                            {detalleSupervisor.diferenciaCantidadTransferencia > 0 ? `+${detalleSupervisor.diferenciaCantidadTransferencia}` : detalleSupervisor.diferenciaCantidadTransferencia} comp.
+                          </div>
+                        )}
                       </td>
                     </tr>
                     <tr className="bg-slate-950/80 font-bold border-t-2 border-slate-700">
@@ -1174,28 +1226,61 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                 </div>
               </div>
 
-              {/* Tarjeta & Transferencia */}
+              {/* Tarjeta & Transferencia con Monto y Cantidad de Procesos/Comprobantes */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  id="arqueo-tarjeta"
-                  label="Vouchers Datáfono (COP) *"
-                  type="number"
-                  min="0"
-                  step="100"
-                  required
-                  value={declTarjeta}
-                  onChange={(e) => setDeclTarjeta(e.target.value)}
-                />
-                <Input
-                  id="arqueo-transferencia"
-                  label="Transferencias Bancarias (COP) *"
-                  type="number"
-                  min="0"
-                  step="100"
-                  required
-                  value={declTransferencia}
-                  onChange={(e) => setDeclTransferencia(e.target.value)}
-                />
+                <div className="space-y-1">
+                  <Input
+                    id="arqueo-tarjeta"
+                    label="Vouchers Datáfono (Monto COP) *"
+                    type="number"
+                    min="0"
+                    step="100"
+                    required
+                    value={declTarjeta}
+                    onChange={(e) => setDeclTarjeta(e.target.value)}
+                  />
+                  <div className="pt-1">
+                    <label htmlFor="arqueo-cantidad-tarjeta" className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Cantidad de Vouchers (Tirilla Lote)
+                    </label>
+                    <input
+                      id="arqueo-cantidad-tarjeta"
+                      type="number"
+                      min="0"
+                      placeholder="Ej: 12"
+                      value={declCantidadTarjeta}
+                      onChange={(e) => setDeclCantidadTarjeta(e.target.value)}
+                      className="w-full h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Input
+                    id="arqueo-transferencia"
+                    label="Transferencias Bancarias (Monto COP) *"
+                    type="number"
+                    min="0"
+                    step="100"
+                    required
+                    value={declTransferencia}
+                    onChange={(e) => setDeclTransferencia(e.target.value)}
+                  />
+                  <div className="pt-1">
+                    <label htmlFor="arqueo-cantidad-transferencia" className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Cantidad de Transferencias (Comprobantes)
+                    </label>
+                    <input
+                      id="arqueo-cantidad-transferencia"
+                      type="number"
+                      min="0"
+                      placeholder="Ej: 5"
+                      value={declCantidadTransferencia}
+                      onChange={(e) => setDeclCantidadTransferencia(e.target.value)}
+                      className="w-full h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="p-2.5 bg-slate-950/60 border border-slate-800 rounded-lg text-[11px] text-slate-400 flex items-center gap-2">

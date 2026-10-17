@@ -27,8 +27,9 @@ function mapDeliveryDetails(res: any, defaultUuid?: string): RemisionDetalle {
   };
 
   const totalNeto = res?.totalNeto ?? res?.totalDeliveredAmount ?? 0;
+  const totalAnticipos = res?.totalAnticiposPrevios ?? res?.totalAdvanceApplied ?? 0;
   const totalPagos = res?.totalPagosEntrega ?? res?.totalCollectedOnDelivery ?? 0;
-  const saldo = res?.saldoPendiente ?? Math.max(0, totalNeto - totalPagos);
+  const saldo = res?.saldoPendiente ?? Math.max(0, totalNeto - (totalPagos + totalAnticipos));
 
   return {
     publicId: res?.publicId || res?.deliveryId || res?.uuid || defaultUuid || 'REM-0001',
@@ -40,7 +41,7 @@ function mapDeliveryDetails(res: any, defaultUuid?: string): RemisionDetalle {
     cliente,
     canal,
     totalNeto,
-    totalAnticiposPrevios: res?.totalAnticiposPrevios ?? 0,
+    totalAnticiposPrevios: totalAnticipos,
     totalPagosEntrega: totalPagos,
     saldoPendiente: saldo,
     recibidoPorNombre: res?.recibidoPorNombre || res?.recipientName || null,

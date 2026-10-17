@@ -221,6 +221,10 @@ export async function declararArqueoCiego(turnoId: number | string, req: Declara
         method: 'POST',
         body: JSON.stringify({
           declaredAmount: req.declaradoEfectivo,
+          declaredCard: req.declaradoTarjeta,
+          declaredTransfer: req.declaradoTransferencia,
+          cardTransactionsCount: req.cantidadTransaccionesTarjeta,
+          transferTransactionsCount: req.cantidadTransaccionesTransferencia,
           countMethod: 'BLIND_COUNT',
           observation: 'Arqueo ciego para cierre de turno',
         }),
@@ -229,6 +233,10 @@ export async function declararArqueoCiego(turnoId: number | string, req: Declara
     );
   } catch (err) {
     console.warn('[cajaApi] Aviso al registrar conteo:', err);
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(`ordeon_arqueo_${turnoId}`, JSON.stringify(req));
   }
 
   return {
@@ -307,6 +315,14 @@ export async function forzarCierreTurno(
 }
 
 export async function obtenerDetalleSupervisor(turnoId: number | string, token?: string): Promise<DetalleSupervisorCierreDto> {
+  let storedReq: DeclararArqueoCiegoRequest | null = null;
+  if (typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem(`ordeon_arqueo_${turnoId}`);
+    if (raw) {
+      try { storedReq = JSON.parse(raw); } catch {}
+    }
+  }
+
   try {
     const res = await apiClient<any>(
       `/reports/cash-closure/${turnoId}`,
@@ -315,7 +331,11 @@ export async function obtenerDetalleSupervisor(turnoId: number | string, token?:
     );
 
     const saldo = res?.saldoTeorico ?? res?.theoreticalBalance ?? 0;
-    const decl = res?.totalDeclarado ?? res?.declaredTotal ?? 0;
+    const decl = res?.totalDeclarado ?? res?.declaredTotal ?? (storedReq?.declaradoEfectivo ?? 0);
+    const declTar = storedReq?.declaradoTarjeta ?? res?.declaradoTarjeta ?? 0;
+    const declTrans = storedReq?.declaradoTransferencia ?? res?.declaradoTransferencia ?? 0;
+    const cantTar = storedReq?.cantidadTransaccionesTarjeta ?? 0;
+    const cantTrans = storedReq?.cantidadTransaccionesTransferencia ?? 0;
 
     return {
       idTurno: turnoId,
@@ -323,37 +343,55 @@ export async function obtenerDetalleSupervisor(turnoId: number | string, token?:
       cajero: 'Cajero Principal',
       declarado: {
         efectivo: decl,
-        tarjeta: 0,
-        transferencia: 0,
-        total: decl,
+        tarjeta: declTar,
+        transferencia: declTrans,
+        total: decl + declTar + declTrans,
+        cantidadTarjeta: cantTar,
+        cantidadTransferencia: cantTrans,
       },
       teorico: {
         efectivo: saldo,
-        tarjeta: 0,
-        transferencia: 0,
-        total: saldo,
+        tarjeta: res?.teoricoTarjeta ?? 0,
+        transferencia: res?.teoricoTransferencia ?? 0,
+        total: saldo + (res?.teoricoTarjeta ?? 0) + (res?.teoricoTransferencia ?? 0),
+        cantidadTarjeta: res?.cantidadTeoricaTarjeta ?? 0,
+        cantidadTransferencia: res?.cantidadTeoricaTransferencia ?? 0,
       },
-      diferencia: decl - saldo,
+      diferencia: (decl + declTar + declTrans) - (saldo + (res?.teoricoTarjeta ?? 0) + (res?.teoricoTransferencia ?? 0)),
+      diferenciaCantidadTarjeta: cantTar - (res?.cantidadTeoricaTarjeta ?? 0),
+      diferenciaCantidadTransferencia: cantTrans - (res?.cantidadTeoricaTransferencia ?? 0),
       estado: res?.estado ?? 'PENDIENTE_VOBO',
     };
   } catch {
+    const declEf = storedReq?.declaradoEfectivo ?? 100000;
+    const declTar = storedReq?.declaradoTarjeta ?? 0;
+    const declTrans = storedReq?.declaradoTransferencia ?? 0;
+    const cantTar = storedReq?.cantidadTransaccionesTarjeta ?? 0;
+    const cantTrans = storedReq?.cantidadTransaccionesTransferencia ?? 0;
+
     return {
       idTurno: turnoId,
       codigoTurno: `TURNO-0${turnoId}`,
       cajero: 'Cajero Principal',
       declarado: {
-        efectivo: 100000,
-        tarjeta: 0,
-        transferencia: 0,
-        total: 100000,
+        efectivo: declEf,
+        tarjeta: declTar,
+        transferencia: declTrans,
+        total: declEf + declTar + declTrans,
+        cantidadTarjeta: cantTar,
+        cantidadTransferencia: cantTrans,
       },
       teorico: {
         efectivo: 100000,
         tarjeta: 0,
         transferencia: 0,
         total: 100000,
+        cantidadTarjeta: 0,
+        cantidadTransferencia: 0,
       },
-      diferencia: 0,
+      diferencia: (declEf + declTar + declTrans) - 100000,
+      diferenciaCantidadTarjeta: cantTar,
+      diferenciaCantidadTransferencia: cantTrans,
       estado: 'PENDIENTE_VOBO',
     };
   }
