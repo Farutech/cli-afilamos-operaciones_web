@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Plus,
   Trash2,
@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  FileText,
 } from 'lucide-react';
 import { Button } from '@farutech/design-system';
 import { CurrencyInput } from './CurrencyInput';
@@ -155,12 +154,9 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
   soloLectura = false,
   onLiquidarSaldoCompleto,
 }) => {
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'OTROS'>('EFECTIVO');
-
   // Toggles de acordeón para maximizar el espacio útil
   const [isPrelacionOpen, setIsPrelacionOpen] = useState(false);
   const [isHistoricosOpen, setIsHistoricosOpen] = useState(false);
-  const [isNotasOpen, setIsNotasOpen] = useState(Boolean(observacionesPago && observacionesPago.trim().length > 0));
 
   const [internalInstrumentoUuid, setInternalInstrumentoUuid] = useState<string>('mp-efectivo');
   const instrumentoSeleccionadoUuid = propInstrumentoSeleccionadoUuid !== undefined ? propInstrumentoSeleccionadoUuid : internalInstrumentoUuid;
@@ -200,21 +196,9 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
     return Array.from(mapa.values());
   }, [mediosPagoDisponibles]);
 
-  // Instrumentos disponibles según la categoría seleccionada
-  const instrumentosEnCategoria = useMemo(() => {
-    return listaOpciones.filter((i) => i.categoria === categoriaSeleccionada);
-  }, [listaOpciones, categoriaSeleccionada]);
-
-  // Asegurar instrumento seleccionado coherente con la categoría
-  useEffect(() => {
-    if (instrumentosEnCategoria.length > 0 && !instrumentosEnCategoria.some((i) => i.uuid === instrumentoSeleccionadoUuid)) {
-      setInstrumentoSeleccionadoUuid(instrumentosEnCategoria[0].uuid);
-    }
-  }, [categoriaSeleccionada, instrumentosEnCategoria, instrumentoSeleccionadoUuid]);
-
   const instrumentoActual =
     listaOpciones.find((i) => i.uuid === instrumentoSeleccionadoUuid) ||
-    instrumentosEnCategoria[0] ||
+    listaOpciones[0] ||
     MEDIOS_CANONICOS[0];
 
   // Cálculo de totales históricos y nuevos
@@ -273,13 +257,6 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
       setMontoInput(String(Math.round(saldoRestante)));
     }
   };
-
-  const CATEGORIAS: { id: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'OTROS'; label: string; icon: string }[] = [
-    { id: 'EFECTIVO', label: 'Efectivo', icon: '💵' },
-    { id: 'TRANSFERENCIA', label: 'Transferencia', icon: '🏦' },
-    { id: 'TARJETA', label: 'Tarjeta / Datáfono', icon: '💳' },
-    { id: 'OTROS', label: 'Otros / Crédito', icon: '📑' },
-  ];
 
   return (
     <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 sm:p-4 space-y-3 shadow-lg backdrop-blur-md">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { TurnoDto, DetalleSupervisorCierreDto } from '../../types/caja';
+import type { TurnoDto, DetalleSupervisorCierreDto, DeclararArqueoCiegoRequest } from '../../types/caja';
 import {
   abrirTurno,
   obtenerTurnoActivo,

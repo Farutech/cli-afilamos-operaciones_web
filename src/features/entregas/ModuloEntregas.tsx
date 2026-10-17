@@ -4,7 +4,6 @@ import {
   Button,
   Badge,
   Input,
-  Textarea,
   Modal,
   Alert,
   EmptyState,
@@ -96,7 +95,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const [etapaEntrega, setEtapaEntrega] = useState<'seleccion' | 'proceso'>('seleccion');
 
   // Pago en Entrega
-  const [incluirPagoConsolidado, setIncluirPagoConsolidado] = useState<boolean>(true);
+  const [incluirPagoConsolidado] = useState<boolean>(true);
   const [montoPagoConsolidado, setMontoPagoConsolidado] = useState<number>(0);
   const [metodoPagoConsolidado, setMetodoPagoConsolidado] = useState<string>(
     instrumentosProps[0]?.uuid || DEFAULT_EFECTIVO.uuid
