@@ -286,7 +286,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
             disabled={!montoInput || Number(montoInput) <= 0}
             className="h-8 sm:h-9 px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-md rounded-lg"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus/>
             <span>+ Registrar Abono</span>
           </Button>
         )}
@@ -301,7 +301,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
           </span>
           {saldoRestante === 0 ? (
             <span className="text-emerald-400 font-bold text-[11px] flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> 100% Cubierto
+              <CheckCircle2/> 100% Cubierto
             </span>
           ) : (
             <span className="text-amber-300 font-mono font-bold text-[11px]">
@@ -391,12 +391,12 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
         </div>
       )}
 
-      {/* 5. Campos de Captura Directa según Imagen */}
+      {/* 5. Campos de Captura Directa en una misma línea */}
       {!soloLectura && (
         <div className="space-y-3">
-          {/* Fila 1: Instrumento de pago y Monto */}
+          {/* Fila única: Instrumento de pago, Monto y Referencia / Comprobante */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            <div className="md:col-span-8">
+            <div className="md:col-span-5">
               <label htmlFor="instrumento-pago-select" className="block text-xs font-semibold text-slate-300 mb-1">
                 Instrumento de pago *
               </label>
@@ -415,7 +415,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
               </select>
             </div>
 
-            <div className="md:col-span-4">
+            <div className="md:col-span-3">
               <div className="flex items-center justify-between mb-1">
                 <label htmlFor="monto-abono-input" className="block text-xs font-semibold text-slate-300">
                   {modo === 'entrega' ? 'Monto a cobrar *' : 'Monto *'}
@@ -442,23 +442,22 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
                 className="font-mono font-bold text-xs h-9 w-full bg-slate-950 border border-slate-700/80 rounded-lg px-3 text-white"
               />
             </div>
-          </div>
 
-          {/* Fila 2: Referencia / Comprobante */}
-          <div>
-            <label htmlFor="referencia-abono-input" className="block text-xs font-semibold text-slate-300 mb-1">
-              Referencia / Comprobante
-            </label>
-            <input
-              id="referencia-abono-input"
-              aria-label="Referencia / Comprobante"
-              type="text"
-              value={referenciaInput}
-              onChange={(e) => setReferenciaInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
-              placeholder="Ej: Voucher #123456, Aprobación..."
-              className="w-full h-9 px-3 bg-slate-950 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
+            <div className="md:col-span-4">
+              <label htmlFor="referencia-abono-input" className="block text-xs font-semibold text-slate-300 mb-1">
+                Referencia / Comprobante
+              </label>
+              <input
+                id="referencia-abono-input"
+                aria-label="Referencia / Comprobante"
+                type="text"
+                value={referenciaInput}
+                onChange={(e) => setReferenciaInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAgregarPago()}
+                placeholder="Ej: Voucher #123456, Aprobación..."
+                className="w-full h-9 px-3 bg-slate-950 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
           </div>
 
           {/* Fila 3: Observaciones del Recaudo / Pago */}
