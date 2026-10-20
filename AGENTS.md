@@ -2,10 +2,12 @@
 
 ## Contexto obligatorio
 - Hub: `../engineering-hub/AGENTS.md`, `../engineering-hub/docs/09_ai/06-ecosystem-workspace.md` y `../engineering-hub/docs/09_ai/10-project-discovery-and-design.md`.
+- Para SDD/MVP que cruce producto o componentes, sigue `../engineering-hub/.agents/skills/spec-driven-delivery/SKILL.md`.
 - No empieces implementación si el Hub no está incluido o accesible.
 - Para un cambio que cruce repos, sigue `../engineering-hub/.agents/skills/cross-repo-change/SKILL.md`.
 - Para UI, sigue `../engineering-hub/.agents/skills/frontend-change/SKILL.md` y la pauta local de Ordeon de este repo. La skill describe el método; los requisitos aprobados de Ordeon deciden comportamiento y presentación.
 - Producto: ../cli-afilamos-operaciones/AGENTS.md y requisitos pertinentes.
+- Lee allí el contexto/plan y los requisitos/prototipos vigentes según la autoridad de `docs/README.md`; este repo es dueño de implementación web, no de redefinir el comportamiento del producto.
 - API: ../engineering-hub/contracts/afilamos-operaciones/api.openapi.yaml es draft; contrasta con la API real.
 - UI Ordeon: `.agents/rules/afilamos-frontend.md` y el paquete instalado en `../pkg-ts-design-system`.
 - Requisitos, prototipos y criterios de aceptación: localiza la fuente indicada en la tarea/producto y verifica que esté aprobada y vigente. Si no se identifica una fuente canónica o su estado, pregunta antes de diseñar o cambiar UI.
@@ -23,6 +25,7 @@
 - Reutiliza componentes del design system; verifica su API y versión antes de crear alternativas.
 - No inventes endpoints ni campos; separa claramente prototipos mock de integración real.
 - Antes de editar, revisa el flujo afectado, estados de interacción, responsive, accesibilidad y componentes/patrones existentes; si falta una decisión de producto o diseño necesaria, pregunta y espera respuesta.
+- Implementa una slice de usuario acordada, no pantallas desconectadas del MVP. Si el prototipo/SDD/contrato y la UI actual discrepan, expón el conflicto antes de elegir o cambiar.
 
 ## Seguridad y validación
 - No expongas secretos de `.npmrc` o `.env*`. Cambia lockfiles cuando un cambio de dependencias lo requiera y revisa su diff; modifica CI solo si está dentro del alcance solicitado.
