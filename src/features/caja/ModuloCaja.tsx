@@ -11,8 +11,15 @@ import {
 } from '../../services/cajaApi';
 import { catalogosApi } from '../../services/catalogosApi';
 import type { DenominacionEfectivo, Caja } from '../../types/catalogos';
-import { Badge, Button, Card, Input } from '@farutech/design-system';
-import { RotateCcw } from 'lucide-react';
+import { Badge, Button, Card, Input, Modal } from '@farutech/design-system';
+import {
+  RotateCcw,
+  AlertCircle,
+  CheckCircle2,
+  ShieldCheck,
+  X,
+  AlertTriangle,
+} from 'lucide-react';
 import { ListPageLayout, CurrencyInput } from '../../components/ui';
 
 /** Planilla de conteo por denominación (cantidad + subtotal calculado). */
@@ -478,23 +485,39 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
       {/* Alertas */}
       {errorMsg && (
-        <div className="p-4 bg-rose-950/40 border border-rose-800/50 text-rose-300 rounded-xl text-sm flex justify-between items-center">
-          <div>
-            <strong className="font-semibold">Atención:</strong> {errorMsg}
+        <div className="p-4 bg-rose-950/40 border border-rose-800/60 text-rose-200 rounded-xl text-sm flex justify-between items-start gap-3 backdrop-blur-md shadow-lg shadow-rose-950/20 transition-all">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="font-semibold text-rose-300">Atención:</strong> {errorMsg}
+            </div>
           </div>
-          <button onClick={() => setErrorMsg(null)} className="text-rose-400 hover:text-rose-200 font-bold ml-4">
-            ×
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            className="text-rose-400 hover:text-rose-100 font-bold p-1 rounded hover:bg-rose-900/40 transition-colors cursor-pointer"
+            aria-label="Cerrar alerta de error"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {successMsg && (
-        <div className="p-4 bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 rounded-xl text-sm flex justify-between items-center">
-          <div>
-            <strong className="font-semibold">Éxito:</strong> {successMsg}
+        <div className="p-4 bg-emerald-950/40 border border-emerald-800/60 text-emerald-200 rounded-xl text-sm flex justify-between items-start gap-3 backdrop-blur-md shadow-lg shadow-emerald-950/20 transition-all">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="font-semibold text-emerald-300">Éxito:</strong> {successMsg}
+            </div>
           </div>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-200 font-bold ml-4">
-            ×
+          <button
+            type="button"
+            onClick={() => setSuccessMsg(null)}
+            className="text-emerald-400 hover:text-emerald-100 font-bold p-1 rounded hover:bg-emerald-900/40 transition-colors cursor-pointer"
+            aria-label="Cerrar alerta de éxito"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -524,7 +547,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
             </div>
 
             <form onSubmit={handleAbrirTurno} className="space-y-5 pt-2">
-              {/* Chips de Selección Rápida */}
+              {/* Chips de Selección Rápida con tamaño táctil optimizado */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
                   Selección Rápida de Base Inicial
@@ -537,7 +560,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                         key={val}
                         type="button"
                         onClick={() => setBaseInicial(String(val))}
-                        className={`py-2 px-1 rounded-xl text-xs font-mono font-bold transition-all ${
+                        className={`min-h-[44px] py-2 px-1 rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center cursor-pointer ${
                           esSeleccionado
                             ? 'bg-primary-600 text-white border-2 border-primary-400 shadow-md shadow-primary-900/50 scale-[1.02]'
                             : 'bg-gray-800/80 text-gray-300 border border-white/10 hover:border-white/20 hover:bg-gray-800'
@@ -888,16 +911,35 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                       <td className="px-4 py-2.5 text-right text-white">
                         ${detalleSupervisor.teorico.total.toLocaleString('es-CO')}
                       </td>
-                      <td
-                        className={`px-4 py-2.5 text-right ${
-                          detalleSupervisor.diferencia < 0
-                            ? 'text-rose-400'
-                            : detalleSupervisor.diferencia > 0
-                            ? 'text-sky-400'
-                            : 'text-emerald-400'
-                        }`}
-                      >
-                        ${detalleSupervisor.diferencia.toLocaleString('es-CO')}
+                      <td className="px-4 py-2.5 text-right font-mono font-bold">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span
+                            className={
+                              detalleSupervisor.diferencia < 0
+                                ? 'text-rose-400'
+                                : detalleSupervisor.diferencia > 0
+                                ? 'text-sky-400'
+                                : 'text-emerald-400'
+                            }
+                          >
+                            ${detalleSupervisor.diferencia.toLocaleString('es-CO')}
+                          </span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded font-sans font-bold ${
+                              detalleSupervisor.diferencia === 0
+                                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                                : detalleSupervisor.diferencia > 0
+                                ? 'bg-sky-950/80 text-sky-300 border border-sky-800/60'
+                                : 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
+                            }`}
+                          >
+                            {detalleSupervisor.diferencia === 0
+                              ? '✓ Cuadrado'
+                              : detalleSupervisor.diferencia > 0
+                              ? '+ Sobrante'
+                              : '- Faltante'}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -911,39 +953,45 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
 
             {/* Formulario VoBo */}
             <div className="pt-4 border-t border-slate-800 space-y-4 max-w-md">
-              <h4 className="text-sm font-bold text-white">Autorización con PIN de Supervisor (T054)</h4>
+              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>Autorización con PIN de Supervisor (T054)</span>
+              </h4>
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                <label htmlFor="pin-supervisor-input" className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                   PIN de Seguridad *
                 </label>
                 <input
+                  id="pin-supervisor-input"
+                  aria-label="PIN de Seguridad del Supervisor"
                   type="password"
                   maxLength={6}
                   value={pinSupervisor}
                   onChange={(e) => setPinSupervisor(e.target.value)}
                   placeholder="••••"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-center tracking-widest text-lg font-bold text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full h-11 px-3 bg-slate-950 border border-slate-700/80 rounded-xl text-center tracking-widest text-xl font-bold font-mono text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
                 />
                 <span className="text-xs text-slate-400">
                   Invariante #7: El supervisor no puede ser el mismo cajero del turno.
                 </span>
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+                <label htmlFor="observaciones-vobo-input" className="block text-xs font-semibold uppercase text-slate-400 mb-1">
                   Observaciones / Justificación de Cierre
                 </label>
                 <input
+                  id="observaciones-vobo-input"
                   type="text"
                   value={observacionVoBo}
                   onChange={(e) => setObservacionVoBo(e.target.value)}
                   placeholder="Ej: Conteo conforme / Justificación de descuadre"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full h-10 px-3 bg-slate-950 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
               {esAdmin && (
                 <div className="p-3 bg-indigo-950/50 border border-indigo-700/60 rounded-xl space-y-2">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-300">
-                    <span>🛡️</span> Modo Administrador: Aprobación Directa
+                    <ShieldCheck className="w-4 h-4 text-indigo-400" /> Modo Administrador: Aprobación Directa
                   </div>
                   <p className="text-[11px] text-slate-300">
                     Como Administrador puedes validar y cerrar el turno directamente sin ingresar PIN secundario de supervisor.
@@ -952,7 +1000,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                     type="button"
                     variant="primary"
                     size="sm"
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 font-bold"
+                    className="w-full min-h-[44px] bg-emerald-600 hover:bg-emerald-500 font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                     disabled={procesandoVoBo}
                     onClick={() => handleProcesarVoBo('APROBADO', true)}
                   >
@@ -966,7 +1014,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                   type="button"
                   disabled={procesandoVoBo}
                   onClick={() => handleProcesarVoBo('APROBADO')}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow text-sm transition-colors"
+                  className="flex-1 min-h-[44px] py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   {procesandoVoBo ? 'Procesando...' : '✓ Aprobar Cierre con PIN'}
                 </button>
@@ -974,7 +1022,7 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
                   type="button"
                   disabled={procesandoVoBo}
                   onClick={() => handleProcesarVoBo('RECHAZADO')}
-                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg shadow text-sm transition-colors"
+                  className="flex-1 min-h-[44px] py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg shadow text-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   {procesandoVoBo ? 'Procesando...' : '✕ Rechazar Cierre'}
                 </button>
@@ -984,349 +1032,335 @@ export const ModuloCaja: React.FC<ModuloCajaProps> = ({
         </div>
       )}
 
-      {/* Modal Egreso Menor */}
-      {mostrarModalEgreso && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>💸</span> Comprobante de Egreso (Caja Menor)
-              </h3>
-              <button
-                type="button"
-                onClick={() => setMostrarModalEgreso(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-lg"
-              >
-                ✕
-              </button>
-            </div>
-            <p className="text-xs text-slate-400">
-              Registra salidas de dinero autorizadas con asignación de folio consecutivo automático (RF-6.10).
-            </p>
+      {/* Modal Egreso Menor utilizando componente canónico Modal */}
+      <Modal
+        isOpen={mostrarModalEgreso}
+        onClose={() => setMostrarModalEgreso(false)}
+        title="Comprobante de Egreso (Caja Menor)"
+        subtitle="Registra salidas de dinero autorizadas con asignación de folio consecutivo automático (RF-6.10)."
+        size="md"
+      >
+        <form onSubmit={handleRegistrarEgreso} className="space-y-4 pt-2">
+          <div>
+            <label htmlFor="egreso-monto-input" className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+              Monto a Retirar (COP) *
+            </label>
+            <CurrencyInput
+              id="egreso-monto-input"
+              required
+              value={egresoMonto ? Number(egresoMonto) : undefined}
+              onChange={(val) => setEgresoMonto(val !== undefined ? String(val) : '')}
+              placeholder="15000"
+              className="h-10 text-sm font-mono font-bold"
+            />
+          </div>
+          <div>
+            <label htmlFor="egreso-motivo-textarea" className="block text-xs font-semibold uppercase text-slate-400 mb-1">
+              Motivo / Justificación *
+            </label>
+            <textarea
+              id="egreso-motivo-textarea"
+              required
+              rows={3}
+              value={egresoMotivo}
+              onChange={(e) => setEgresoMotivo(e.target.value)}
+              placeholder="Ej: Compra de insumos de limpieza para mostrador"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-700/80 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none"
+            />
+          </div>
+          <div className="flex gap-2.5 justify-end pt-3 border-t border-slate-800">
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              onClick={() => setMostrarModalEgreso(false)}
+              className="min-h-[40px] px-4"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={guardandoEgreso}
+              className="min-h-[40px] px-4 font-bold bg-indigo-600 hover:bg-indigo-500"
+            >
+              {guardandoEgreso ? 'Guardando...' : 'Emitir Comprobante'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
-            <form onSubmit={handleRegistrarEgreso} className="space-y-4">
+      {/* Modal Arqueo Ciego con Desglose de Denominaciones (Dark Mode) */}
+      <Modal
+        isOpen={mostrarModalArqueo}
+        onClose={() => setMostrarModalArqueo(false)}
+        title="Cierre de Turno: Arqueo Ciego (RF-6.5)"
+        subtitle="Control y cuadre de valores físicos de la jornada sin saldos esperados visibles."
+        size="xl"
+      >
+        <div className="space-y-4 pt-1 max-h-[75vh] overflow-y-auto pr-1">
+          <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl text-xs text-amber-200 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <strong>Atención — Arqueo Ciego:</strong> Ingrese los valores reales que contó físicamente en su gaveta y datáfono. Los saldos teóricos del sistema están ocultos para asegurar integridad.
+            </div>
+          </div>
+
+          {esAdmin && (
+            <div className="p-3 bg-indigo-950/60 border border-indigo-600/50 rounded-xl text-xs text-indigo-200 flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                  Monto a Retirar (COP) *
-                </label>
-                <CurrencyInput
+                <strong className="text-white block font-bold">Modo Administrador de Cierre:</strong>
+                Como Administrador puedes enviar este arqueo a <strong>VoBo de Supervisión</strong> para auditoría previa, o presionar <strong>⚡ Forzar Cierre Definitivo (Admin)</strong> para cerrar la caja de inmediato en la base de datos sin requerir PIN adicional.
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleDeclararArqueoCiego} className="space-y-4">
+            {/* Sección Efectivo: Selector de Modo (Desglose vs Directo) */}
+            <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>💵</span> Efectivo Contado en Gaveta (COP) *
+                  </label>
+                  <span className="text-[11px] text-slate-400 block">
+                    Total contado:{' '}
+                    <strong className="text-emerald-400 font-mono text-sm font-bold">
+                      {new Intl.NumberFormat('es-CO', {
+                        style: 'currency',
+                        currency: 'COP',
+                        maximumFractionDigits: 0,
+                      }).format(Number(declEfectivo) || 0)}
+                    </strong>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setModoDesgloseEfectivo(true)}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                      modoDesgloseEfectivo
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🪙 Por Monedas / Billetes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModoDesgloseEfectivo(false)}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                      !modoDesgloseEfectivo
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    ⌨️ Total Directo
+                  </button>
+                </div>
+              </div>
+
+              {modoDesgloseEfectivo && (
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 pb-1">
+                    <span className="flex items-center gap-2">
+                      Planilla de Conteo Físico por Denominación:
+                      {denominacionesConfiguradas ? (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/50 text-[10px] font-semibold">
+                          ✓ Configuradas por Administración
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-semibold">
+                          Estándar COP (fallback)
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleReiniciarConteo}
+                      className="text-amber-400 hover:underline cursor-pointer"
+                    >
+                      ↺ Poner en ceros
+                    </button>
+                  </div>
+
+                  <div className="border border-slate-800 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-950 text-slate-400 sticky top-0 uppercase tracking-wider">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Denominación</th>
+                          <th className="px-2 py-2 text-center">Tipo</th>
+                          <th className="px-3 py-2 text-center w-28">Cantidad</th>
+                          <th className="px-3 py-2 text-right">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {conteoDenominaciones.map((d, idx) => (
+                          <tr key={`${d.tipo}-${d.valor}-${idx}`} className="hover:bg-slate-800/40">
+                            <td className="px-3 py-2 font-mono font-bold text-white">
+                              {d.etiqueta}
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                  d.tipo === 'BILLETE'
+                                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                    : 'bg-amber-950 text-amber-300 border border-amber-800'
+                                }`}
+                              >
+                                {d.tipo === 'BILLETE' ? '💵 Billete' : '🪙 Moneda'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-1.5 text-center">
+                              <input
+                                type="number"
+                                min={0}
+                                value={d.cantidad || ''}
+                                placeholder="0"
+                                onChange={(e) =>
+                                  handleCantidadDenominacionChange(
+                                    idx,
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                                className="w-20 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-center text-white font-mono font-bold focus:outline-none focus:border-amber-500"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-slate-200">
+                              {new Intl.NumberFormat('es-CO', {
+                                style: 'currency',
+                                currency: 'COP',
+                                maximumFractionDigits: 0,
+                              }).format(d.cantidad * d.valor)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <Input
+                  id="arqueo-efectivo"
+                  label="Efectivo Contado Físicamente (COP) *"
+                  aria-label="Efectivo Contado Físicamente"
+                  type="number"
+                  min="0"
+                  step="100"
                   required
-                  value={egresoMonto ? Number(egresoMonto) : undefined}
-                  onChange={(val) => setEgresoMonto(val !== undefined ? String(val) : '')}
-                  placeholder="15000"
+                  value={declEfectivo}
+                  onChange={(e) => setDeclEfectivo(e.target.value)}
+                  helperText={modoDesgloseEfectivo ? "Calculado automáticamente por el conteo de billetes y monedas, o modifique si requiere ajuste manual." : undefined}
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">
-                  Motivo / Justificación *
-                </label>
-                <textarea
+            </div>
+
+            {/* Tarjeta & Transferencia con Monto y Cantidad de Procesos/Comprobantes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Input
+                  id="arqueo-tarjeta"
+                  label="Vouchers Datáfono (Monto COP) *"
+                  type="number"
+                  min="0"
+                  step="100"
                   required
-                  rows={2}
-                  value={egresoMotivo}
-                  onChange={(e) => setEgresoMotivo(e.target.value)}
-                  placeholder="Ej: Compra de insumos de limpieza para mostrador"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                  value={declTarjeta}
+                  onChange={(e) => setDeclTarjeta(e.target.value)}
                 />
+                <div className="pt-1">
+                  <label htmlFor="arqueo-cantidad-tarjeta" className="block text-[11px] font-semibold text-slate-400 mb-1">
+                    Cantidad de Vouchers (Tirilla Lote)
+                  </label>
+                  <input
+                    id="arqueo-cantidad-tarjeta"
+                    type="number"
+                    min="0"
+                    placeholder="Ej: 12"
+                    value={declCantidadTarjeta}
+                    onChange={(e) => setDeclCantidadTarjeta(e.target.value)}
+                    className="w-full h-9 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
               </div>
-              <div className="flex gap-2 justify-end pt-2 border-t border-slate-800">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMostrarModalEgreso(false)}
-                >
-                  Cancelar
-                </Button>
+
+              <div className="space-y-1">
+                <Input
+                  id="arqueo-transferencia"
+                  label="Transferencias Bancarias (Monto COP) *"
+                  type="number"
+                  min="0"
+                  step="100"
+                  required
+                  value={declTransferencia}
+                  onChange={(e) => setDeclTransferencia(e.target.value)}
+                />
+                <div className="pt-1">
+                  <label htmlFor="arqueo-cantidad-transferencia" className="block text-[11px] font-semibold text-slate-400 mb-1">
+                    Cantidad de Transferencias (Comprobantes)
+                  </label>
+                  <input
+                    id="arqueo-cantidad-transferencia"
+                    type="number"
+                    min="0"
+                    placeholder="Ej: 5"
+                    value={declCantidadTransferencia}
+                    onChange={(e) => setDeclCantidadTransferencia(e.target.value)}
+                    className="w-full h-9 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-slate-950/60 border border-slate-800 rounded-lg text-[11px] text-slate-400 flex items-center gap-2">
+              <span className="text-amber-400 font-bold">ℹ️ Cartera y Créditos:</span>
+              <span>Los pagos a crédito comercial (15, 30, 60, 90 y 120 días) representan cobro diferido; no requieren arqueo físico ni afectan el cuadre de este turno.</span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => setMostrarModalArqueo(false)}
+                className="min-h-[40px] px-4"
+              >
+                Cancelar
+              </Button>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {esAdmin && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    className="bg-rose-700 hover:bg-rose-600 text-white font-bold min-h-[40px] px-4 cursor-pointer"
+                    disabled={guardandoArqueo}
+                    onClick={handleForzarCierreAdmin}
+                    title="Administrador: Registra conteo y fuerza el cierre inmediato del turno en la base de datos"
+                  >
+                    {guardandoArqueo ? 'Cerrando Turno...' : '⚡ Forzar Cierre Definitivo (Admin)'}
+                  </Button>
+                )}
                 <Button
                   type="submit"
                   variant="primary"
-                  size="sm"
-                  disabled={guardandoEgreso}
+                  size="md"
+                  className="bg-amber-600 hover:bg-amber-500 text-white font-bold min-h-[40px] px-4 cursor-pointer"
+                  disabled={guardandoArqueo}
                 >
-                  {guardandoEgreso ? 'Guardando...' : 'Emitir Comprobante'}
+                  {guardandoArqueo ? 'Registrando...' : 'Declarar y Enviar a VoBo'}
                 </Button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Arqueo Ciego con Desglose de Denominaciones (Dark Mode) */}
-      {mostrarModalArqueo && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>🔒</span> Cierre de Turno: Arqueo Ciego (RF-6.5)
-              </h3>
-              <button
-                type="button"
-                onClick={() => setMostrarModalArqueo(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer text-lg"
-              >
-                ✕
-              </button>
             </div>
-
-            <div className="p-3 bg-amber-950/40 border border-amber-600/40 rounded-xl text-xs text-amber-200">
-              <strong>Atención — Arqueo Ciego:</strong> Ingrese los valores reales que contó físicamente en su gaveta y datáfono. Los saldos teóricos del sistema están ocultos para asegurar integridad.
-            </div>
-
-            {esAdmin && (
-              <div className="p-3 bg-indigo-950/60 border border-indigo-600/50 rounded-xl text-xs text-indigo-200 flex items-start gap-2">
-                <span className="text-base">🛡️</span>
-                <div>
-                  <strong className="text-white block font-bold">Modo Administrador de Cierre:</strong>
-                  Como Administrador puedes enviar este arqueo a <strong>VoBo de Supervisión</strong> para auditoría previa, o presionar <strong>⚡ Forzar Cierre Definitivo (Admin)</strong> para cerrar la caja de inmediato en la base de datos sin requerir PIN adicional.
-                </div>
-              </div>
-            )}
-
-            <form onSubmit={handleDeclararArqueoCiego} className="space-y-4">
-              {/* Sección Efectivo: Selector de Modo (Desglose vs Directo) */}
-              <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
-                      <span>💵</span> Efectivo Contado en Gaveta (COP) *
-                    </label>
-                    <span className="text-[11px] text-slate-400 block">
-                      Total contado:{' '}
-                      <strong className="text-emerald-400 font-mono text-sm font-bold">
-                        {new Intl.NumberFormat('es-CO', {
-                          style: 'currency',
-                          currency: 'COP',
-                          maximumFractionDigits: 0,
-                        }).format(Number(declEfectivo) || 0)}
-                      </strong>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setModoDesgloseEfectivo(true)}
-                      className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
-                        modoDesgloseEfectivo
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      🪙 Por Monedas / Billetes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModoDesgloseEfectivo(false)}
-                      className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
-                        !modoDesgloseEfectivo
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      ⌨️ Total Directo
-                    </button>
-                  </div>
-                </div>
-
-                {modoDesgloseEfectivo && (
-                  <div className="space-y-2 pt-2">
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 pb-1">
-                      <span className="flex items-center gap-2">
-                        Planilla de Conteo Físico por Denominación:
-                        {denominacionesConfiguradas ? (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/50 text-[10px] font-semibold">
-                            ✓ Configuradas por Administración
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-semibold">
-                            Estándar COP (fallback)
-                          </span>
-                        )}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleReiniciarConteo}
-                        className="text-amber-400 hover:underline cursor-pointer"
-                      >
-                        ↺ Poner en ceros
-                      </button>
-                    </div>
-
-                    <div className="border border-slate-800 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
-                      <table className="w-full text-xs">
-                        <thead className="bg-slate-950 text-slate-400 sticky top-0 uppercase tracking-wider">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Denominación</th>
-                            <th className="px-2 py-2 text-center">Tipo</th>
-                            <th className="px-3 py-2 text-center w-28">Cantidad</th>
-                            <th className="px-3 py-2 text-right">Subtotal</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/60">
-                          {conteoDenominaciones.map((d, idx) => (
-                            <tr key={`${d.tipo}-${d.valor}-${idx}`} className="hover:bg-slate-800/40">
-                              <td className="px-3 py-2 font-mono font-bold text-white">
-                                {d.etiqueta}
-                              </td>
-                              <td className="px-2 py-2 text-center">
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                                    d.tipo === 'BILLETE'
-                                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                                      : 'bg-amber-950 text-amber-300 border border-amber-800'
-                                  }`}
-                                >
-                                  {d.tipo === 'BILLETE' ? '💵 Billete' : '🪙 Moneda'}
-                                </span>
-                              </td>
-                              <td className="px-3 py-1.5 text-center">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={d.cantidad || ''}
-                                  placeholder="0"
-                                  onChange={(e) =>
-                                    handleCantidadDenominacionChange(
-                                      idx,
-                                      parseInt(e.target.value) || 0
-                                    )
-                                  }
-                                  className="w-20 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-center text-white font-mono font-bold focus:outline-none focus:border-amber-500"
-                                />
-                              </td>
-                              <td className="px-3 py-2 text-right font-mono text-slate-200">
-                                {new Intl.NumberFormat('es-CO', {
-                                  style: 'currency',
-                                  currency: 'COP',
-                                  maximumFractionDigits: 0,
-                                }).format(d.cantidad * d.valor)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-2">
-                  <Input
-                    id="arqueo-efectivo"
-                    label="Efectivo Contado Físicamente (COP) *"
-                    aria-label="Efectivo Contado Físicamente"
-                    type="number"
-                    min="0"
-                    step="100"
-                    required
-                    value={declEfectivo}
-                    onChange={(e) => setDeclEfectivo(e.target.value)}
-                    helperText={modoDesgloseEfectivo ? "Calculado automáticamente por el conteo de billetes y monedas, o modifique si requiere ajuste manual." : undefined}
-                  />
-                </div>
-              </div>
-
-              {/* Tarjeta & Transferencia con Monto y Cantidad de Procesos/Comprobantes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Input
-                    id="arqueo-tarjeta"
-                    label="Vouchers Datáfono (Monto COP) *"
-                    type="number"
-                    min="0"
-                    step="100"
-                    required
-                    value={declTarjeta}
-                    onChange={(e) => setDeclTarjeta(e.target.value)}
-                  />
-                  <div className="pt-1">
-                    <label htmlFor="arqueo-cantidad-tarjeta" className="block text-[11px] font-semibold text-slate-400 mb-1">
-                      Cantidad de Vouchers (Tirilla Lote)
-                    </label>
-                    <input
-                      id="arqueo-cantidad-tarjeta"
-                      type="number"
-                      min="0"
-                      placeholder="Ej: 12"
-                      value={declCantidadTarjeta}
-                      onChange={(e) => setDeclCantidadTarjeta(e.target.value)}
-                      className="w-full h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Input
-                    id="arqueo-transferencia"
-                    label="Transferencias Bancarias (Monto COP) *"
-                    type="number"
-                    min="0"
-                    step="100"
-                    required
-                    value={declTransferencia}
-                    onChange={(e) => setDeclTransferencia(e.target.value)}
-                  />
-                  <div className="pt-1">
-                    <label htmlFor="arqueo-cantidad-transferencia" className="block text-[11px] font-semibold text-slate-400 mb-1">
-                      Cantidad de Transferencias (Comprobantes)
-                    </label>
-                    <input
-                      id="arqueo-cantidad-transferencia"
-                      type="number"
-                      min="0"
-                      placeholder="Ej: 5"
-                      value={declCantidadTransferencia}
-                      onChange={(e) => setDeclCantidadTransferencia(e.target.value)}
-                      className="w-full h-8 px-2.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-2.5 bg-slate-950/60 border border-slate-800 rounded-lg text-[11px] text-slate-400 flex items-center gap-2">
-                <span className="text-amber-400 font-bold">ℹ️ Cartera y Créditos:</span>
-                <span>Los pagos a crédito comercial (15, 30, 60, 90 y 120 días) representan cobro diferido; no requieren arqueo físico ni afectan el cuadre de este turno.</span>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMostrarModalArqueo(false)}
-                >
-                  Cancelar
-                </Button>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {esAdmin && (
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      style={{ backgroundColor: '#dc2626' }}
-                      disabled={guardandoArqueo}
-                      onClick={handleForzarCierreAdmin}
-                      title="Administrador: Registra conteo y fuerza el cierre inmediato del turno en la base de datos"
-                    >
-                      {guardandoArqueo ? 'Cerrando Turno...' : '⚡ Forzar Cierre Definitivo (Admin)'}
-                    </Button>
-                  )}
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    style={{ backgroundColor: '#d97706' }}
-                    disabled={guardandoArqueo}
-                  >
-                    {guardandoArqueo ? 'Registrando...' : 'Declarar y Enviar a VoBo'}
-                  </Button>
-                </div>
-              </div>
-            </form>
-          </div>
+          </form>
         </div>
-      )}
+      </Modal>
     </ListPageLayout>
   );
 };

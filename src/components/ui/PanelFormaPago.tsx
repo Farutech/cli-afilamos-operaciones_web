@@ -507,11 +507,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
                   <CreditCard className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-slate-200">{p.instrumentoNombre}</span>
-                    {p.validaEnCierre ? (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-300">
-                        Caja
-                      </span>
-                    ) : (
+                    {!p.validaEnCierre && (
                       <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-800/60 text-amber-300">
                         Cartera
                       </span>
@@ -528,8 +524,9 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
                     <button
                       type="button"
                       onClick={() => handleEliminarPago(p.idTemp)}
-                      className="text-slate-500 hover:text-rose-400 transition-colors cursor-pointer p-0.5"
+                      className="text-slate-400 hover:text-rose-400 p-1.5 rounded hover:bg-slate-800/50 transition-colors cursor-pointer flex items-center justify-center"
                       title="Eliminar abono"
+                      aria-label={`Eliminar abono de ${p.instrumentoNombre}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
