@@ -26,5 +26,6 @@
 
 ## Seguridad y validación
 - No expongas secretos de `.npmrc` o `.env*`. Cambia lockfiles cuando un cambio de dependencias lo requiera y revisa su diff; modifica CI solo si está dentro del alcance solicitado.
-- Usa los scripts existentes en package.json. Validación documentada: npm run build, npm run test.
+- Para todo cambio ejecutable, corre los checks afectados y siempre `npm run lint`, `npm run test` y `npm run build`; revisa toda su salida, corrige errores y warnings relevantes y repite la validación. Un exit code 0 no basta si quedaron advertencias relevantes.
+- Para cambios de interfaz, inicia la app local y verifica el flujo afectado con navegador/automatización, consola y solicitudes de red en viewports móvil, tablet y escritorio. Revisa accesibilidad e interacción para usuarios nuevos siguiendo la skill `frontend-change`. Si no hay browser o entorno usable, reporta la brecha y no declares validación visual/E2E completa.
 - Aplica la regla visual local de Ordeon sin extenderla a otros productos.
