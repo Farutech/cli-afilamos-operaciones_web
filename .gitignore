@@ -1,9 +1,60 @@
+# ============================================
+# .gitignore - Ordeon Web POS (React + Vite + TypeScript)
+# ============================================
+
+# ---------- Dependencies ----------
 node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# ---------- Build Outputs ----------
 dist/
-.vite/
-coverage/
+dist-ssr/
+build/
+out/
 *.local
+
+# ---------- Vite & Cache ----------
+.vite/
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# ---------- Testing & Coverage ----------
+coverage/
+**/coverage/
+.nyc_output/
+playwright-report/
+**/playwright-report/
+test-results/
+**/test-results/
+.playwright/
+allure-results/
+allure-report/
+
+# ---------- Environment & Secrets ----------
 .env
 .env.*
 !.env.example
+*.local.env
+
+# ---------- Editor / IDE ----------
+.vscode/
+.idea/
+.vs/
+*.suo
+*.user
+
+# ---------- Logs & System ----------
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- Local Packages ----------
 packages/*.tgz
+*.tgz

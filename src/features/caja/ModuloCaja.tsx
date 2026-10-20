@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { TurnoDto, DetalleSupervisorCierreDto, DeclararArqueoCiegoRequest } from '../../types/caja';
+import type { TurnoDto, DetalleSupervisorCierreDto, DeclararArqueoCiegoRequest } from '@/types/caja';
 import {
   abrirTurno,
   obtenerTurnoActivo,
@@ -8,9 +8,9 @@ import {
   forzarCierreTurno,
   obtenerDetalleSupervisor,
   procesarVoBo
-} from '../../services/cajaApi';
-import { catalogosApi } from '../../services/catalogosApi';
-import type { DenominacionEfectivo, Caja } from '../../types/catalogos';
+} from '@/services/cajaApi';
+import { catalogosApi } from '@/services/catalogosApi';
+import type { DenominacionEfectivo, Caja } from '@/types/catalogos';
 import { Badge, Button, Card, Input, Modal } from '@farutech/design-system';
 import {
   RotateCcw,
@@ -20,7 +20,7 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
-import { ListPageLayout, CurrencyInput } from '../../components/ui';
+import { ListPageLayout, CurrencyInput } from '@/components/ui';
 
 /** Planilla de conteo por denominación (cantidad + subtotal calculado). */
 interface ConteoDenominacion {
