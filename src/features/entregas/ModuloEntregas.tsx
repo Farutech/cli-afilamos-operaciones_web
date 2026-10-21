@@ -4,7 +4,6 @@ import {
   Button,
   Badge,
   Input,
-  Textarea,
   Modal,
   Alert,
   EmptyState,
@@ -13,6 +12,8 @@ import {
   DocumentPrintPreviewModal,
   type DocumentPrintData,
   ListPageLayout,
+  PanelFormaPago,
+  type MetodoPagoItem,
 } from '../../components/ui';
 import { CheckCircle, Printer } from 'lucide-react';
 import { entregasApi } from '../../services/entregasApi';
@@ -94,7 +95,7 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
   const [etapaEntrega, setEtapaEntrega] = useState<'seleccion' | 'proceso'>('seleccion');
 
   // Pago en Entrega
-  const [incluirPagoConsolidado, setIncluirPagoConsolidado] = useState<boolean>(true);
+  const [incluirPagoConsolidado] = useState<boolean>(true);
   const [montoPagoConsolidado, setMontoPagoConsolidado] = useState<number>(0);
   const [metodoPagoConsolidado, setMetodoPagoConsolidado] = useState<string>(
     instrumentosProps[0]?.uuid || DEFAULT_EFECTIVO.uuid
@@ -359,6 +360,35 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
     };
   }, [previewData, ordenesAvanceAplicado, anticipoClienteAplicado, totalesSeleccion]);
 
+  const [pagosEntrega, setPagosEntrega] = useState<MetodoPagoItem[]>([]);
+
+  const totalInventario = useMemo(() => {
+    return itemsClienteMarcados
+      .filter((i) => !i.documentoOtNumero && !i.etapaActualCodigo)
+      .reduce((acc, i) => acc + i.subtotal, 0);
+  }, [itemsClienteMarcados]);
+
+  const totalServicios = useMemo(() => {
+    return itemsClienteMarcados
+      .filter((i) => !!(i.documentoOtNumero || i.etapaActualCodigo))
+      .reduce((acc, i) => acc + i.subtotal, 0);
+  }, [itemsClienteMarcados]);
+
+  const montoPagadoEnMostrador = useMemo(() => {
+    if (pagosEntrega.length > 0) {
+      return pagosEntrega.reduce((sum, p) => sum + p.monto, 0);
+    }
+    return incluirPagoConsolidado ? montoPagoConsolidado : 0;
+  }, [pagosEntrega, incluirPagoConsolidado, montoPagoConsolidado]);
+
+  const totalAbonadoYAnticipos = useMemo(() => {
+    return resumenFinanciero.totalAnticipos + montoPagadoEnMostrador;
+  }, [resumenFinanciero.totalAnticipos, montoPagadoEnMostrador]);
+
+  const saldoPendienteNeto = useMemo(() => {
+    return Math.max(0, resumenFinanciero.totalEntregar - totalAbonadoYAnticipos);
+  }, [resumenFinanciero.totalEntregar, totalAbonadoYAnticipos]);
+
   const comprobanteEntregaData = useMemo<DocumentPrintData | null>(() => {
     if (!despachoExitoso) return null;
     return {
@@ -432,7 +462,9 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
       return;
     }
 
-    const montoAPagar = incluirPagoConsolidado ? montoPagoConsolidado : 0;
+    const montoAPagar = montoPagadoEnMostrador;
+    const metodoUuid = pagosEntrega[0]?.instrumentoUuid || metodoPagoConsolidado || mediosPago[0]?.uuid || '';
+    const refPago = pagosEntrega[0]?.referencia || referenciaPagoConsolidado.trim() || undefined;
 
     setLoading(true);
     setErrorMsg(null);
@@ -456,9 +488,9 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
           pagoLiquidacion:
             montoAPagar > 0
               ? {
-                  instrumentoPublicId: metodoPagoConsolidado || mediosPago[0]?.uuid || '',
+                  instrumentoPublicId: metodoUuid,
                   monto: montoAPagar,
-                  referencia: referenciaPagoConsolidado.trim() || undefined,
+                  referencia: refPago,
                 }
               : undefined,
           recibidoPorNombre: receptorNombre.trim(),
@@ -870,129 +902,80 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                   </Card>
                 )}
 
-                {/* FORMULARIO DE LIQUIDACIÓN Y RECEPTOR */}
-                <Card className="p-6 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl space-y-5">
-                  <div className="border-b border-white/10 pb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">💵</span>
-                      <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                        Liquidación de Pago y Receptor
-                      </h3>
-                    </div>
-                    <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={incluirPagoConsolidado}
-                        onChange={(e) => setIncluirPagoConsolidado(e.target.checked)}
-                        className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                      <span>Registrar cobro en entrega</span>
-                    </label>
+                {/* MEDIOS DE PAGO Y ABONOS (COMPONENTE CANÓNICO REUTILIZABLE) */}
+                <PanelFormaPago
+                  title="MEDIOS DE PAGO Y ABONOS DE LA ENTREGA"
+                  subtitulo="Registre los abonos o liquidación del despacho en mostrador"
+                  modo="entrega"
+                  totalDocumento={resumenFinanciero.totalEntregar}
+                  totalInventario={totalInventario}
+                  totalServicios={totalServicios}
+                  abonosPrevios={resumenFinanciero.totalAnticipos}
+                  pagos={pagosEntrega}
+                  onChangePagos={setPagosEntrega}
+                  montoInput={String(montoPagoConsolidado || '')}
+                  onChangeMontoInput={(val) => {
+                    if (val === '') {
+                      setMontoPagoConsolidado(0);
+                    } else {
+                      const num = Number(val);
+                      setMontoPagoConsolidado(isNaN(num) ? 0 : num);
+                    }
+                    setErrorMsg(null);
+                  }}
+                  referenciaInput={referenciaPagoConsolidado}
+                  onChangeReferenciaInput={setReferenciaPagoConsolidado}
+                  instrumentoSeleccionadoUuid={metodoPagoConsolidado}
+                  onChangeInstrumentoSeleccionadoUuid={(uuid) => {
+                    setMetodoPagoConsolidado(uuid);
+                    setErrorMsg(null);
+                  }}
+                  observacionesPago={observacionEntrega}
+                  onChangeObservacionesPago={setObservacionEntrega}
+                  mediosPagoDisponibles={mediosPago.map((m) => ({
+                    uuid: m.uuid,
+                    codigo: m.codigo,
+                    nombre: m.nombre,
+                    categoria: m.categoria,
+                    validaEnCierre: m.validaEnCierre,
+                    permiteReferencia: m.requiereReferencia,
+                    diasCredito: m.diasCredito,
+                  }))}
+                />
+
+                {/* RECEPTOR DE LA ENTREGA */}
+                <Card className="p-5 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-xl space-y-4">
+                  <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+                    <span className="text-base">👤</span>
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                      Receptor / Quien Recibe la Entrega
+                    </h4>
                   </div>
-
-                  <div className="space-y-4">
-                    {/* Fila 1: Instrumento de Pago y Monto a Cobrar */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                      <div className="md:col-span-7">
-                        <label htmlFor="instrumento-pago-select" className="block text-xs font-semibold text-slate-300 uppercase mb-1">
-                          Instrumento de pago *
-                        </label>
-                        <select
-                          id="instrumento-pago-select"
-                          aria-label="Instrumento de pago"
-                          value={metodoPagoConsolidado}
-                          onChange={(e) => {
-                            setMetodoPagoConsolidado(e.target.value);
-                            setErrorMsg(null);
-                          }}
-                          className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px] cursor-pointer"
-                        >
-                          {mediosPago.map((m) => (
-                            <option key={m.uuid} value={m.uuid}>
-                              {m.codigo} - {m.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="md:col-span-5">
-                        <div className="flex items-center justify-between mb-1">
-                          <label htmlFor="monto-a-cobrar-input" className="block text-xs font-semibold text-slate-300 uppercase">
-                            Monto a cobrar *
-                          </label>
-                          {resumenFinanciero.saldoPendiente > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setMontoPagoConsolidado(resumenFinanciero.saldoPendiente)}
-                              className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
-                            >
-                              Pagar Saldo Completo
-                            </button>
-                          )}
-                        </div>
-                        <Input
-                          id="monto-a-cobrar-input"
-                          type="number"
-                          value={montoPagoConsolidado}
-                          onChange={(e) => setMontoPagoConsolidado(Number(e.target.value))}
-                          min={0}
-                          fullWidth
-                          className="min-h-[44px]"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Fila 2: Referencia / Comprobante */}
-                    <div>
-                      <Input
-                        label="Referencia / N° Transacción / Comprobante"
-                        value={referenciaPagoConsolidado}
-                        onChange={(e) => setReferenciaPagoConsolidado(e.target.value)}
-                        placeholder="Ej: Aprobación datáfono #123456"
-                        fullWidth
-                        className="min-h-[44px]"
-                      />
-                    </div>
-
-                    {/* Fila 3: Receptor (Nombre y Documento sin asterisco duplicado) */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input
-                        label="Recibido por (Nombre)"
-                        required
-                        value={receptorNombre}
-                        onChange={(e) => {
-                          setReceptorNombre(e.target.value);
-                          setErrorMsg(null);
-                        }}
-                        placeholder="Nombre de quien retira"
-                        fullWidth
-                        className="min-h-[44px]"
-                      />
-                      <Input
-                        label="Documento de identidad"
-                        required
-                        value={receptorDocumento}
-                        onChange={(e) => {
-                          setReceptorDocumento(e.target.value);
-                          setErrorMsg(null);
-                        }}
-                        placeholder="Cédula o NIT"
-                        fullWidth
-                        className="min-h-[44px]"
-                      />
-                    </div>
-
-                    {/* Fila 4: Observaciones */}
-                    <div>
-                      <Textarea
-                        label="Observaciones de entrega"
-                        rows={2}
-                        value={observacionEntrega}
-                        onChange={(e) => setObservacionEntrega(e.target.value)}
-                        placeholder="Notas adicionales sobre la entrega, estado del paquete, etc."
-                        fullWidth
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input
+                      label="Recibido por (Nombre)"
+                      required
+                      value={receptorNombre}
+                      onChange={(e) => {
+                        setReceptorNombre(e.target.value);
+                        setErrorMsg(null);
+                      }}
+                      placeholder="Nombre de quien retira"
+                      fullWidth
+                      className="min-h-[44px]"
+                    />
+                    <Input
+                      label="Documento de identidad"
+                      required
+                      value={receptorDocumento}
+                      onChange={(e) => {
+                        setReceptorDocumento(e.target.value);
+                        setErrorMsg(null);
+                      }}
+                      placeholder="Cédula o NIT"
+                      fullWidth
+                      className="min-h-[44px]"
+                    />
                   </div>
                 </Card>
               </div>
@@ -1010,51 +993,47 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                   <span>🧾</span> Resumen de Liquidación
                 </h3>
-                <Badge variant={resumenFinanciero.saldoPendiente <= 0 || montoPagoConsolidado >= resumenFinanciero.saldoPendiente ? 'success' : 'warning'}>
-                  {resumenFinanciero.saldoPendiente <= 0 || montoPagoConsolidado >= resumenFinanciero.saldoPendiente ? '100% Cubierto' : 'Con Saldo'}
+                <Badge variant={saldoPendienteNeto <= 0 ? 'success' : 'warning'}>
+                  {saldoPendienteNeto <= 0 ? '100% Cubierto' : 'Con Saldo'}
                 </Badge>
               </div>
 
-              {/* Métricas reales del Preview */}
-              <div className="space-y-3 text-xs">
+              {/* Métricas con el formato exacto del wireframe canónico */}
+              <div className="space-y-2 text-xs">
                 <div className="flex justify-between items-center text-slate-300">
-                  <span className="font-medium">Total Ítems:</span>
-                  <span className="font-mono text-white text-sm font-bold">
-                    {formatMoneyCOP(resumenFinanciero.totalEntregar)}
-                  </span>
+                  <span className="font-medium">Total Inventario:</span>
+                  <div className="px-3 py-1 bg-slate-900 border border-slate-800 rounded font-mono text-white text-right w-32">
+                    ${Math.round(totalInventario).toLocaleString('es-CO')}
+                  </div>
                 </div>
 
                 <div className="flex justify-between items-center text-slate-300">
-                  <span className="font-medium">Anticipos Aplicados:</span>
-                  <span className="font-mono text-emerald-400 font-bold">
-                    -{formatMoneyCOP(resumenFinanciero.totalAnticipos)}
-                  </span>
+                  <span className="font-medium">Total Servicio:</span>
+                  <div className="px-3 py-1 bg-slate-900 border border-slate-800 rounded font-mono text-white text-right w-32">
+                    ${Math.round(totalServicios).toLocaleString('es-CO')}
+                  </div>
                 </div>
 
-                {anticipoClienteAplicado > 0 && (
-                  <div className="flex justify-between items-center text-indigo-300">
-                    <span className="font-medium">Anticipo Libre Cliente:</span>
-                    <span className="font-mono text-indigo-400 font-bold">
-                      -{formatMoneyCOP(anticipoClienteAplicado)}
-                    </span>
+                <div className="pt-1.5 border-t border-slate-800 flex justify-between items-center text-white font-bold">
+                  <span>Total Neto:</span>
+                  <div className="px-3 py-1 bg-slate-900 border border-slate-700 rounded font-mono text-emerald-400 font-bold text-sm text-right w-32">
+                    ${Math.round(resumenFinanciero.totalEntregar).toLocaleString('es-CO')}
                   </div>
-                )}
-
-                <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-rose-300 font-bold">
-                  <span>Saldo a Cobrar:</span>
-                  <span className="font-mono text-rose-400 text-base font-black">
-                    {formatMoneyCOP(resumenFinanciero.saldoPendiente)}
-                  </span>
                 </div>
 
-                {montoPagoConsolidado > 0 && (
-                  <div className="flex justify-between items-center text-emerald-400 pt-1">
-                    <span className="font-medium">Abono / Pago mostrador:</span>
-                    <span className="font-mono text-emerald-300 font-bold">
-                      {formatMoneyCOP(montoPagoConsolidado)}
-                    </span>
+                <div className="flex justify-between items-center text-slate-300">
+                  <span className="font-medium">Total Abonado:</span>
+                  <div className="px-3 py-1 bg-slate-900 border border-slate-800 rounded font-mono text-emerald-400 text-right w-32">
+                    -${Math.round(resumenFinanciero.totalAnticipos).toLocaleString('es-CO')}
                   </div>
-                )}
+                </div>
+
+                <div className="flex justify-between items-center text-rose-300 font-bold">
+                  <span>Saldo Pendiente:</span>
+                  <div className="px-3 py-1 bg-slate-900 border border-rose-900/50 rounded font-mono text-rose-400 font-bold text-sm text-right w-32">
+                    ${Math.round(resumenFinanciero.saldoPendiente).toLocaleString('es-CO')}
+                  </div>
+                </div>
               </div>
 
               {/* Alerta de error del backend visible inmediatamente junto al botón Despachar */}
@@ -1064,25 +1043,38 @@ export const ModuloEntregas: React.FC<ModuloEntregasProps> = ({
                 </Alert>
               )}
 
-              {/* Botón Principal de Despacho (mínimo 44px de alto) */}
-              <Button
-                variant="primary"
-                size="lg"
-                fullWidth
-                disabled={
-                  loading ||
-                  itemsClienteMarcados.length === 0 ||
-                  !receptorNombre.trim() ||
-                  !receptorDocumento.trim() ||
-                  !metodoPagoConsolidado
-                }
-                onClick={handleCrearEntregaConsolidada}
-                className="min-h-[44px] py-3 text-sm font-bold tracking-wide shadow-lg"
-              >
-                {loading
-                  ? 'Despachando...'
-                  : `🚀 Despachar (${itemsClienteMarcados.length} ${itemsClienteMarcados.length === 1 ? 'ítem' : 'ítems'})`}
-              </Button>
+              {/* Botones de acción alineados con el diseño canónico */}
+              <div className="space-y-2 pt-2">
+                {etapaEntrega === 'proceso' && (
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => setEtapaEntrega('seleccion')}
+                    className="min-h-[44px] py-2.5 text-xs font-semibold"
+                  >
+                    ← Volver a Selección de Ítems
+                  </Button>
+                )}
+
+                <Button
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  disabled={
+                    loading ||
+                    itemsClienteMarcados.length === 0 ||
+                    !receptorNombre.trim() ||
+                    !receptorDocumento.trim() ||
+                    (!metodoPagoConsolidado && pagosEntrega.length === 0)
+                  }
+                  onClick={handleCrearEntregaConsolidada}
+                  className="min-h-[48px] py-3 text-sm font-bold tracking-wide shadow-lg bg-indigo-600 hover:bg-indigo-500"
+                >
+                  {loading
+                    ? 'Despachando...'
+                    : `⚡ Despachar Entrega (${itemsClienteMarcados.length} ${itemsClienteMarcados.length === 1 ? 'ítem' : 'ítems'})`}
+                </Button>
+              </div>
             </Card>
           </div>
         </div>
