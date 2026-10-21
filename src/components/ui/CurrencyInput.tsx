@@ -8,6 +8,11 @@ export interface CurrencyInputProps
   currencySymbol?: string;
   allowDecimals?: boolean;
   maxDecimals?: number;
+  label?: React.ReactNode;
+  labelExtra?: React.ReactNode;
+  required?: boolean;
+  error?: React.ReactNode;
+  helperText?: React.ReactNode;
 }
 
 /**
@@ -70,6 +75,12 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       onFocus,
       onBlur,
       disabled,
+      label,
+      labelExtra,
+      required,
+      error,
+      helperText,
+      id,
       ...restProps
     },
     ref
@@ -153,13 +164,14 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       ? rawInput
       : formatCurrencyMask(effectiveVal, currencySymbol);
 
-    return (
+    const inputElement = (
       <input
         ref={(node) => {
           inputRef.current = node;
           if (typeof ref === 'function') ref(node);
           else if (ref) (ref as React.MutableRefObject<HTMLInputElement | null>).current = node;
         }}
+        id={id}
         role="spinbutton"
         type="text"
         inputMode={allowDecimals ? 'decimal' : 'numeric'}
@@ -169,12 +181,40 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         onFocus={handleFocus}
         onBlur={handleBlur}
         onChange={handleChange}
-        className={`w-full h-9 px-3 bg-slate-900 border border-slate-700/80 rounded-lg text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-primary-500 font-mono transition-all ${
+        className={`w-full h-9 px-3 bg-slate-900 border ${
+          error ? 'border-red-500' : 'border-slate-700/80'
+        } rounded-lg text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-primary-500 font-mono transition-all ${
           disabled ? 'opacity-50 cursor-not-allowed' : ''
         } ${className}`}
         {...restProps}
       />
     );
+
+    if (label || labelExtra || error || helperText) {
+      return (
+        <div className="w-full flex flex-col text-left">
+          {(label || labelExtra) && (
+            <div className="flex items-center justify-between mb-1 gap-2">
+              {label && (
+                <label
+                  htmlFor={id}
+                  className="block text-xs font-semibold text-slate-300"
+                >
+                  {label}
+                  {required && <span className="text-red-500 ml-0.5">*</span>}
+                </label>
+              )}
+              {labelExtra}
+            </div>
+          )}
+          {inputElement}
+          {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+          {helperText && !error && <p className="mt-1 text-xs text-slate-400">{helperText}</p>}
+        </div>
+      );
+    }
+
+    return inputElement;
   }
 );
 

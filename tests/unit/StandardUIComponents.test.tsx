@@ -163,7 +163,7 @@ describe('Standard UI Components Suite', () => {
       const inputMonto = screen.getByPlaceholderText('Monto a abonar...');
       fireEvent.change(inputMonto, { target: { value: '50000' } });
 
-      const addBtn = screen.getByRole('button', { name: /\+ Registrar Abono/i });
+      const addBtn = screen.getByRole('button', { name: /(\+ )?Registrar Abono/i });
       fireEvent.click(addBtn);
 
       expect(handleChange).toHaveBeenCalledTimes(1);

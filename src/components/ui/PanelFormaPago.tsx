@@ -157,6 +157,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
   // Toggles de acordeón para maximizar el espacio útil
   const [isPrelacionOpen, setIsPrelacionOpen] = useState(false);
   const [isHistoricosOpen, setIsHistoricosOpen] = useState(false);
+  const [isObservacionesExpanded, setIsObservacionesExpanded] = useState(Boolean(observacionesPago && observacionesPago.length > 0));
 
   const [internalInstrumentoUuid, setInternalInstrumentoUuid] = useState<string>('mp-efectivo');
   const instrumentoSeleccionadoUuid = propInstrumentoSeleccionadoUuid !== undefined ? propInstrumentoSeleccionadoUuid : internalInstrumentoUuid;
@@ -282,12 +283,13 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
             type="button"
             size="sm"
             variant="primary"
+            aria-label="+ Registrar Abono"
             onClick={handleAgregarPago}
             disabled={!montoInput || Number(montoInput) <= 0}
-            className="h-8 sm:h-9 px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-md rounded-lg"
+            className="h-8 sm:h-9 px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-md rounded-lg whitespace-nowrap"
           >
-            <Plus/>
-            <span>+ Registrar Abono</span>
+            <Plus className="w-3.5 h-3.5 shrink-0" />
+            <span className="whitespace-nowrap">Registrar Abono</span>
           </Button>
         )}
       </div>
@@ -395,8 +397,8 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
       {!soloLectura && (
         <div className="space-y-3">
           {/* Fila única: Instrumento de pago, Monto y Referencia / Comprobante */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            <div className="md:col-span-5">
+          <div className="grid grid-cols-12 md:grid-cols-12 gap-3 items-end">
+            <div className="md:col-span-4">
               <label htmlFor="instrumento-pago-select" className="block text-xs font-semibold text-slate-300 mb-1">
                 Instrumento de pago *
               </label>
@@ -416,24 +418,23 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
             </div>
 
             <div className="md:col-span-3">
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="monto-abono-input" className="block text-xs font-semibold text-slate-300">
-                  {modo === 'entrega' ? 'Monto a cobrar *' : 'Monto *'}
-                </label>
-                {saldoRestante > 0 && (
-                  <button
-                    type="button"
-                    onClick={handlePagarSaldoCompleto}
-                    className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline cursor-pointer flex items-center gap-1"
-                    title="Copiar saldo restante al monto"
-                  >
-                    <span>Saldo</span>
-                    <span className="font-mono">{formatCOP(saldoRestante)}</span>
-                  </button>
-                )}
-              </div>
               <CurrencyInput
                 id="monto-abono-input"
+                label={modo === 'entrega' ? 'Monto a cobrar' : 'Monto'}
+                required
+                labelExtra={
+                  saldoRestante > 0 ? (
+                    <button
+                      type="button"
+                      onClick={handlePagarSaldoCompleto}
+                      className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 underline cursor-pointer flex items-center gap-1"
+                      title="Copiar saldo restante al monto"
+                    >
+                      <span>Saldo</span>
+                      <span className="font-mono">{formatCOP(saldoRestante)}</span>
+                    </button>
+                  ) : null
+                }
                 aria-label={modo === 'entrega' ? 'Monto a cobrar' : 'Monto'}
                 value={montoInput ? Number(montoInput) : undefined}
                 onChange={(val) => setMontoInput(val !== undefined ? String(val) : '')}
@@ -443,7 +444,7 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
               />
             </div>
 
-            <div className="md:col-span-4">
+            <div className="md:col-span-5">
               <label htmlFor="referencia-abono-input" className="block text-xs font-semibold text-slate-300 mb-1">
                 Referencia / Comprobante
               </label>
@@ -460,19 +461,30 @@ export const PanelFormaPago: React.FC<PanelFormaPagoProps> = ({
             </div>
           </div>
 
-          {/* Fila 3: Observaciones del Recaudo / Pago */}
+          {/* Fila 3: Observaciones del Recaudo / Pago (con modo colapsable/expandible) */}
           <div>
-            <label htmlFor="observaciones-pago-textarea" className="block text-xs font-semibold text-slate-300 mb-1">
-              Observaciones del Recaudo / Pago
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label htmlFor="observaciones-pago-textarea" className="block text-xs font-semibold text-slate-300">
+                Observaciones del Recaudo / Pago
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsObservacionesExpanded(!isObservacionesExpanded)}
+                className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 hover:underline cursor-pointer select-none transition-colors"
+              >
+                {isObservacionesExpanded ? 'Contraer' : '+ Desplegar'}
+              </button>
+            </div>
             <textarea
               id="observaciones-pago-textarea"
               aria-label="Observaciones del Recaudo / Pago"
-              rows={2}
+              rows={isObservacionesExpanded ? 3 : 1}
               value={observacionesPago}
               onChange={(e) => onChangeObservacionesPago && onChangeObservacionesPago(e.target.value)}
               placeholder="Observación o nota adicional del recaudo o comprobante..."
-              className="w-full min-h-[60px] px-3 py-2 bg-slate-950 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
+              className={`w-full px-3 py-1.5 bg-slate-950 border border-slate-700/80 rounded-lg text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all ${
+                isObservacionesExpanded ? 'min-h-[64px] resize-y' : 'h-8 min-h-[32px] max-h-[34px] resize-none overflow-hidden'
+              }`}
             />
           </div>
         </div>

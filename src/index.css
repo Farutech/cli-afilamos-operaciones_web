@@ -1,6 +1,28 @@
 @import '@farutech/design-system/styles.css';
 
 /* =============================================================================
+   Design System Button Hardening: Prevenir saltos de línea con iconos y texto
+   ============================================================================= */
+.ft-button,
+button.ft-button {
+  white-space: nowrap !important;
+}
+
+.ft-button > span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.375rem !important;
+  white-space: nowrap !important;
+}
+
+.ft-button svg,
+.ft-button [data-icon],
+.ft-button span > svg {
+  flex-shrink: 0 !important;
+  display: inline-block !important;
+}
+
+/* =============================================================================
    Ordeon UI patterns — compact, accessible, and aligned with the design system.
    ============================================================================= */
 .item-selector__toolbar {
