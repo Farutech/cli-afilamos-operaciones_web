@@ -1,60 +1,550 @@
-# ============================================
-# .gitignore - Ordeon Web POS (React + Vite + TypeScript)
-# ============================================
+# ============================================================
+# .gitignore — GLOBAL / MULTI-TECHNOLOGY
+#
+# Cobertura:
+#   - Sistemas operativos y editores
+#   - Secretos y configuracion local
+#   - .NET / C#
+#   - Go
+#   - Node.js / React / Vite / TypeScript
+#   - Flutter / Dart / Android / iOS
+#   - Dependencias y paquetes
+#   - Pruebas y automatizacion
+#   - Docker y bases de datos
+#   - CI/CD e infraestructura
+#   - Terraform
+#   - Empaquetado y distribucion
+#
+# Principios:
+#   1. No ignorar codigo fuente por defecto.
+#   2. No ignorar configuracion necesaria para construir,
+#      probar o desplegar el proyecto.
+#   3. Conservar manifiestos y archivos de bloqueo.
+#   4. Excluir secretos reales y datos locales.
+#   5. Documentar excepciones y conservar archivos fuente.
+#
+# IMPORTANTE:
+# Las reglas se aplican por patron, no por tecnologia.
+# Este archivo debe adaptarse a la estructura de cada proyecto.
+# ============================================================
 
-# ---------- Dependencies ----------
-node_modules/
-**/node_modules/
-.pnp
-.pnp.js
+# ============================================================
+# 01. SISTEMAS OPERATIVOS
+# Motivo: metadatos y archivos generados por el sistema.
+# ============================================================
 
-# ---------- Build Outputs ----------
-dist/
-dist-ssr/
-build/
-out/
-*.local
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
 
-# ---------- Vite & Cache ----------
-.vite/
-.turbo/
-.cache/
-*.tsbuildinfo
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
 
-# ---------- Testing & Coverage ----------
-coverage/
-**/coverage/
-.nyc_output/
-playwright-report/
-**/playwright-report/
-test-results/
-**/test-results/
-.playwright/
-allure-results/
-allure-report/
+# Linux / entornos de escritorio
+.directory
 
-# ---------- Environment & Secrets ----------
-.env
-.env.*
-!.env.example
-*.local.env
+# ============================================================
+# 02. EDITORES E IDE
+# Motivo: preferencias personales y estado local del editor.
+# ============================================================
 
-# ---------- Editor / IDE ----------
+# Visual Studio Code
 .vscode/
-.idea/
+
+# Visual Studio
 .vs/
 *.suo
 *.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.VC.db
+*.VC.VC.opendb
 
-# ---------- Logs & System ----------
-.DS_Store
-Thumbs.db
+# JetBrains
+.idea/
+
+# Archivos temporales de editores
+*.swp
+*.swo
+*~
+*.orig
+*.rej
+
+# Si el equipo necesita compartir configuracion de VS Code,
+# revisar excepciones especificas antes de habilitarlas.
+# !.vscode/extensions.json
+# !.vscode/launch.json
+# !.vscode/tasks.json
+# !.vscode/settings.json
+
+# ============================================================
+# 03. TEMPORALES, CACHES Y REGISTROS
+# Motivo: archivos locales que pueden regenerarse.
+# ============================================================
+
 *.log
+*.tmp
+*.temp
+*.bak
+*.old
+*.backup
+*.pid
+*.seed
+
+tmp/
+tmp-*
+temp/
+.cache/
+cache/
+
+# ============================================================
+# 04. SECRETOS Y CONFIGURACION DE ENTORNO
+# Motivo: evitar publicar credenciales y configuracion sensible.
+# ============================================================
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Configuracion local
+*.local
+*.local.json
+
+# Credenciales identificadas explicitamente
+*.secret
+*.secrets
+*.credentials
+
+# Claves privadas y certificados
+*.pem
+*.key
+*.p12
+*.pfx
+*.p7b
+*.p7c
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+
+# IMPORTANTE:
+# No ignorar globalmente JSON, YAML, XML, CONFIG ni TFVARS.
+# Estos formatos tambien contienen codigo y configuracion
+# necesaria para construir o desplegar aplicaciones.
+#
+# Los certificados publicos pueden necesitar versionarse.
+# Nunca incluir claves privadas ni secretos reales.
+
+# ============================================================
+# 05. .NET / C#
+# Motivo: resultados de compilacion y archivos generados.
+# ============================================================
+
+[Bb]in/
+[Oo]bj/
+**/bin/
+**/obj/
+
+publish/
+**/publish/
+
+artifacts/
+**/artifacts/
+
+# Binarios y simbolos
+*.exe
+*.dll
+*.pdb
+*.mdb
+*.ilk
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+
+# Archivos generados
+GeneratedFiles/
+**/GeneratedFiles/
+
+# Cache de compilacion
+*.cache
+
+# Conservar:
+# *.cs, *.csproj, *.sln, Directory.Build.*,
+# global.json, NuGet.Config y archivos de migracion.
+
+# ============================================================
+# 06. GO
+# Motivo: binarios, perfiles y resultados de compilacion.
+# ============================================================
+
+# Binarios y pruebas compiladas
+*.test
+*.out
+
+# Perfiles de rendimiento
+*.prof
+*.pprof
+
+# Cobertura generada
+coverage.out
+coverprofile.out
+
+# Dependencias vendorizadas:
+# habilitar solo si las dependencias son regenerables
+# y el proyecto no requiere versionarlas.
+# vendor/
+
+# Conservar:
+# go.mod, go.sum y archivos fuente *.go.
+
+# ============================================================
+# 07. NODE.JS / NPM / YARN / PNPM
+# Motivo: dependencias instaladas y caches locales.
+# ============================================================
+
+node_modules/
+**/node_modules/
+
+.npm/
+.pnpm-store/
+
+# Registros de gestores de paquetes
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-# ---------- Local Packages ----------
-packages/*.tgz
+# Conservar:
+# package.json, package-lock.json, yarn.lock,
+# pnpm-lock.yaml y configuracion del proyecto.
+
+# ============================================================
+# 08. REACT / VITE / TYPESCRIPT Y FRONTEND
+# Motivo: compilaciones y caches generadas.
+# ============================================================
+
+dist/
+**/dist/
+
+build/
+**/build/
+
+out/
+**/out/
+
+.vite/
+**/.vite/
+
+.parcel-cache/
+.turbo/
+.next/
+.nuxt/
+.svelte-kit/
+
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
+# Variables locales de frontend
+.env.local
+.env.*.local
+
+# Conservar:
+# src/, public/, index.html, tsconfig.json,
+# vite.config.ts, codigo fuente y pruebas fuente.
+
+# ============================================================
+# 09. FLUTTER / DART / ANDROID / IOS
+# Motivo: dependencias descargadas y compilaciones.
+# ============================================================
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-automation/
+.packages
+.pub-cache/
+.pub/
+
+# Salidas de compilacion
+build/
+**/build/
+
+# Android
+.gradle/
+android/.gradle/
+android/local.properties
+android/key.properties
+android/**/key.properties
+android/captures/
+android/.cxx/
+android/.externalNativeBuild/
+
+# iOS / Xcode
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+ios/Flutter/.last_build_id
+
+DerivedData/
+**/DerivedData/
+
+*.xcuserstate
+*.xcuserdatad/
+*.xccheckout
+*.moved-aside
+
+# Archivos generados por Flutter
+ios/Runner/GeneratedPluginRegistrant.*
+
+# Conservar:
+# pubspec.yaml, pubspec.lock, codigo Dart y configuracion
+# necesaria para construir las aplicaciones.
+
+# ============================================================
+# 10. DEPENDENCIAS Y PAQUETES GENERADOS
+# Motivo: paquetes descargados y feeds locales.
+# ============================================================
+
+packages/
+**/packages/
+
+nupkg/
+**/nupkg/
+
+*.nupkg
+*.snupkg
+
+# Conservar manifiestos y archivos de bloqueo.
+
+# ============================================================
+# 11. PRUEBAS, COBERTURA Y REPORTES
+# Motivo: resultados generados por herramientas de testing.
+# ============================================================
+
+TestResults/
+test-results/
+[Tt]est[Rr]esults/
+
+**/TestResults/
+**/test-results/
+
+test/bin/
+test/obj/
+test/**/bin/
+test/**/obj/
+test/**/TestResults/
+
+coverage/
+**/coverage/
+
+*.trx
+*.coverage
+*.coveragexml
+.coverage
+.coverage.*
+
+# Allure
+allure-results/
+allure-report/
+**/allure-results/
+**/allure-report/
+
+.framework-allurerc.json
+categories.json
+
+# Playwright
+playwright-report/
+**/playwright-report/
+
+.playwright/
+**/.playwright/
+
+# Otros reportes generados
+reports/
+**/reports/
+
+# IMPORTANTE:
+# No ignorar globalmente test/, tests/ ni spec/.
+# Estas carpetas suelen contener codigo fuente de pruebas.
+
+# ============================================================
+# 12. EVIDENCIAS DE AUTOMATIZACION
+# Motivo: capturas, videos y trazas generadas por pruebas.
+# ============================================================
+
+evidence/
+**/evidence/
+
+screenshots/
+**/screenshots/
+
+videos/
+**/videos/
+
+traces/
+**/traces/
+
+# ============================================================
+# 13. BASES DE DATOS Y DATOS LOCALES
+# Motivo: bases de desarrollo, archivos temporales y respaldos.
+# ============================================================
+
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# SQL Server
+*.mdf
+*.ldf
+
+# Dumps y respaldos generados
+*.dump
+*.bak.sql
+*.sql.gz
+
+# PostgreSQL y volumenes locales
+pgdata/
+**/pgdata/
+
+# Conservar:
+# migraciones, scripts SQL fuente, esquemas y datos de prueba
+# que deban mantenerse versionados.
+
+# ============================================================
+# 14. DOCKER Y CONTENEDORES
+# Motivo: datos persistentes y ajustes locales.
+# ============================================================
+
+docker-compose.override.yml
+docker-compose.*.override.yml
+
+.docker/
+docker-data/
+
+# Conservar:
+# Dockerfile, Dockerfile.*, compose.yaml, compose.yml,
+# docker-compose.yml y archivos necesarios para construir.
+
+# ============================================================
+# 15. CI/CD E INFRAESTRUCTURA
+# Motivo: datos de ejecucion y artefactos locales de pipelines.
+# ============================================================
+
+# Directorios temporales de pipelines
+cicd/**/tmp/
+cicd/**/temp/
+cicd/**/logs/
+
+# Artefactos generados
+cicd/**/artifacts/
+cicd/**/publish/
+
+# Datos locales de servicios
+cicd/local/pgdata/
+cicd/local/mysql/
+cicd/local/redis/
+cicd/local/mongodb/
+
+# Certificados de produccion.
+# Mantener unicamente el marcador .gitkeep.
+cicd/prod/certs/*
+!cicd/prod/certs/.gitkeep
+
+# Conservar marcadores de certificados de otros entornos
+!cicd/**/certs/.gitkeep
+
+# Conservar:
+# pipelines, manifiestos, plantillas y configuracion fuente.
+# No ignorar globalmente cicd/ ni sus archivos fuente.
+
+# ============================================================
+# 16. TERRAFORM
+# Motivo: estado local, caches y archivos de sobrescritura.
+# ============================================================
+
+.terraform/
+**/.terraform/
+
+*.tfstate
+*.tfstate.*
+
+crash.log
+crash.*.log
+
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Conservar .terraform.lock.hcl para reproducibilidad.
+#
+# Los archivos *.tfvars pueden contener secretos o valores
+# necesarios para el proyecto. Excluirlos selectivamente
+# si corresponde, en lugar de ignorarlos globalmente.
+
+# ============================================================
+# 17. EMPAQUETADO Y DISTRIBUCION
+# Motivo: paquetes y entregables generados.
+# ============================================================
+
+*.zip
+*.tar
+*.tar.gz
 *.tgz
+*.7z
+*.rar
+
+*.msi
+*.dmg
+*.iso
+
+# Directorios de salida
+publish/
+**/publish/
+
+dist/
+**/dist/
+
+build/
+**/build/
+
+out/
+**/out/
+
+# ============================================================
+# 18. EXCEPCIONES Y CONSERVACION
+# Motivo: permitir archivos de ejemplo y estructura del repo.
+# ============================================================
+
+# Plantillas de configuracion
+!.env.example
+!.env.sample
+!.env.template
+
+# Marcadores de directorios vacios
+!.gitkeep
+
+# Mantener los archivos fuente, manifiestos, migraciones,
+# pruebas fuente, pipelines y documentacion mantenida.
+#
+# FIN DEL .gitignore GLOBAL
+# ============================================================
