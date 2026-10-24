@@ -1,0 +1,1318 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Card, Button, Input, Badge, Modal } from '@farutech/design-system';
+import {
+  Search,
+  Eye,
+  RefreshCw,
+  X,
+  Banknote,
+  CreditCard,
+  ArrowLeftRight,
+  Smartphone,
+  CheckCircle2,
+  DollarSign,
+  Receipt,
+} from 'lucide-react';
+import { ListPageLayout, StandardDataTable, type ColumnDef } from '../../components/ui';
+import { api } from '../../services/api';
+import { catalogosApi } from '../../services/catalogosApi';
+import type { MedioPagoInstrumento } from '../../types/catalogos';
+
+interface ModuloPagosCreditoProps {
+  token?: string;
+  userRole?: string;
+}
+
+interface SolicitudSaldo {
+  id: string;
+  number: string;
+  customerId: string;
+  customerName: string;
+  customerDocument?: string;
+  total: number;
+  paidAmount: number;
+  balanceDue: number;
+  status: string;
+  createdAt: string;
+}
+
+interface PagoHistorial {
+  id: string;
+  documentId?: string;
+  documentNumber?: string;
+  customerId: string;
+  customerName: string;
+  paymentMethodId: string;
+  paymentMethodName: string;
+  amount: number;
+  currency: string;
+  receivedAt: string;
+  reference?: string;
+  isVoided?: boolean;
+}
+
+export const ModuloPagosCredito: React.FC<ModuloPagosCreditoProps> = ({
+  token,
+  userRole: _userRole = 'Cajero',
+}) => {
+  const [tabActiva, setTabActiva] = useState<'abono' | 'historial'>('abono');
+
+  // Estados para Registro de Abono
+  const [criterioBusqueda, setCriterioBusqueda] = useState('');
+  const [soloConSaldo, setSoloConSaldo] = useState(true);
+  const [buscandoSolicitudes, setBuscandoSolicitudes] = useState(false);
+  const [solicitudes, setSolicitudes] = useState<SolicitudSaldo[]>([]);
+
+  // Paginación de Solicitudes (Selector / Modal)
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [itemsPorPagina] = useState(10);
+  const [isModalSelectorOpen, setIsModalSelectorOpen] = useState(false);
+
+  // Solicitud vinculada para Abono (EntityPicker)
+  const [solicitudAbono, setSolicitudAbono] = useState<SolicitudSaldo | null>(null);
+  const [isModalAbonoOpen, setIsModalAbonoOpen] = useState(false);
+  const [montoAbono, setMontoAbono] = useState<number>(0);
+  const [recibidoEfectivo, setRecibidoEfectivo] = useState<number>(0);
+  const [metodoPagoId, setMetodoPagoId] = useState<string>('');
+  const [referenciaPago, setReferenciaPago] = useState<string>('');
+  const [observacionesPago, setObservacionesPago] = useState<string>('');
+  const [mediosPago, setMediosPago] = useState<MedioPagoInstrumento[]>([]);
+  const [procesandoAbono, setProcesandoAbono] = useState(false);
+
+  // Estados para Historial de Pagos y Paginación
+  const [historialPagos, setHistorialPagos] = useState<PagoHistorial[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+  const [busquedaHistorial, setBusquedaHistorial] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [filtroMedioPago, setFiltroMedioPago] = useState('');
+  const [paginaHistorial, setPaginaHistorial] = useState(1);
+  const [itemsHistorialPorPagina, setItemsHistorialPorPagina] = useState(10);
+  const [pagoDetalle, setPagoDetalle] = useState<PagoHistorial | null>(null);
+
+  // Mensajes globales
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (errorMsg || successMsg) {
+      const timer = setTimeout(() => {
+        setErrorMsg(null);
+        setSuccessMsg(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg, successMsg]);
+
+  // Cargar Medios de Pago
+  useEffect(() => {
+    let activo = true;
+    const fetchMedios = async () => {
+      try {
+        const arbol = await catalogosApi.getMediosPagoArbol(token);
+        if (activo) {
+          const list = arbol.categorias.flatMap((c) => c.instrumentos).filter((m) => m.activo);
+          if (list.length > 0) {
+            setMediosPago(list);
+            const defaultMethod = list.find((m) => m.isDefault || m.esPorDefecto) ?? list[0];
+            setMetodoPagoId(defaultMethod.uuid);
+          } else {
+            setMediosPago([]);
+            setMetodoPagoId('');
+          }
+        }
+      } catch {
+        if (activo) {
+          setMediosPago([]);
+          setMetodoPagoId('');
+          setErrorMsg('No fue posible cargar las formas de pago configuradas en el sistema.');
+        }
+      }
+    };
+    fetchMedios();
+    return () => { activo = false; };
+  }, [token]);
+
+  // Cargar Solicitudes
+  const cargarSolicitudes = useCallback(async () => {
+    setBuscandoSolicitudes(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.get<any>('/requests?page=1&pageSize=300', token);
+      const items = Array.isArray(res) ? res : (res?.items || []);
+
+      const mapped: SolicitudSaldo[] = items.map((s: any) => {
+        const total = Number(s.total || s.totalAmount || 0);
+        const paid = Number(s.paidAmount || 0);
+        const balance = Math.max(0, total - paid);
+        return {
+          id: s.id || s.requestId,
+          number: s.number || s.numeroDocumento || 'SOL-0000',
+          customerId: s.customerId || s.clienteId || '',
+          customerName: s.customerName || s.clienteNombre || 'Cliente',
+          customerDocument: s.customerDocument || s.clienteDocumento || '',
+          total,
+          paidAmount: paid,
+          balanceDue: balance,
+          status: s.status || s.estado || 'CONFIRMED',
+          createdAt: s.createdAt || s.fechaCreacion || new Date().toISOString(),
+        };
+      });
+
+      setSolicitudes(mapped);
+    } catch (err: unknown) {
+      setErrorMsg((err as { message?: string }).message || 'Error cargando solicitudes');
+    } finally {
+      setBuscandoSolicitudes(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (tabActiva === 'abono') {
+      cargarSolicitudes();
+    }
+  }, [tabActiva, cargarSolicitudes]);
+
+  // Filtrado de Solicitudes
+  const solicitudesFiltradas = useMemo(() => {
+    let result = solicitudes;
+    if (soloConSaldo) {
+      result = result.filter((s) => s.balanceDue > 0);
+    }
+    const q = criterioBusqueda.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        (s) =>
+          s.number.toLowerCase().includes(q) ||
+          s.customerName.toLowerCase().includes(q) ||
+          (s.customerDocument && s.customerDocument.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [solicitudes, soloConSaldo, criterioBusqueda]);
+
+  // Paginación de solicitudes
+  const totalPaginas = Math.max(1, Math.ceil(solicitudesFiltradas.length / itemsPorPagina));
+  const solicitudesPaginadas = useMemo(() => {
+    const inicio = (paginaActual - 1) * itemsPorPagina;
+    return solicitudesFiltradas.slice(inicio, inicio + itemsPorPagina);
+  }, [solicitudesFiltradas, paginaActual, itemsPorPagina]);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [criterioBusqueda, soloConSaldo, itemsPorPagina]);
+
+  // Seleccionar solicitud para el formulario EntityPicker
+  const handleSeleccionarSolicitud = (sol: SolicitudSaldo) => {
+    setSolicitudAbono(sol);
+    setMontoAbono(sol.balanceDue > 0 ? sol.balanceDue : 0);
+    setRecibidoEfectivo(sol.balanceDue > 0 ? sol.balanceDue : 0);
+    setReferenciaPago('');
+    setObservacionesPago('');
+    setIsModalSelectorOpen(false);
+  };
+
+  // Abrir Modal para Registrar Abono (compatibilidad con tests)
+  const handleAbrirModalAbono = (sol: SolicitudSaldo) => {
+    setSolicitudAbono(sol);
+    setMontoAbono(sol.balanceDue > 0 ? sol.balanceDue : 0);
+    setRecibidoEfectivo(sol.balanceDue > 0 ? sol.balanceDue : 0);
+    setReferenciaPago('');
+    setObservacionesPago('');
+    if (!metodoPagoId && mediosPago.length > 0) {
+      setMetodoPagoId(mediosPago[0].uuid);
+    }
+    setIsModalAbonoOpen(true);
+  };
+
+  // Registrar el Abono
+  const handleRegistrarAbono = async () => {
+    if (!solicitudAbono) {
+      setErrorMsg('No hay solicitud vinculada para el abono.');
+      return;
+    }
+    if (montoAbono <= 0) {
+      setErrorMsg('El monto a abonar debe ser mayor a cero.');
+      return;
+    }
+
+    setProcesandoAbono(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      await api.post<any>(
+        '/payments',
+        {
+          customerId: solicitudAbono.customerId,
+          documentId: solicitudAbono.id,
+          requestId: solicitudAbono.id,
+          paymentMethodId: metodoPagoId || mediosPago[0]?.uuid,
+          amount: montoAbono,
+          reference: referenciaPago.trim() || undefined,
+          referenciaTransaccion: referenciaPago.trim() || undefined,
+          notes: observacionesPago.trim() || undefined,
+        },
+        token
+      );
+
+      const nuevoPagado = solicitudAbono.paidAmount + montoAbono;
+      const nuevoSaldo = Math.max(0, solicitudAbono.total - nuevoPagado);
+
+      setSuccessMsg(
+        `¡Abono de $${montoAbono.toLocaleString('es-CO')} registrado con éxito a ${solicitudAbono.number}! Nuevo saldo: $${nuevoSaldo.toLocaleString('es-CO')}.`
+      );
+
+      setIsModalAbonoOpen(false);
+      setSolicitudAbono(null);
+      setMontoAbono(0);
+      setRecibidoEfectivo(0);
+      await cargarSolicitudes();
+    } catch (err: unknown) {
+      setErrorMsg((err as { message?: string }).message || 'Error al procesar el recaudo');
+    } finally {
+      setProcesandoAbono(false);
+    }
+  };
+
+  // Cargar Historial de Pagos
+  const cargarHistorial = useCallback(async () => {
+    setCargandoHistorial(true);
+    setErrorMsg(null);
+    try {
+      const res = await api.get<any>('/payments?page=1&pageSize=300', token);
+      const items = Array.isArray(res) ? res : (res?.items || []);
+      setHistorialPagos(
+        items.map((p: any) => ({
+          id: p.id || p.comprobanteId,
+          documentId: p.documentId,
+          documentNumber: p.documentNumber,
+          customerId: p.customerId,
+          customerName: p.customerName || 'Cliente',
+          paymentMethodId: p.paymentMethodId,
+          paymentMethodName: p.paymentMethodName || 'Efectivo',
+          amount: Number(p.amount || p.monto || 0),
+          currency: p.currency || 'COP',
+          receivedAt: p.receivedAt || p.fechaRecaudo || new Date().toISOString(),
+          reference: p.reference || p.referencia,
+          isVoided: p.isVoided ?? false,
+        }))
+      );
+    } catch (err: unknown) {
+      setErrorMsg((err as { message?: string }).message || 'Error cargando historial de pagos');
+    } finally {
+      setCargandoHistorial(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (tabActiva === 'historial') {
+      cargarHistorial();
+    }
+  }, [tabActiva, cargarHistorial]);
+
+  // Filtrado y Paginación de Historial
+  const historialFiltrado = useMemo(() => {
+    let result = historialPagos;
+
+    if (filtroMedioPago) {
+      result = result.filter((p) =>
+        p.paymentMethodName.toLowerCase().includes(filtroMedioPago.toLowerCase())
+      );
+    }
+
+    if (fechaDesde) {
+      result = result.filter((p) => p.receivedAt.split('T')[0] >= fechaDesde);
+    }
+
+    if (fechaHasta) {
+      result = result.filter((p) => p.receivedAt.split('T')[0] <= fechaHasta);
+    }
+
+    const q = busquedaHistorial.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        (p) =>
+          p.customerName.toLowerCase().includes(q) ||
+          (p.documentNumber && p.documentNumber.toLowerCase().includes(q)) ||
+          p.paymentMethodName.toLowerCase().includes(q) ||
+          (p.reference && p.reference.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [historialPagos, busquedaHistorial, filtroMedioPago, fechaDesde, fechaHasta]);
+
+  useEffect(() => {
+    setPaginaHistorial(1);
+  }, [busquedaHistorial, filtroMedioPago, fechaDesde, fechaHasta, itemsHistorialPorPagina]);
+
+  const historialPaginado = useMemo(() => {
+    const inicio = (paginaHistorial - 1) * itemsHistorialPorPagina;
+    return historialFiltrado.slice(inicio, inicio + itemsHistorialPorPagina);
+  }, [historialFiltrado, paginaHistorial, itemsHistorialPorPagina]);
+
+  // Totales de Arqueo / Cuadre en una sola franja horizontal
+  const totalesCuadre = useMemo(() => {
+    let total = 0;
+    let efectivo = 0;
+    let tarjeta = 0;
+    let transferencia = 0;
+    let anulados = 0;
+
+    for (const p of historialFiltrado) {
+      if (p.isVoided) {
+        anulados += 1;
+        continue;
+      }
+      total += p.amount;
+      const m = p.paymentMethodName.toLowerCase();
+      if (m.includes('efectivo')) efectivo += p.amount;
+      else if (m.includes('tarjeta') || m.includes('datafono')) tarjeta += p.amount;
+      else if (m.includes('transfe') || m.includes('nequi') || m.includes('daviplata')) transferencia += p.amount;
+      else efectivo += p.amount;
+    }
+
+    return { total, efectivo, tarjeta, transferencia, anulados, count: historialFiltrado.length };
+  }, [historialFiltrado]);
+
+  // Métricas financieras rápidas
+  const metricas = useMemo(() => {
+    const conSaldo = solicitudes.filter((s) => s.balanceDue > 0);
+    const saldoTotal = conSaldo.reduce((acc, s) => acc + s.balanceDue, 0);
+    const totalFacturado = solicitudes.reduce((acc, s) => acc + s.total, 0);
+    const totalRecaudado = solicitudes.reduce((acc, s) => acc + s.paidAmount, 0);
+    return {
+      cantidadConSaldo: conSaldo.length,
+      saldoTotal,
+      totalFacturado,
+      totalRecaudado,
+    };
+  }, [solicitudes]);
+
+  const cambioEfectivo = Math.max(0, recibidoEfectivo - montoAbono);
+  const esMetodoEfectivo = useMemo(() => {
+    const act = mediosPago.find((m) => m.uuid === metodoPagoId);
+    return !act || act.categoria === 'EFECTIVO' || act.codigo.includes('EFECTIVO');
+  }, [mediosPago, metodoPagoId]);
+
+  const columnsHistorial = useMemo<ColumnDef<PagoHistorial>[]>(() => [
+    {
+      key: 'fecha',
+      header: 'FECHA Y HORA',
+      render: (p) => (
+        <span className="font-mono text-slate-300 text-xs">
+          {new Date(p.receivedAt).toLocaleString('es-CO', {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          })}
+        </span>
+      ),
+    },
+    {
+      key: 'documento',
+      header: 'DOCUMENTO',
+      render: (p) => (
+        <span className="font-mono font-bold text-xs text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-700/30">
+          {p.documentNumber || 'ANTICIPO'}
+        </span>
+      ),
+    },
+    {
+      key: 'cliente',
+      header: 'CLIENTE',
+      render: (p) => <span className="font-medium text-white text-xs">{p.customerName}</span>,
+    },
+    {
+      key: 'medio',
+      header: 'MEDIO DE PAGO',
+      render: (p) => <span className="text-slate-300 text-xs">{p.paymentMethodName}</span>,
+    },
+    {
+      key: 'referencia',
+      header: 'REFERENCIA',
+      render: (p) => <span className="font-mono text-slate-400 text-xs">{p.reference || '—'}</span>,
+    },
+    {
+      key: 'monto',
+      header: 'MONTO',
+      align: 'right',
+      render: (p) => (
+        <span className="text-right font-mono font-bold text-emerald-400 text-xs">
+          ${p.amount.toLocaleString('es-CO')}
+        </span>
+      ),
+    },
+    {
+      key: 'estado',
+      header: 'ESTADO',
+      align: 'center',
+      render: (p) => (
+        <Badge variant={p.isVoided ? 'danger' : 'success'} size="sm">
+          {p.isVoided ? 'Anulado' : 'Válido'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'acciones',
+      header: 'ACCIONES',
+      align: 'right',
+      render: (p) => (
+        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => setPagoDetalle(p)}
+            className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
+            title="Ver detalle del comprobante de pago"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Ver</span>
+          </button>
+        </div>
+      ),
+    },
+  ], []);
+
+  return (
+    <div className="space-y-4 pb-8">
+      <ListPageLayout
+        title="Pagos, Abonos y Crédito"
+        eyebrow="OPERACIÓN · TESORERÍA & CARTERA"
+        description="Gestión ágil de recaudos, abonos a solicitudes e historial de movimientos."
+        filters={
+          <div className="bg-slate-950/90 p-0.5 rounded-lg border border-slate-700/80 flex items-center gap-1">
+            <button
+              onClick={() => setTabActiva('abono')}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                tabActiva === 'abono'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Formulario ágil de recaudo y abonos con selector modal"
+            >
+              <DollarSign className="w-3.5 h-3.5" />
+              <span>Registrar Abono</span>
+            </button>
+            <button
+              onClick={() => setTabActiva('historial')}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                tabActiva === 'historial'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Historial de recaudos con cuadre de caja diario"
+            >
+              <Receipt className="w-3.5 h-3.5" />
+              <span>Historial de Pagos</span>
+            </button>
+          </div>
+        }
+      >
+        {(errorMsg || successMsg) && (
+          <div
+            className={`mb-3 flex items-center justify-between gap-3 p-3 rounded-lg border text-xs shadow-md backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-300 ${
+              errorMsg
+                ? 'bg-rose-950/40 border-rose-800/40 text-rose-300'
+                : 'bg-emerald-950/40 border-emerald-800/40 text-emerald-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {errorMsg ? <span>⚠️</span> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+              <span>{errorMsg || successMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="text-slate-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+      {/* PESTAÑA 1: FORMULARIO CON VINCULACIÓN (ENTITY PICKER) SIN SCROLL */}
+      {tabActiva === 'abono' && (
+        <div className="space-y-4">
+          {/* Franja Horizontal Compacta de KPIs (1 sola línea) */}
+          <div className="grid grid-cols-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Con Saldo</span>
+                <span className="text-base font-bold font-mono text-white">{metricas.cantidadConSaldo} órdenes</span>
+              </div>
+              <Badge variant="warning" size="sm">Pendiente</Badge>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Facturado</span>
+                <span className="text-base font-bold font-mono text-white">${metricas.totalFacturado.toLocaleString('es-CO')}</span>
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Recaudado</span>
+                <span className="text-base font-bold font-mono text-emerald-400">${metricas.totalRecaudado.toLocaleString('es-CO')}</span>
+              </div>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-rose-500/20 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-semibold text-rose-300 uppercase tracking-wider block">Cartera por Cobrar</span>
+                <span className="text-base font-black font-mono text-rose-400">${metricas.saldoTotal.toLocaleString('es-CO')}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Plantilla: Formulario con Vinculación EntityPicker (Altura contenida en viewport) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            {/* Columna Izquierda: Tarjeta / Selector de Solicitud Vinculada (4 cols) */}
+            <div className="lg:col-span-5 space-y-3">
+              <Card className="p-4 bg-slate-900/80 border border-white/10 rounded-2xl shadow-xl space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                    <Search className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>1. Solicitud a Vincular</span>
+                  </h3>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsModalSelectorOpen(true)}
+                    className="text-xs py-1 px-2.5 flex items-center gap-1 border-indigo-500/30 text-indigo-300 hover:text-white"
+                  >
+                    <Search className="w-3 h-3" />
+                    <span>Buscar...</span>
+                  </Button>
+                </div>
+
+                {solicitudAbono ? (
+                  <div className="p-3.5 rounded-xl bg-slate-950/80 border border-indigo-500/30 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-indigo-400 bg-indigo-950/60 px-2.5 py-0.5 rounded border border-indigo-500/30">
+                        {solicitudAbono.number}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsModalSelectorOpen(true)}
+                          className="p-1 text-slate-400 hover:text-white transition-colors"
+                          title="Cambiar solicitud vinculada"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSolicitudAbono(null)}
+                          className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
+                          title="Desvincular solicitud"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="font-bold text-white text-sm">{solicitudAbono.customerName}</div>
+                      {solicitudAbono.customerDocument && (
+                        <div className="text-xs text-slate-400 font-mono">Doc: {solicitudAbono.customerDocument}</div>
+                      )}
+                    </div>
+
+                    {/* 4 Elementos Clave en 1 Sola Fila */}
+                    <div className="grid grid-cols-4 gap-2 pt-2 border-t border-white/10 text-xs font-mono bg-slate-900/90 p-2.5 rounded-xl border border-white/5">
+                      <div className="text-center">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Orden</span>
+                        <span className="font-bold text-indigo-400 truncate block">{solicitudAbono.number}</span>
+                      </div>
+                      <div className="text-center">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Total</span>
+                        <span className="font-bold text-white block">${solicitudAbono.total.toLocaleString('es-CO')}</span>
+                      </div>
+                      <div className="text-center">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Abonado</span>
+                        <span className="font-bold text-emerald-400 block">${solicitudAbono.paidAmount.toLocaleString('es-CO')}</span>
+                      </div>
+                      <div className="text-center border-l pl-1 border-rose-500/20">
+                        <span className="text-[10px] text-rose-300 uppercase tracking-wider block font-bold">Saldo</span>
+                        <span className="font-black text-rose-400 block">${solicitudAbono.balanceDue.toLocaleString('es-CO')}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center rounded-xl bg-slate-950/50 border border-dashed border-white/10 space-y-2">
+                    <p className="text-xs text-slate-400">
+                      Seleccione una solicitud con saldo pendiente para registrar el abono.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setIsModalSelectorOpen(true)}
+                      className="text-xs py-1.5 px-3 mx-auto"
+                    >
+                      <Search className="w-3.5 h-3.5 mr-1" />
+                      Seleccionar Solicitud
+                    </Button>
+                  </div>
+                )}
+
+                {/* Lista rápida de solicitudes con saldo para acceso directo (con scroll interno acotado) */}
+                <div className="pt-2">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold mb-1.5">
+                    <span>Órdenes pendientes recientes</span>
+                    <button
+                      onClick={cargarSolicitudes}
+                      className="text-indigo-400 hover:text-indigo-300 p-0.5"
+                      title="Refrescar órdenes"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${buscandoSolicitudes ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                    {solicitudesPaginadas.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic p-3 text-center">No hay órdenes con saldo.</p>
+                    ) : (
+                      solicitudesPaginadas.map((s) => (
+                        <div
+                          key={s.id}
+                          className={`p-2 rounded-lg border text-xs flex items-center justify-between transition-all ${
+                            solicitudAbono?.id === s.id
+                              ? 'bg-indigo-950/60 border-indigo-500/60 text-white'
+                              : 'bg-slate-950/50 border-white/5 hover:border-white/20 text-slate-300'
+                          }`}
+                        >
+                          <div
+                            className="truncate pr-2 cursor-pointer flex-1"
+                            onClick={() => handleSeleccionarSolicitud(s)}
+                          >
+                            <span className="font-mono font-bold text-indigo-400 mr-1.5">{s.number}</span>
+                            <span className="text-white font-medium">{s.customerName}</span>
+                          </div>
+                          <div className="text-right whitespace-nowrap flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleAbrirModalAbono(s)}
+                              title={`Registrar abono a solicitud ${s.number}`}
+                              className="p-1.5 rounded-lg border border-indigo-500/40 bg-indigo-950/40 hover:bg-indigo-600/60 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
+                            >
+                              <DollarSign className="w-3.5 h-3.5" />
+                              <span className="sr-only sm:not-sr-only text-[11px] font-semibold">Abonar</span>
+                              <span className="sr-only">💰 Abonar</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Paginación similar a Solicitudes */}
+                  <div className="pt-2 mt-2 border-t border-white/10 flex items-center justify-between text-[11px] text-slate-400">
+                    <span>
+                      Mostrando <strong className="text-white">{solicitudesFiltradas.length > 0 ? (paginaActual - 1) * itemsPorPagina + 1 : 0}</strong> a{' '}
+                      <strong className="text-white">{Math.min(paginaActual * itemsPorPagina, solicitudesFiltradas.length)}</strong> de{' '}
+                      <strong className="text-white">{solicitudesFiltradas.length}</strong>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={paginaActual <= 1}
+                        onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white cursor-pointer"
+                        title="Página anterior"
+                      >
+                        ←
+                      </button>
+                      <span className="font-mono text-white px-1 font-semibold">{paginaActual}/{totalPaginas}</span>
+                      <button
+                        type="button"
+                        disabled={paginaActual >= totalPaginas}
+                        onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+                        className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white cursor-pointer"
+                        title="Página siguiente"
+                      >
+                        →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* Columna Derecha: Formulario de Abono y Liquidación en Mostrador (7 cols) */}
+            <div className="lg:col-span-7">
+              <Card className="p-5 bg-slate-900/80 border border-white/10 rounded-2xl shadow-xl space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                    <Receipt className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>2. Datos del Abono & Forma de Pago</span>
+                  </h3>
+                  {solicitudAbono && (
+                    <span className="text-xs font-mono text-slate-400">
+                      Saldo actual: <strong className="text-rose-400">${solicitudAbono.balanceDue.toLocaleString('es-CO')}</strong>
+                    </span>
+                  )}
+                </div>
+
+                {/* Formas de Pago tipo Chips con Iconos */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-semibold text-slate-300 uppercase">
+                      Forma de Pago *
+                    </label>
+                    {(() => {
+                      const mActual = mediosPago.find((m) => m.uuid === metodoPagoId);
+                      const valida = mActual?.validaEnCierre ?? !mActual?.codigo?.startsWith('CRED');
+                      return valida ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 font-medium">
+                          Valida en Cierre de Caja
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/60 text-amber-300 font-medium">
+                          Cobro Futuro / Cartera
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {mediosPago.map((m) => {
+                      const isSelected = metodoPagoId === m.uuid;
+                      const esEfectivo = m.codigo.includes('EFECTIVO');
+                      const esTransf = m.codigo.includes('TRANSFERENCIA') || m.codigo.includes('NEQUI');
+                      const esTarj = m.codigo.includes('DATAFONO') || m.codigo.includes('TARJETA');
+                      const esCred = m.codigo.startsWith('CRED');
+
+                      return (
+                        <button
+                          key={m.uuid}
+                          type="button"
+                          onClick={() => setMetodoPagoId(m.uuid)}
+                          className={`p-2.5 rounded-xl border text-xs font-semibold flex flex-col items-center justify-center gap-1.5 transition-all ${
+                            isSelected
+                              ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/30'
+                              : 'bg-slate-950/80 border-white/10 text-slate-400 hover:text-white hover:border-white/20'
+                          }`}
+                        >
+                          {esEfectivo && <Banknote className="w-4 h-4" />}
+                          {esTransf && <ArrowLeftRight className="w-4 h-4" />}
+                          {esTarj && <CreditCard className="w-4 h-4" />}
+                          {!esEfectivo && !esTransf && !esTarj && <Smartphone className="w-4 h-4" />}
+                          <span className="truncate w-full text-center">{m.nombre.split(' ')[0]}</span>
+                          {esCred && (
+                            <span className="text-[9px] text-amber-300 font-normal">Cartera</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Monto a Abonar + Atajos de Pago */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-slate-300 uppercase">
+                      Monto a Abonar (COP) *
+                    </label>
+                    {solicitudAbono && solicitudAbono.balanceDue > 0 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMontoAbono(solicitudAbono.balanceDue);
+                            setRecibidoEfectivo(solicitudAbono.balanceDue);
+                          }}
+                          className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 underline"
+                        >
+                          Saldar Saldo Total
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <Input
+                    type="number"
+                    value={montoAbono}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setMontoAbono(v);
+                      if (recibidoEfectivo < v) setRecibidoEfectivo(v);
+                    }}
+                    min={1}
+                    fullWidth
+                  />
+                </div>
+
+                {/* Si es efectivo: Recibido y Cambio */}
+                {esMetodoEfectivo ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/90 border border-white/10">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 uppercase mb-1">
+                        Efectivo Recibido (COP)
+                      </label>
+                      <Input
+                        type="number"
+                        value={recibidoEfectivo}
+                        onChange={(e) => setRecibidoEfectivo(Number(e.target.value))}
+                        min={0}
+                        fullWidth
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase mb-1">
+                        Cambio / Devuelta
+                      </span>
+                      <div className="p-2 rounded-xl bg-slate-900 border border-white/10 font-mono font-black text-emerald-400 text-lg flex items-center justify-between">
+                        <span>$</span>
+                        <span>{cambioEfectivo.toLocaleString('es-CO')}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Input
+                      label="Referencia / N° Aprobación / Comprobante Bancario"
+                      value={referenciaPago}
+                      onChange={(e) => setReferenciaPago(e.target.value)}
+                      placeholder="Ej: Aprobación #123456, Nequi ref, etc."
+                      fullWidth
+                    />
+                  </div>
+                )}
+
+                {/* Observaciones */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">
+                    Observaciones (Opcional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={observacionesPago}
+                    onChange={(e) => setObservacionesPago(e.target.value)}
+                    placeholder="Nota u observación de caja..."
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                {/* Botón de Acción Principal */}
+                <div className="pt-2 border-t border-white/10 flex items-center justify-between">
+                  <div className="text-xs font-mono text-slate-400">
+                    {solicitudAbono && montoAbono > 0 && (
+                      <span>
+                        Nuevo saldo: <strong className="text-white">${Math.max(0, solicitudAbono.balanceDue - montoAbono).toLocaleString('es-CO')}</strong>
+                      </span>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    loading={procesandoAbono}
+                    disabled={!solicitudAbono || montoAbono <= 0 || procesandoAbono}
+                    onClick={handleRegistrarAbono}
+                    className="px-4 py-2 text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Registrar e Imprimir Recibo</span>
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PESTAÑA 2: HISTORIAL DE PAGOS CON CUADRE HORIZONTAL Y BOTONES ICONOS */}
+      {tabActiva === 'historial' && (
+        <div className="space-y-4">
+          {/* Franja Horizontal de Totales de Arqueo / Cuadre */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase block">Total Recaudado</span>
+              <span className="text-base font-black font-mono text-emerald-400">${totalesCuadre.total.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase block">Efectivo</span>
+              <span className="text-base font-bold font-mono text-white">${totalesCuadre.efectivo.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase block">Datáfono / Tarjetas</span>
+              <span className="text-base font-bold font-mono text-white">${totalesCuadre.tarjeta.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase block">Transferencias / Nequi</span>
+              <span className="text-base font-bold font-mono text-white">${totalesCuadre.transferencia.toLocaleString('es-CO')}</span>
+            </div>
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/10">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase block">Anulados</span>
+              <span className="text-base font-bold font-mono text-rose-400">{totalesCuadre.anulados} transacciones</span>
+            </div>
+          </div>
+
+          <Card className="overflow-hidden bg-slate-900/80 border border-white/10 rounded-2xl shadow-xl">
+            {/* Barra de Filtros Compacta en 1 Fila */}
+            <div className="p-3 border-b border-white/10 bg-slate-950/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 text-xs items-center">
+              <div className="lg:col-span-3">
+                <input
+                  type="text"
+                  value={busquedaHistorial}
+                  onChange={(e) => setBusquedaHistorial(e.target.value)}
+                  placeholder="Buscar SOL-..., cliente, referencia..."
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="lg:col-span-2">
+                <select
+                  value={filtroMedioPago}
+                  onChange={(e) => setFiltroMedioPago(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">Todos los medios</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Nequi">Nequi / Daviplata</option>
+                  <option value="Tarjeta">Tarjeta / Datáfono</option>
+                </select>
+              </div>
+
+              <div className="lg:col-span-2">
+                <input
+                  type="date"
+                  value={fechaDesde}
+                  onChange={(e) => setFechaDesde(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  title="Fecha desde"
+                />
+              </div>
+
+              <div className="lg:col-span-2">
+                <input
+                  type="date"
+                  value={fechaHasta}
+                  onChange={(e) => setFechaHasta(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  title="Fecha hasta"
+                />
+              </div>
+
+              <div className="lg:col-span-3 flex justify-end gap-1.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={cargarHistorial}
+                  disabled={cargandoHistorial}
+                  className="text-xs py-1 px-2.5"
+                  title="Refrescar historial"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${cargandoHistorial ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+            </div>
+
+            <StandardDataTable<PagoHistorial>
+              columns={columnsHistorial}
+              data={historialPaginado}
+              keyExtractor={(p) => p.id}
+              loading={cargandoHistorial}
+              pagination={{
+                currentPage: paginaHistorial,
+                pageSize: itemsHistorialPorPagina,
+                totalItems: historialFiltrado.length,
+                onPageChange: (p) => setPaginaHistorial(p),
+                onPageSizeChange: (s) => {
+                  setItemsHistorialPorPagina(s);
+                  setPaginaHistorial(1);
+                },
+              }}
+              onRowClick={(p: PagoHistorial) => setPagoDetalle(p)}
+              emptyMessage="No hay pagos registrados para los criterios seleccionados."
+            />
+          </Card>
+        </div>
+      )}
+
+      {/* MODAL ENTITY PICKER: BUSCADOR DE SOLICITUDES CON SCROLL INTERNO */}
+      <Modal
+        isOpen={isModalSelectorOpen}
+        onClose={() => setIsModalSelectorOpen(false)}
+        title="Buscar Solicitud con Saldo Pendiente"
+        size="lg"
+      >
+        <div className="space-y-3 p-1">
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <Input
+                value={criterioBusqueda}
+                onChange={(e) => setCriterioBusqueda(e.target.value)}
+                placeholder="Escribe consecutivo (SOL-...), cliente o documento..."
+                fullWidth
+              />
+            </div>
+            <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-white/10 text-xs">
+              <button
+                type="button"
+                onClick={() => setSoloConSaldo(true)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  soloConSaldo ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Con Saldo
+              </button>
+              <button
+                type="button"
+                onClick={() => setSoloConSaldo(false)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  !soloConSaldo ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Todas
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-[360px] overflow-y-auto space-y-1.5 pr-1 border border-white/10 rounded-xl p-1 bg-slate-950/60">
+            {solicitudesPaginadas.length === 0 ? (
+              <p className="text-xs text-slate-500 italic p-6 text-center">
+                {buscandoSolicitudes ? 'Buscando...' : 'No se encontraron solicitudes con saldo.'}
+              </p>
+            ) : (
+              solicitudesPaginadas.map((s) => (
+                <div
+                  key={s.id}
+                  onClick={() => handleSeleccionarSolicitud(s)}
+                  className="p-3 rounded-xl bg-slate-900/60 border border-white/5 hover:border-indigo-500/50 hover:bg-slate-900 transition-all cursor-pointer flex items-center justify-between"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs text-indigo-400 bg-indigo-950 px-2 py-0.5 rounded border border-indigo-700/40">
+                        {s.number}
+                      </span>
+                      <span className="font-semibold text-white text-xs">{s.customerName}</span>
+                    </div>
+                    {s.customerDocument && (
+                      <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">Doc: {s.customerDocument}</span>
+                    )}
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 uppercase block">Saldo Pendiente</span>
+                    <span className="text-xs font-mono font-bold text-rose-400">${s.balanceDue.toLocaleString('es-CO')}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="flex justify-between items-center text-xs text-slate-400 pt-2 border-t border-white/10">
+            <span>Página {paginaActual} de {totalPaginas}</span>
+            <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={paginaActual <= 1}
+                onClick={() => setPaginaActual((p) => Math.max(1, p - 1))}
+              >
+                ←
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={paginaActual >= totalPaginas}
+                onClick={() => setPaginaActual((p) => Math.min(totalPaginas, p + 1))}
+              >
+                →
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL DETALLE DE COMPROBANTE DE HISTORIAL */}
+      <Modal
+        isOpen={!!pagoDetalle}
+        onClose={() => setPagoDetalle(null)}
+        title={`Comprobante de Pago · ${pagoDetalle?.documentNumber || 'Recaudo'}`}
+        size="md"
+      >
+        {pagoDetalle && (
+          <div className="space-y-4 p-2 text-xs">
+            <div className="p-4 rounded-xl bg-slate-950 border border-white/10 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Cliente:</span>
+                <span className="font-bold text-white">{pagoDetalle.customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Fecha y Hora:</span>
+                <span className="font-mono text-slate-200">{new Date(pagoDetalle.receivedAt).toLocaleString('es-CO')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Medio de Pago:</span>
+                <span className="font-semibold text-indigo-300">{pagoDetalle.paymentMethodName}</span>
+              </div>
+              {pagoDetalle.reference && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Referencia:</span>
+                  <span className="font-mono text-slate-200">{pagoDetalle.reference}</span>
+                </div>
+              )}
+              <div className="flex justify-between pt-2 border-t border-white/10 text-sm">
+                <span className="font-bold text-white">Monto Recaudado:</span>
+                <span className="font-mono font-black text-emerald-400">${pagoDetalle.amount.toLocaleString('es-CO')}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="secondary" onClick={() => setPagoDetalle(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* MODAL PARA REGISTRAR ABONO (Compatibilidad completa con tests unitarios) */}
+      <Modal
+        isOpen={isModalAbonoOpen && !!solicitudAbono}
+        onClose={() => {
+          if (!procesandoAbono) {
+            setIsModalAbonoOpen(false);
+            setSolicitudAbono(null);
+          }
+        }}
+        title={`Registrar Abono · ${solicitudAbono?.number ?? ''}`}
+        size="lg"
+      >
+        {solicitudAbono && (
+          <div className="space-y-4 p-1">
+            <div className="p-3 bg-slate-950/80 rounded-xl border border-white/10 text-xs space-y-2">
+              <div className="flex items-center justify-between text-xs pb-1.5 border-b border-white/5">
+                <span className="text-[11px] text-slate-400">Cliente: <strong className="text-white font-medium">{solicitudAbono.customerName}</strong>{solicitudAbono.customerDocument ? ` (${solicitudAbono.customerDocument})` : ''}</span>
+                <span className="text-[11px] text-indigo-400 font-mono font-bold">{solicitudAbono.number}</span>
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-center font-mono">
+                <div className="bg-slate-900/60 p-2 rounded-lg border border-white/5">
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-sans">Orden</span>
+                  <span className="font-bold text-indigo-400 truncate block text-xs mt-0.5">{solicitudAbono.number}</span>
+                </div>
+                <div className="bg-slate-900/60 p-2 rounded-lg border border-white/5">
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-sans">Total</span>
+                  <span className="font-bold text-white block text-xs mt-0.5">${solicitudAbono.total.toLocaleString('es-CO')}</span>
+                </div>
+                <div className="bg-slate-900/60 p-2 rounded-lg border border-white/5">
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-sans">Abonado</span>
+                  <span className="font-bold text-emerald-400 block text-xs mt-0.5">${solicitudAbono.paidAmount.toLocaleString('es-CO')}</span>
+                </div>
+                <div className="bg-rose-950/30 p-2 rounded-lg border border-rose-500/20">
+                  <span className="text-[9px] text-rose-300 uppercase tracking-wider block font-sans font-bold">Saldo</span>
+                  <span className="font-black text-rose-400 block text-xs mt-0.5">${solicitudAbono.balanceDue.toLocaleString('es-CO')}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase">
+                    Instrumento de Pago *
+                  </label>
+                  {(() => {
+                    const mActual = mediosPago.find((m) => m.uuid === metodoPagoId);
+                    const valida = mActual?.validaEnCierre ?? !mActual?.codigo?.startsWith('CRED');
+                    return valida ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 font-medium">
+                        Valida en Cierre de Caja
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/60 text-amber-300 font-medium">
+                        Cobro Futuro / Cartera
+                      </span>
+                    );
+                  })()}
+                </div>
+                <select
+                  value={metodoPagoId}
+                  onChange={(e) => setMetodoPagoId(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {mediosPago.map((m) => (
+                    <option key={m.uuid} value={m.uuid}>
+                      {m.codigo} - {m.nombre} {m.validaEnCierre === false ? '(Cartera)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase">
+                    Monto a Abonar (COP) *
+                  </label>
+                  {solicitudAbono.balanceDue > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMontoAbono(solicitudAbono.balanceDue)}
+                      className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 underline"
+                    >
+                      Pagar Saldo Total
+                    </button>
+                  )}
+                </div>
+                <Input
+                  type="number"
+                  value={montoAbono}
+                  onChange={(e) => setMontoAbono(Number(e.target.value))}
+                  min={1}
+                  fullWidth
+                />
+              </div>
+
+              <div>
+                <Input
+                  label="Referencia / N° Transacción / Comprobante Bancario"
+                  value={referenciaPago}
+                  onChange={(e) => setReferenciaPago(e.target.value)}
+                  placeholder="Ej: Aprobación #123456, Nequi ref, etc."
+                  fullWidth
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">
+                  Observaciones
+                </label>
+                <textarea
+                  rows={2}
+                  value={observacionesPago}
+                  onChange={(e) => setObservacionesPago(e.target.value)}
+                  placeholder="Nota u observación opcional..."
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+              <Button
+                variant="secondary"
+                disabled={procesandoAbono}
+                onClick={() => {
+                  setIsModalAbonoOpen(false);
+                  setSolicitudAbono(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                loading={procesandoAbono}
+                disabled={montoAbono <= 0 || procesandoAbono}
+                onClick={handleRegistrarAbono}
+              >
+                💰 Confirmar y Registrar Abono
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+      </ListPageLayout>
+    </div>
+  );
+};
+
+export default ModuloPagosCredito;

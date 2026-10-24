@@ -4,7 +4,11 @@ export interface UsuarioSesion {
   nombreCompleto: string
   email: string
   rol: 'Administrador' | 'Cajero' | 'Operario' | 'Auditor'
+  roles: string[]
+  permissions: string[]
+  isCashier: boolean
   token: string
+  expiresAt?: string
 }
 
 export interface LoginPayload {

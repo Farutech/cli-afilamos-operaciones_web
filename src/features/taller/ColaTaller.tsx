@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Button, Badge, Input } from '@farutech/design-system';
+import {
+  Eye,
+  Zap,
+  ArrowRight,
+  ClipboardList,
+  ShieldCheck,
+} from 'lucide-react';
+import { ListPageLayout, StandardDataTable, type ColumnDef } from '../../components/ui';
 import { tallerApi } from '../../services/tallerApi';
 import type {
   ItemTaller,
@@ -18,6 +26,7 @@ interface ColaTallerProps {
     codigo: string;
     rol: string;
   };
+  vistaSwitch?: React.ReactNode;
 }
 
 const ETAPAS_FILTRO = [
@@ -34,6 +43,7 @@ const ETAPAS_FILTRO = [
 export const ColaTaller: React.FC<ColaTallerProps> = ({
   token,
   usuarioActual = { codigo: 'OP-01', rol: 'OPERARIO' },
+  vistaSwitch,
 }) => {
   const [items, setItems] = useState<ItemTaller[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +51,20 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
   const [busqueda, setBusqueda] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (errorMsg || successMsg) {
+      const timer = setTimeout(() => {
+        setErrorMsg(null);
+        setSuccessMsg(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg, successMsg]);
+
+  // Paginación estándar
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [itemsPorPagina, setItemsPorPagina] = useState(10);
 
   // Modales
   const [itemSeleccionado, setItemSeleccionado] = useState<ItemTaller | null>(null);
@@ -108,6 +132,16 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
       );
     });
   }, [items, busqueda]);
+
+  // Reset de página al cambiar filtros
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [filtroEtapa, busqueda, itemsPorPagina]);
+
+  const itemsPaginados = useMemo(() => {
+    const inicio = (paginaActual - 1) * itemsPorPagina;
+    return itemsFiltrados.slice(inicio, inicio + itemsPorPagina);
+  }, [itemsFiltrados, paginaActual, itemsPorPagina]);
 
   // T032: Recepción Rápida (< 500ms)
   const handleRecepcionRapida = async (item: ItemTaller) => {
@@ -249,188 +283,229 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Cola de Trabajo de Taller</h1>
-          <p className="text-sm text-slate-400">
-            Control técnico de ítems de servicio, órdenes de trabajo (OT) y transiciones de workflow.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={cargarCola} disabled={loading}>
-            {loading ? 'Actualizando...' : 'Refrescar'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Alertas */}
-      {errorMsg && (
-        <div className="p-4 bg-red-950/60 border border-red-800/50 text-red-300 rounded-lg text-sm flex items-center justify-between">
-          <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-red-200 font-bold">✕</button>
-        </div>
-      )}
-      {successMsg && (
-        <div className="p-4 bg-emerald-950/60 border border-emerald-800/50 text-emerald-300 rounded-lg text-sm flex items-center justify-between">
-          <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-emerald-200 font-bold">✕</button>
-        </div>
-      )}
-
-      {/* Filtros */}
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  const columns: ColumnDef<ItemTaller>[] = useMemo(
+    () => [
+      {
+        key: 'ot',
+        header: 'OT / Solicitud',
+        render: (item: ItemTaller) => (
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">Filtrar por Etapa</label>
-            <select
-              value={filtroEtapa}
-              onChange={(e) => setFiltroEtapa(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-700 bg-slate-950 text-white rounded-md text-sm focus:ring-2 focus:ring-blue-500"
+            <div className="font-bold text-white">{item.documentoOtNumero}</div>
+            <div className="text-xs text-slate-400">Sol: {item.documentoSolicitudNumero}</div>
+          </div>
+        ),
+      },
+      {
+        key: 'item',
+        header: 'Ítem & Detalle',
+        render: (item: ItemTaller) => (
+          <div>
+            <div className="font-medium text-white">{item.descripcion}</div>
+            <div className="text-xs text-slate-400">
+              Cód: {item.itemCodigo} | Cant: {item.cantidad}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: 'cliente',
+        header: 'Cliente',
+        render: (item: ItemTaller) => (
+          <div>
+            <div className="text-white font-medium">{item.clienteNombre}</div>
+            <div className="text-xs text-slate-400">{item.clienteTelefono}</div>
+          </div>
+        ),
+      },
+      {
+        key: 'franja',
+        header: 'Franja Compromiso',
+        render: (item: ItemTaller) => (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-950/60 text-amber-300 border border-amber-500/30">
+            ⏱ {item.franjaCompromiso || 'Sin Franja'}
+          </span>
+        ),
+      },
+      {
+        key: 'etapa',
+        header: 'Etapa Actual',
+        render: (item: ItemTaller) => (
+          <Badge variant={getBadgeVariant(item.etapaActualCodigo)}>
+            {item.etapaActualNombre}
+          </Badge>
+        ),
+      },
+      {
+        key: 'acciones',
+        header: 'Acciones Técnicas',
+        align: 'right',
+        render: (item: ItemTaller) => (
+          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+            {item.etapaActualCodigo === 'RECEPCION_TECNICA' && (
+              <button
+                type="button"
+                onClick={() => handleRecepcionRapida(item)}
+                disabled={loading}
+                title="Recibir en Taller"
+                className="p-1.5 rounded-lg border border-amber-500/40 bg-amber-950/40 hover:bg-amber-600/50 text-amber-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold">⚡ Recibir en Taller</span>
+              </button>
+            )}
+
+            {item.transicionesPermitidas.map((tr: TransicionDisponible) => (
+              <button
+                key={tr.transicionPublicId}
+                type="button"
+                onClick={() => handleAbrirTransicion(item, tr)}
+                disabled={loading}
+                title={`Avanzar a: ${tr.nombre}`}
+                className="p-1.5 rounded-lg border border-indigo-500/30 bg-indigo-950/40 hover:bg-indigo-600/50 text-indigo-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold max-w-[120px] truncate">{tr.nombre}</span>
+                {tr.requiereAprobacion && <ShieldCheck className="w-3 h-3 text-amber-400" />}
+              </button>
+            ))}
+
+            {item.esFinal && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Finalizado
+              </span>
+            )}
+
+            {!item.esFinal && (
+              <button
+                type="button"
+                onClick={() => handleAbrirActividad(item)}
+                disabled={loading}
+                title="Registrar bitácora / actividad técnica"
+                className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span className="text-[11px]">Actividad</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setItemSeleccionado(item);
+                setIsHistorialModalOpen(true);
+              }}
+              title="Ver detalle e historial de la orden de trabajo"
+              className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer"
             >
-              {ETAPAS_FILTRO.map((et) => (
-                <option key={et.codigo} value={et.codigo}>
-                  {et.label}
-                </option>
-              ))}
-            </select>
+              <Eye className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Ver</span>
+            </button>
+
+            {!item.esFinal && (
+              <button
+                type="button"
+                onClick={() => handleAbrirCancelar(item)}
+                disabled={loading}
+                title="Cancelar orden de ítem (Invariante #8)"
+                className="p-1.5 rounded-lg border border-rose-500/40 bg-rose-950/40 hover:bg-rose-600/60 text-rose-300 hover:text-white transition-all shadow-sm flex items-center gap-1 text-xs cursor-pointer disabled:opacity-50"
+              >
+                <span>✕</span>
+              </button>
+            )}
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-slate-400 mb-1">Buscar OT / Solicitud / Cliente / Ítem</label>
-            <Input
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por código de ítem, OT, solicitud o cliente..."
-            />
+        ),
+      },
+    ],
+    [loading]
+  );
+
+  return (
+    <div className="space-y-4">
+      <ListPageLayout
+        title="Cola de Trabajo de Taller"
+        eyebrow="OPERACIÓN · TALLER"
+        description="Control de procesos, cola de afilado y asignación técnica en tiempo real."
+        actions={
+          <div className="flex items-center gap-2">
+            {vistaSwitch}
+            <Button variant="secondary" size="sm" onClick={cargarCola} disabled={loading} className="cursor-pointer">
+              {loading ? 'Actualizando...' : 'Refrescar'}
+            </Button>
           </div>
-        </div>
-      </Card>
+        }
+        search={{
+          value: busqueda,
+          onChange: (val) => {
+            setBusqueda(val);
+            setPaginaActual(1);
+          },
+          placeholder: 'Buscar por OT, solicitud, cliente o código...',
+          isSearching: loading,
+        }}
+        filters={
+          <select
+            value={filtroEtapa}
+            onChange={(e) => {
+              setFiltroEtapa(e.target.value);
+              setPaginaActual(1);
+            }}
+            className="h-8 px-2.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+          >
+            {ETAPAS_FILTRO.map((et) => (
+              <option key={et.codigo} value={et.codigo}>
+                {et.label}
+              </option>
+            ))}
+          </select>
+        }
+        onRefresh={cargarCola}
+        isRefreshing={loading}
+      >
+        {(errorMsg || successMsg) && (
+          <div
+            className={`mb-3 flex items-center justify-between gap-3 p-3 rounded-lg border text-xs shadow-md backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-300 ${
+              errorMsg
+                ? 'bg-rose-950/40 border-rose-800/40 text-rose-300'
+                : 'bg-emerald-950/40 border-emerald-800/40 text-emerald-300'
+            }`}
+          >
+            <span>{errorMsg || successMsg}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMsg(null);
+                setSuccessMsg(null);
+              }}
+              className="text-slate-400 hover:text-white p-1 rounded transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
-      {/* Tabla de la Cola */}
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-800 text-sm">
-            <thead className="bg-slate-950/80">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">OT / Solicitud</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">Ítem & Detalle</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">Cliente</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">Franja Compromiso</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-400">Etapa Actual</th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-400">Acciones Técnicas</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
-              {itemsFiltrados.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                    {loading ? 'Cargando cola de taller...' : 'No hay ítems en la cola de taller para los criterios seleccionados.'}
-                  </td>
-                </tr>
-              ) : (
-                itemsFiltrados.map((item) => (
-                  <tr key={item.itemPublicId} className="hover:bg-slate-950/80 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-white">{item.documentoOtNumero}</div>
-                      <div className="text-xs text-slate-400">Sol: {item.documentoSolicitudNumero}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-white">{item.descripcion}</div>
-                      <div className="text-xs text-gray-400">
-                        Cód: {item.itemCodigo} | Cant: {item.cantidad}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-white">{item.clienteNombre}</div>
-                      <div className="text-xs text-gray-400">{item.clienteTelefono}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-950/60 text-amber-300 border border-amber-500/30">
-                        ⏱ {item.franjaCompromiso || 'Sin Franja'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={getBadgeVariant(item.etapaActualCodigo)}>
-                        {item.etapaActualNombre}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                      {/* Botón Recepción Rápida (T032) */}
-                      {item.etapaActualCodigo === 'RECEPCION_TECNICA' && (
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => handleRecepcionRapida(item)}
-                          disabled={loading}
-                        >
-                          ⚡ Recibir en Taller
-                        </Button>
-                      )}
-
-                      {/* Transiciones permitidas */}
-                      {item.transicionesPermitidas.map((tr) => (
-                        <Button
-                          key={tr.transicionPublicId}
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleAbrirTransicion(item, tr)}
-                          disabled={loading}
-                        >
-                          {tr.nombre}
-                          {tr.requiereAprobacion && ' 🔒'}
-                        </Button>
-                      ))}
-
-                      {/* Registrar Actividad (T034) */}
-                      {!item.esFinal && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleAbrirActividad(item)}
-                          disabled={loading}
-                        >
-                          📝 Actividad
-                        </Button>
-                      )}
-
-                      {/* Historial */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setItemSeleccionado(item);
-                          setIsHistorialModalOpen(true);
-                        }}
-                      >
-                        👁 Ver
-                      </Button>
-
-                      {/* Cancelar ítem (Invariante #8) */}
-                      {!item.esFinal && (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => handleAbrirCancelar(item)}
-                          disabled={loading}
-                        >
-                          ✕
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+        <StandardDataTable<ItemTaller>
+          columns={columns}
+          data={itemsPaginados}
+          keyExtractor={(item) => item.itemPublicId}
+          loading={loading && items.length === 0}
+          pagination={{
+            currentPage: paginaActual,
+            pageSize: itemsPorPagina,
+            totalItems: itemsFiltrados.length,
+            onPageChange: (p) => setPaginaActual(p),
+            onPageSizeChange: (s) => {
+              setItemsPorPagina(s);
+              setPaginaActual(1);
+            },
+          }}
+          emptyMessage="No hay ítems en la cola de taller para los criterios seleccionados."
+        />
+      </ListPageLayout>
 
       {/* MODAL TRANSICIÓN */}
       {isTransicionModalOpen && itemSeleccionado && transicionSeleccionada && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg p-6 space-y-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
             <h3 className="text-lg font-bold text-white">
               Ejecutar Transición: {transicionSeleccionada.nombre}
             </h3>
@@ -441,7 +516,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Notas técnicas</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Notas técnicas</label>
                 <Input
                   value={transicionNotas}
                   onChange={(e) => setTransicionNotas(e.target.value)}
@@ -450,7 +525,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Insumos / Materiales</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Insumos / Materiales</label>
                 <Input
                   value={transicionInsumos}
                   onChange={(e) => setTransicionInsumos(e.target.value)}
@@ -460,8 +535,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
               {/* VoBo Supervisor requerido */}
               {transicionSeleccionada.requiereAprobacion && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
-                  <div className="text-xs font-bold text-amber-800 flex items-center gap-1">
+                <div className="p-3 bg-amber-950/50 border border-amber-700/50 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                     <span>🔒</span> Esta transición requiere VoBo de Supervisor
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -495,7 +570,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
               <Button variant="secondary" onClick={() => setIsTransicionModalOpen(false)}>
                 Cancelar
               </Button>
@@ -509,8 +584,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
       {/* MODAL REGISTRAR ACTIVIDAD TÉCNICA (T034) */}
       {isActividadModalOpen && itemSeleccionado && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg p-6 space-y-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
             <h3 className="text-lg font-bold text-white">Registrar Actividad Técnica</h3>
             <p className="text-sm text-slate-400">
               Ítem: <span className="font-semibold">{itemSeleccionado.descripcion}</span> ({itemSeleccionado.itemCodigo})
@@ -518,7 +593,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Nombre de la Actividad *</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre de la Actividad *</label>
                 <Input
                   value={actividadNombre}
                   onChange={(e) => setActividadNombre(e.target.value)}
@@ -528,7 +603,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Subactividades</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Subactividades</label>
                 <Input
                   value={subactividades}
                   onChange={(e) => setSubactividades(e.target.value)}
@@ -537,7 +612,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Insumos Utilizados</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Insumos Utilizados</label>
                 <Input
                   value={insumosUtilizados}
                   onChange={(e) => setInsumosUtilizados(e.target.value)}
@@ -546,7 +621,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">URL Evidencia Fotográfica</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">URL Evidencia Fotográfica</label>
                 <Input
                   value={evidenciaUrl}
                   onChange={(e) => setEvidenciaUrl(e.target.value)}
@@ -555,7 +630,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
               <Button variant="secondary" onClick={() => setIsActividadModalOpen(false)}>
                 Cancelar
               </Button>
@@ -569,16 +644,16 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
       {/* MODAL CANCELAR ÍTEM (Invariante #8) */}
       {isCancelarModalOpen && itemSeleccionado && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg p-6 space-y-4">
-            <h3 className="text-lg font-bold text-red-600">Cancelar Ítem de Taller</h3>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg p-6 space-y-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
+            <h3 className="text-lg font-bold text-rose-400">Cancelar Ítem de Taller</h3>
             <p className="text-sm text-slate-400">
               Se cancelará el ítem <span className="font-semibold">{itemSeleccionado.descripcion}</span> en la OT {itemSeleccionado.documentoOtNumero}.
             </p>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Motivo de Cancelación *</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Motivo de Cancelación *</label>
                 <Input
                   value={motivoCancelacion}
                   onChange={(e) => setMotivoCancelacion(e.target.value)}
@@ -588,8 +663,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               </div>
 
               {!itemSeleccionado.permiteCancelacionDirecta && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-3">
-                  <div className="text-xs font-bold text-red-800">
+                <div className="p-3 bg-rose-950/50 border border-rose-700/50 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-rose-300">
                     ⚠️ Invariante #8: El ítem se encuentra en una etapa técnica avanzada ({itemSeleccionado.etapaActualNombre}). Requiere VoBo de Supervisor.
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -623,7 +698,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
               <Button variant="secondary" onClick={() => setIsCancelarModalOpen(false)}>
                 Volver
               </Button>
@@ -641,8 +716,8 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
 
       {/* MODAL HISTORIAL / BITÁCORA */}
       {isHistorialModalOpen && itemSeleccionado && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-xl p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-xl p-6 space-y-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">
                 Historial Técnico: {itemSeleccionado.itemCodigo}
@@ -660,7 +735,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
                 <div className="text-center py-6 text-gray-400 text-sm">Sin eventos registrados aún.</div>
               ) : (
                 itemSeleccionado.historial.map((ev, idx) => (
-                  <div key={idx} className="p-3 bg-slate-950/80 border border-gray-100 rounded-lg text-xs space-y-1">
+                  <div key={idx} className="p-3 bg-slate-950/80 border border-slate-800 rounded-lg text-xs space-y-1">
                     <div className="flex justify-between font-semibold text-gray-700">
                       <span>{ev.accion} ({ev.etapaNombre})</span>
                       <span className="text-gray-400">{new Date(ev.fechaHoraUtc).toLocaleString()}</span>
@@ -674,7 +749,7 @@ export const ColaTaller: React.FC<ColaTallerProps> = ({
               )}
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-gray-100">
+            <div className="flex justify-end pt-4 border-t border-slate-800">
               <Button variant="secondary" onClick={() => setIsHistorialModalOpen(false)}>
                 Cerrar
               </Button>

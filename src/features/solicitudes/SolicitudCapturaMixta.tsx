@@ -1,13 +1,21 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, Button, Badge, Input, Modal, Alert } from '@farutech/design-system';
+import { toast } from 'sonner';
 import { ItemSelector } from '../catalogos/ItemSelector';
+import { ItemBuscarModal } from '../catalogos/ItemBuscarModal';
 import { RegistroClienteModal } from '../clientes/RegistroClienteModal';
+import { ClienteBuscarModal } from '../clientes/ClienteBuscarModal';
+import { PanelFormaPago } from '@/components/ui';
 import { catalogosApi } from '../../services/catalogosApi';
+import { aprobacionesApi } from '../../services/aprobacionesApi';
+import { formatearNumeroDocumento } from '../../utils/documentFormat';
+import { Edit2, Trash2, Eye } from 'lucide-react';
 import type {
   ItemCatalogo,
   Cliente,
   CanalOrigen,
   TipoDocumentoIdentidad,
+  TipoDocumentoBase,
   PoliticaPrecios,
   ListaPrecio,
   MedioPagoInstrumento,
@@ -16,6 +24,7 @@ import type { NaturalezaItem } from '../../types/solicitudes';
 
 export interface LineaDetalleLocal {
   idTemp: string;
+  lineaId?: string;
   itemCatalogoId?: string;
   naturaleza: NaturalezaItem;
   descripcion: string;
@@ -28,6 +37,8 @@ export interface LineaDetalleLocal {
   anticipoMinimo: number;
   anticipoImputado: number;
   franjaCompromiso: string;
+  fechaEntregaCompromiso?: string;
+  observaciones?: string;
 }
 
 export interface PagoDistribucionLocal {
@@ -39,21 +50,112 @@ export interface PagoDistribucionLocal {
   referencia: string;
 }
 
+export interface SubtipoDocOpcion {
+  uuid: string;
+  tipoBaseUuid: string;
+  codigoBase: string;
+  codigoSubtipo: string;
+  nombre: string;
+  prefijo: string;
+  sufijo?: string;
+  folioActual: number;
+  longitudCeros?: number;
+  formatoPlantilla: 'TIRILLA' | 'MEDIA_CARTA' | 'CARTA';
+}
+
 interface SolicitudCapturaMixtaProps {
   canales: CanalOrigen[];
   tiposDocumento: TipoDocumentoIdentidad[];
   clientes: Cliente[];
   onAsentarSolicitud: (solicitud: {
+    requestId?: string;
+    numeroDocumentoVisible?: string;
     canalUuid: string;
     clienteUuid: string;
+    tipoDocumentoUuid?: string;
+    tipoDocumentoCodigo?: string;
+    subtipoUuid?: string;
+    subtipoCodigo?: string;
+    prefijo?: string;
+    sufijo?: string;
+    folio?: number;
+    longitudCeros?: number;
     lineas: LineaDetalleLocal[];
     totalPagadoInventario: number;
     anticipoVoBoAutorizado: boolean;
     observaciones?: string;
     pagosAbono?: PagoDistribucionLocal[];
+    esSoloGuardar?: boolean;
+    supervisorPin?: string;
   }) => Promise<void>;
   loading?: boolean;
+  solicitudInicial?: {
+    requestId?: string;
+    numeroDocumentoVisible?: string;
+    clienteUuid?: string;
+    canalUuid?: string;
+    observaciones?: string;
+    lineas?: LineaDetalleLocal[];
+    pagosAbono?: PagoDistribucionLocal[];
+  } | null;
+  onCancelarEdicion?: () => void;
+  onClienteCreado?: (cliente: Cliente) => void;
 }
+
+interface AnticipoInputProps {
+  valor: number;
+  minimo: number;
+  ariaLabel: string;
+  onGuardar: (val: number) => void;
+}
+
+const AnticipoInput: React.FC<AnticipoInputProps> = ({
+  valor,
+  minimo,
+  ariaLabel,
+  onGuardar,
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const [localVal, setLocalVal] = useState<string>(valor ? String(valor) : '');
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalVal(valor ? String(valor) : '');
+    }
+  }, [valor, isFocused]);
+
+  const displayVal = isFocused
+    ? localVal
+    : valor > 0
+    ? `$ ${valor.toLocaleString()}`
+    : '';
+
+  return (
+    <input
+      type="text"
+      aria-label={ariaLabel}
+      value={displayVal}
+      placeholder={`Mín: $${minimo.toLocaleString()}`}
+      onFocus={() => {
+        setIsFocused(true);
+        setLocalVal(valor ? String(valor) : '');
+      }}
+      onChange={(e) => {
+        // Solo dígitos y opcionalmente punto decimal
+        const clean = e.target.value.replace(/[^\d.]/g, '');
+        setLocalVal(clean);
+        const num = parseFloat(clean) || 0;
+        onGuardar(num);
+      }}
+      onBlur={() => {
+        setIsFocused(false);
+        const num = parseFloat(localVal) || 0;
+        onGuardar(num);
+      }}
+      className="w-32 px-2.5 py-1 bg-slate-900 border border-slate-700 rounded text-right text-xs font-mono text-emerald-300 focus:border-indigo-500 focus:outline-none transition-colors"
+    />
+  );
+};
 
 export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   canales,
@@ -61,129 +163,290 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   clientes: clientesIniciales,
   onAsentarSolicitud,
   loading = false,
+  solicitudInicial = null,
+  onCancelarEdicion,
+  onClienteCreado: onClienteCreadoProp,
 }) => {
   const [clientes, setClientes] = useState<Cliente[]>(clientesIniciales);
-  const [selectedCanal, setSelectedCanal] = useState<string>(canales[0]?.uuid || '');
-  const [selectedCliente, setSelectedCliente] = useState<string>(clientesIniciales[0]?.uuid || '');
+  const [selectedCanal, setSelectedCanal] = useState<string>(
+    solicitudInicial?.canalUuid || canales[0]?.uuid || ''
+  );
+  const [selectedCliente, setSelectedCliente] = useState<string>(
+    solicitudInicial?.clienteUuid || clientesIniciales[0]?.uuid || ''
+  );
   const [isClienteModalOpen, setIsClienteModalOpen] = useState(false);
+  const [isClienteBuscarModalOpen, setIsClienteBuscarModalOpen] = useState(false);
 
-  // Subtipos de Documento y Consecutivos (Tipo Novasoft)
-  const [subtipoDoc, setSubtipoDoc] = useState<string>('SOL-GEN');
-  const [subtipoPersonalizado, setSubtipoPersonalizado] = useState<string>('');
+  // Precargar datos si cambia solicitudInicial
+  useEffect(() => {
+    if (!solicitudInicial) return;
+    if (solicitudInicial.canalUuid) {
+      setSelectedCanal(solicitudInicial.canalUuid);
+    }
+    if (solicitudInicial.clienteUuid) {
+      setSelectedCliente(solicitudInicial.clienteUuid);
+    }
+    if (typeof solicitudInicial.observaciones === 'string') {
+      setObservacionesDocumento(solicitudInicial.observaciones);
+    }
+    if (Array.isArray(solicitudInicial.lineas) && solicitudInicial.lineas.length > 0) {
+      setLineas(solicitudInicial.lineas);
+    }
+    if (Array.isArray(solicitudInicial.pagosAbono) && solicitudInicial.pagosAbono.length > 0) {
+      setPagosAbono(solicitudInicial.pagosAbono);
+    }
+    if (solicitudInicial.numeroDocumentoVisible) {
+      setModoNumeracion('MANUAL');
+      setNumeroDocManual(solicitudInicial.numeroDocumentoVisible);
+    }
+  }, [solicitudInicial]);
+
+  // Autocompletado / buscador predictivo de cliente con debounce de 500ms
+  const [clienteSearchQuery, setClienteSearchQuery] = useState('');
+  const [isClienteDropdownOpen, setIsClienteDropdownOpen] = useState(false);
+  const [clientesPredictivos, setClientesPredictivos] = useState<Cliente[]>([]);
+  const [isBuscandoClientes, setIsBuscandoClientes] = useState(false);
+  const clienteDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const q = clienteSearchQuery.trim();
+    if (q.length < 2) {
+      setClientesPredictivos([]);
+      setIsBuscandoClientes(false);
+      return;
+    }
+
+    setIsBuscandoClientes(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await catalogosApi.getClientes(q, 10);
+        setClientesPredictivos(res.clientes || []);
+      } catch {
+        setClientesPredictivos([]);
+      } finally {
+        setIsBuscandoClientes(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [clienteSearchQuery]);
+
+  // Catálogo y autocompletado / buscador predictivo de ítem en modal
+  const [catalogoItems, setCatalogoItems] = useState<ItemCatalogo[]>([]);
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
+  const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
+  const itemDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    const fetchCatalogo = async () => {
+      try {
+        const res = await catalogosApi.getItems({ activo: true });
+        if (!cancelado && res?.items && res.items.length > 0) {
+          setCatalogoItems(res.items);
+        }
+      } catch {
+        // Mantiene vacío si falla
+      }
+    };
+    fetchCatalogo();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  // Cerrar dropdowns al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (clienteDropdownRef.current && !clienteDropdownRef.current.contains(e.target as Node)) {
+        setIsClienteDropdownOpen(false);
+      }
+      if (itemDropdownRef.current && !itemDropdownRef.current.contains(e.target as Node)) {
+        setIsItemDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Cliente seleccionado actual
+  const clienteSeleccionadoObj = useMemo(() => {
+    return clientes.find((c) => c.uuid === selectedCliente) || clientes[0] || null;
+  }, [clientes, selectedCliente]);
+
+  // Lista predictiva de ítems filtrados (solo a partir del 2do carácter, max 10)
+  const itemsPredictivos = useMemo(() => {
+    const q = itemSearchQuery.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return catalogoItems
+      .filter((it) => it.nombre.toLowerCase().includes(q) || it.codigoReferencia.toLowerCase().includes(q) || (it.descripcion || '').toLowerCase().includes(q))
+      .slice(0, 10);
+  }, [catalogoItems, itemSearchQuery]);
+
+  // =========================================================================
+  // CONTROL DOCUMENTAL (Tipo de Documento y Subtipo dinámicos desde API)
+  // =========================================================================
+  const [tiposDocDisponibles, setTiposDocDisponibles] = useState<TipoDocumentoBase[]>([]);
+  const [tipoDocSeleccionadoUuid, setTipoDocSeleccionadoUuid] = useState<string>('');
+  const [subtiposDisponibles, setSubtiposDisponibles] = useState<SubtipoDocOpcion[]>([]);
+  const [subtipoSeleccionadoUuid, setSubtipoSeleccionadoUuid] = useState<string>('');
+  const [modoNumeracion, setModoNumeracion] = useState<'AUTOMATICO' | 'MANUAL'>('AUTOMATICO');
+  const [consecutivoNumero, setConsecutivoNumero] = useState<number>(1);
+  const [numeroDocManual, setNumeroDocManual] = useState<string>('');
   const [plantillaFormato, setPlantillaFormato] = useState<'TIRILLA' | 'MEDIA_CARTA' | 'CARTA'>('TIRILLA');
   const [isPlantillaModalOpen, setIsPlantillaModalOpen] = useState(false);
 
-  // Fecha y hora del documento (datetime-local picker estilo Novasoft)
+  useEffect(() => {
+    let cancelado = false;
+    const fetchTipos = async () => {
+      try {
+        const res = await catalogosApi.getTiposDocumento();
+        if (cancelado || !res?.tipos) return;
+        const tiposFiltrados = res.tipos.filter(
+          (t) =>
+            t.codigoBase.toUpperCase().includes('SOL') ||
+            t.nombre.toLowerCase().includes('solicitud')
+        );
+        const listaTipos = tiposFiltrados.length > 0 ? tiposFiltrados : res.tipos;
+        setTiposDocDisponibles(listaTipos);
+        if (listaTipos.length > 0) {
+          const primerTipo = listaTipos[0];
+          setTipoDocSeleccionadoUuid(primerTipo.uuid);
+
+          const subs: SubtipoDocOpcion[] = (primerTipo.subtipos || []).map((st) => ({
+            uuid: st.uuid,
+            tipoBaseUuid: primerTipo.uuid,
+            codigoBase: primerTipo.codigoBase,
+            codigoSubtipo: st.codigoSubtipo || primerTipo.codigoBase,
+            nombre: st.nombre || primerTipo.nombre,
+            prefijo: st.prefijo || primerTipo.codigoBase,
+            sufijo: (st as any).sufijo || '',
+            folioActual: st.folioActual || 1,
+            longitudCeros: (st as any).longitudCeros || 4,
+            formatoPlantilla: (st.formatoPlantilla as 'TIRILLA' | 'MEDIA_CARTA' | 'CARTA') || 'TIRILLA',
+          }));
+
+          if (subs.length === 0) {
+            subs.push({
+              uuid: primerTipo.uuid,
+              tipoBaseUuid: primerTipo.uuid,
+              codigoBase: primerTipo.codigoBase,
+              codigoSubtipo: primerTipo.codigoBase,
+              nombre: primerTipo.nombre,
+              prefijo: primerTipo.codigoBase,
+              sufijo: '',
+              folioActual: 1,
+              longitudCeros: 4,
+              formatoPlantilla: 'TIRILLA',
+            });
+          }
+
+          setSubtiposDisponibles(subs);
+          setSubtipoSeleccionadoUuid(subs[0].uuid);
+          setConsecutivoNumero(subs[0].folioActual);
+          setPlantillaFormato(subs[0].formatoPlantilla);
+        }
+      } catch {
+        setTiposDocDisponibles([]);
+        setSubtiposDisponibles([]);
+      }
+    };
+    fetchTipos();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const tipoDocActual = useMemo(() => {
+    return tiposDocDisponibles.find((t) => t.uuid === tipoDocSeleccionadoUuid) || tiposDocDisponibles[0] || null;
+  }, [tiposDocDisponibles, tipoDocSeleccionadoUuid]);
+
+  const subtipoActual = useMemo<SubtipoDocOpcion>(() => {
+    return (
+      subtiposDisponibles.find((s) => s.uuid === subtipoSeleccionadoUuid) ||
+      subtiposDisponibles[0] || {
+        uuid: 'sub-def',
+        tipoBaseUuid: 'tipo-def',
+        codigoBase: 'SOL',
+        codigoSubtipo: 'SOL',
+        nombre: 'Solicitud estándar',
+        prefijo: 'SOL',
+        sufijo: '',
+        folioActual: 1,
+        longitudCeros: 4,
+        formatoPlantilla: 'TIRILLA',
+      }
+    );
+  }, [subtiposDisponibles, subtipoSeleccionadoUuid]);
+
+
+  // Al cambiar subtipo, sincronizar folio y formato
+  const handleCambiarSubtipo = (uuid: string) => {
+    setSubtipoSeleccionadoUuid(uuid);
+    const target = subtiposDisponibles.find((s) => s.uuid === uuid);
+    if (target) {
+      setConsecutivoNumero(target.folioActual);
+      setPlantillaFormato(target.formatoPlantilla);
+    }
+  };
+
+  // Fecha del documento (SOLO FECHA, NO HORA: YYYY-MM-DD)
   const [fechaDocumento, setFechaDocumento] = useState<string>(() => {
     const d = new Date();
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 16);
+    return d.toISOString().slice(0, 10);
   });
 
-  // Fecha y hora prometida de entrega
-  const [fechaEntrega, setFechaEntrega] = useState<string>(() => {
+  // Detalle / Concepto general
+  const [observacionesDocumento, setObservacionesDocumento] = useState<string>('');
+
+  // Número visible final con prefijo, padding y sufijo
+  const numeroDocumentoVisible = useMemo(() => {
+    if (modoNumeracion === 'MANUAL' && numeroDocManual.trim()) {
+      return numeroDocManual.trim().toUpperCase();
+    }
+    return formatearNumeroDocumento(
+      subtipoActual.prefijo,
+      consecutivoNumero,
+      subtipoActual.sufijo,
+      subtipoActual.longitudCeros || 4
+    );
+  }, [modoNumeracion, numeroDocManual, consecutivoNumero, subtipoActual]);
+
+  // =========================================================================
+  // GESTIÓN DEL PACTO DE ENTREGA (POR ÍTEM CON HERENCIA)
+  // =========================================================================
+  const [ultimoCompromisoServicio, setUltimoCompromisoServicio] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(17, 0, 0, 0);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 16);
+    return `${d.toISOString().slice(0, 10)}T17:00`;
   });
 
+  const [fechaCompromisoLinea, setFechaCompromisoLinea] = useState<string>(ultimoCompromisoServicio);
+  const [franjaCompromiso, setFranjaCompromiso] = useState<string>('HOY TARDE');
+  const [observacionesLinea, setObservacionesLinea] = useState<string>('');
+  const [programarEntregaInventario, setProgramarEntregaInventario] = useState<boolean>(false);
 
-  const textoFechaEntrega = useMemo(() => {
-    if (!fechaEntrega) return 'No especificada';
-    try {
-      const d = new Date(fechaEntrega);
-      return new Intl.DateTimeFormat('es-CO', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(d);
-    } catch {
-      return fechaEntrega;
-    }
-  }, [fechaEntrega]);
-
-  const [sufijoDoc, setSufijoDoc] = useState<string>('');
-  const [numeroDocManual, setNumeroDocManual] = useState<string>('');
-
-  const infoConsecutivo = useMemo(() => {
-    switch (subtipoDoc) {
-      case 'SOL-PREF':
-        return {
-          prefijo: 'SP',
-          subtipoNombre: 'Solicitud Prioritaria / VIP',
-          siguienteNumero: 'SP-0001',
-          longitud: 4,
-          tipoImpresion: 'Carta Completa / Formato Especial',
-        };
-      case 'SOL-GAR':
-        return {
-          prefijo: 'GA',
-          subtipoNombre: 'Garantía Técnica de Afilado',
-          siguienteNumero: 'GA-0001',
-          longitud: 4,
-          tipoImpresion: 'Tirilla POS 80mm / Media Carta',
-        };
-      case 'SOL-EXP':
-        return {
-          prefijo: 'SX',
-          subtipoNombre: 'Servicio Exprés en Mostrador',
-          siguienteNumero: 'SX-0001',
-          longitud: 4,
-          tipoImpresion: 'Tirilla POS 80mm',
-        };
-      case 'SOL-MAY':
-        return {
-          prefijo: 'SM',
-          subtipoNombre: 'Distribuidor / Mayorista',
-          siguienteNumero: 'SM-0001',
-          longitud: 4,
-          tipoImpresion: 'Carta Completa (Factura/OT)',
-        };
-      case 'OTRO':
-        return {
-          prefijo: (subtipoPersonalizado || 'SO').slice(0, 3).toUpperCase(),
-          subtipoNombre: subtipoPersonalizado || 'Solicitud Personalizada',
-          siguienteNumero: `${(subtipoPersonalizado || 'SO').slice(0, 2).toUpperCase()}-0001`,
-          longitud: 4,
-          tipoImpresion: 'Tirilla POS 80mm',
-        };
-      case 'SOL-GEN':
-      default:
-        return {
-          prefijo: 'SG',
-          subtipoNombre: 'Solicitud General de Taller e Inventario',
-          siguienteNumero: 'SG-0003',
-          longitud: 4,
-          tipoImpresion: 'Tirilla POS 80mm / Media Carta',
-        };
-    }
-  }, [subtipoDoc, subtipoPersonalizado]);
-
-  // Folio visible por defecto con el prefijo y sufijo
-  const folioCompletoVisible = useMemo(() => {
-    const base = numeroDocManual || infoConsecutivo.siguienteNumero;
-    return sufijoDoc ? `${base}-${sufijoDoc}` : base;
-  }, [numeroDocManual, infoConsecutivo.siguienteNumero, sufijoDoc]);
-
+  // Lineas de la solicitud
   const [lineas, setLineas] = useState<LineaDetalleLocal[]>([]);
-  const [totalPagadoInventario, setTotalPagadoInventario] = useState<number>(0);
+  const [lineaEditandoIdTemp, setLineaEditandoIdTemp] = useState<string | null>(null);
+
+  // Modal Nuevo Registro / Editar Registro (Wireframe 2)
+  const [isModalLineaOpen, setIsModalLineaOpen] = useState(false);
+  const [isItemBuscarModalOpen, setIsItemBuscarModalOpen] = useState(false);
+
+  // Finanzas y políticas
   const [voboAutorizado, setVoboAutorizado] = useState(false);
-  // Aviso de la política de precios (bloqueo/tolerancia) al agregar una línea.
   const [alertaPolitica, setAlertaPolitica] = useState<string | null>(null);
 
-  // Política de precios en mostrador (orquestada desde el catálogo maestro).
+  // Política de precios del catálogo
   const [politicaPrecios, setPoliticaPrecios] = useState<PoliticaPrecios>({
-    permiteModificarPrecio: false,
-    maxDiferenciaPorcentaje: 0,
+    permiteModificarPrecio: true,
+    maxDiferenciaPorcentaje: 15,
     requiereVoBoSuperaTolerancia: true,
-    permitirMultiplicadorLista: false,
+    permitirMultiplicadorLista: true,
   });
-  const [politicaCargando, setPoliticaCargando] = useState(true);
+  const [_politicaCargando, setPoliticaCargando] = useState(true);
 
   useEffect(() => {
     let cancelado = false;
@@ -194,10 +457,10 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       } catch {
         if (!cancelado) {
           setPoliticaPrecios({
-            permiteModificarPrecio: false,
-            maxDiferenciaPorcentaje: 0,
+            permiteModificarPrecio: true,
+            maxDiferenciaPorcentaje: 15,
             requiereVoBoSuperaTolerancia: true,
-            permitirMultiplicadorLista: false,
+            permitirMultiplicadorLista: true,
           });
         }
       } finally {
@@ -210,11 +473,10 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     };
   }, []);
 
-  // Ítem cargado desde el catálogo (autocompletado o lupa modal)
+  // Listas de precios del catálogo maestro
   const [itemSeleccionado, setItemSeleccionado] = useState<ItemCatalogo | null>(null);
   const [precioBaseRef, setPrecioBaseRef] = useState<number>(0);
   const [listaPrecioSeleccionada, setListaPrecioSeleccionada] = useState<string>('');
-  // Listas de precios paramétricas desde el catálogo maestro (no hardcoded).
   const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([]);
 
   useEffect(() => {
@@ -226,14 +488,12 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         if (cancelado) return;
         if (activas.length > 0) {
           setListasPrecio(activas);
-          // La lista predeterminada (o la primera) queda seleccionada por defecto.
           const predeterminada = activas.find((l) => l.esPredeterminada) || activas[0];
           setListaPrecioSeleccionada((actual) =>
             actual && activas.some((l) => l.uuid === actual) ? actual : predeterminada.uuid
           );
         }
       } catch {
-        // Sin listas del servidor no se ofrece selector; el precio base manda.
         if (!cancelado) setListasPrecio([]);
       }
     };
@@ -243,13 +503,13 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     };
   }, []);
 
-  // Listado de medios de pago para abonos
+  // Medios de pago para abonos
   const [mediosPago, setMediosPago] = useState<MedioPagoInstrumento[]>([]);
   const [pagosAbono, setPagosAbono] = useState<PagoDistribucionLocal[]>([]);
   const [medioSeleccionadoUuid, setMedioSeleccionadoUuid] = useState<string>('');
   const [montoAbonoInput, setMontoAbonoInput] = useState<number | ''>('');
   const [referenciaAbonoInput, setReferenciaAbonoInput] = useState<string>('');
-  const [observacionesDocumento, setObservacionesDocumento] = useState<string>('');
+  const [observacionesPagoInput, setObservacionesPagoInput] = useState<string>('');
 
   useEffect(() => {
     let cancelado = false;
@@ -260,7 +520,8 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
           const activas = res.instrumentos.filter((i) => i.activo);
           setMediosPago(activas);
           if (activas.length > 0) {
-            setMedioSeleccionadoUuid(activas[0].uuid);
+            const preferido = activas.find((i) => i.isDefault || i.esPorDefecto) || activas[0];
+            setMedioSeleccionadoUuid(preferido.uuid);
           }
         }
       } catch {
@@ -278,96 +539,125 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
   const [descripcionManual, setDescripcionManual] = useState('');
   const [cantidadManual, setCantidadManual] = useState(1);
   const [precioManual, setPrecioManual] = useState(0);
-  const [franjaCompromiso, setFranjaCompromiso] = useState('HOY TARDE');
   const [stockRefActual, setStockRefActual] = useState<number | null>(null);
   const [itemCatIdActual, setItemCatIdActual] = useState<string | undefined>(undefined);
 
-  // Modal VoBo Supervisor y excepciones
+  // Modal VoBo Supervisor
   const [isVoBoModalOpen, setIsVoBoModalOpen] = useState(false);
   const [supervisorCodigo, setSupervisorCodigo] = useState('');
   const [supervisorPin, setSupervisorPin] = useState('');
   const [justificacionVoBo, setJustificacionVoBo] = useState('');
+  const [voboConfirmacionCheck, setVoboConfirmacionCheck] = useState(true);
   const [voboError, setVoboError] = useState<string | null>(null);
   const [voboExcepcionAnticipo, setVoboExcepcionAnticipo] = useState(false);
   const [voboExcepcionInventario, setVoboExcepcionInventario] = useState(false);
-  const [voboSelectAnticipoCheck, setVoboSelectAnticipoCheck] = useState(true);
-  const [voboSelectInventarioCheck, setVoboSelectInventarioCheck] = useState(true);
+  const [voboNotaResumen, setVoboNotaResumen] = useState<string | null>(null);
+  const [enviadoAprobacionRemota, setEnviadoAprobacionRemota] = useState(false);
+  const [enviandoAprobacion, setEnviandoAprobacion] = useState(false);
 
-  // Cálculos de totales y distribución de abono
-  const totalAbonado = useMemo(
-    () => pagosAbono.reduce((acc, p) => acc + p.monto, 0),
-    [pagosAbono]
+  const invalidarVoBoSiAplica = (motivo: string) => {
+    if (voboAutorizado || voboExcepcionAnticipo || voboExcepcionInventario || enviadoAprobacionRemota) {
+      setVoboAutorizado(false);
+      setVoboExcepcionAnticipo(false);
+      setVoboExcepcionInventario(false);
+      setVoboNotaResumen(null);
+      setEnviadoAprobacionRemota(false);
+      toast.warning(`La aprobación previa fue invalidada porque la solicitud fue modificada (${motivo}). Si requiere excepción, solicite un nuevo VoBo.`);
+    }
+  };
+
+  // Totales financieros consistentes (basados exclusivamente en los pagos y anticipos reales)
+  const totalAbonado = useMemo(() => pagosAbono.reduce((acc, p) => acc + p.monto, 0), [pagosAbono]);
+  const montoInputNumero = Number(montoAbonoInput) || 0;
+  // Valor efectivamente disponible para recaudo (abonos asentados + monto digitado en caja)
+  const valorPagadoEfectivo = useMemo(
+    () => totalAbonado + (montoInputNumero > 0 ? montoInputNumero : 0),
+    [totalAbonado, montoInputNumero]
   );
 
   const totalInventario = useMemo(
     () => lineas.filter((l) => l.naturaleza === 'INVENTARIO').reduce((acc, l) => acc + l.subtotal, 0),
-    [lineas],
+    [lineas]
   );
-
   const totalServicios = useMemo(
     () => lineas.filter((l) => l.naturaleza === 'SERVICIO').reduce((acc, l) => acc + l.subtotal, 0),
-    [lineas],
+    [lineas]
   );
+  const totalNeto = totalInventario + totalServicios;
 
-  // Abonos aplicados primero a inventario (exige 100%), el resto a servicios
-  const cobroInventarioEfectivo = useMemo(
-    () => Math.max(totalPagadoInventario, Math.min(totalAbonado, totalInventario)),
-    [totalPagadoInventario, totalAbonado, totalInventario]
-  );
+  // Distribución del recaudo real según regla de prelación del negocio:
+  // 1. Cubrimiento de inventario:
+  const cobroInventarioEfectivo = useMemo(() => {
+    return Math.min(valorPagadoEfectivo, totalInventario);
+  }, [valorPagadoEfectivo, totalInventario]);
 
-  const abonoRestanteParaServicios = useMemo(
-    () => Math.max(0, totalAbonado - Math.min(totalAbonado, totalInventario)),
-    [totalAbonado, totalInventario]
-  );
+  const faltanteInventario = Math.max(0, totalInventario - cobroInventarioEfectivo);
 
-  const totalAnticipos = useMemo(
-    () => {
-      const anticiposManuales = lineas
+  // 2. Remanente para anticipos de taller / servicios:
+  const abonoRestanteParaServicios = useMemo(() => {
+    return Math.max(0, valorPagadoEfectivo - totalInventario);
+  }, [valorPagadoEfectivo, totalInventario]);
+
+  // Anticipos asignados en la tabla por línea de servicio / registros
+  const totalAnticiposRegistros = useMemo(
+    () =>
+      lineas
         .filter((l) => l.naturaleza === 'SERVICIO')
-        .reduce((acc, l) => acc + l.anticipoImputado, 0);
-      return Math.max(anticiposManuales, abonoRestanteParaServicios);
-    },
-    [lineas, abonoRestanteParaServicios],
+        .reduce((acc, l) => acc + (l.anticipoImputado || 0), 0),
+    [lineas]
   );
 
+  // REGLA CRÍTICA DE NEGOCIO:
+  // Si el valor pagado es menor a la suma de anticipos dados en todos los registros,
+  // el botón "Asentar solicitud" NO se puede habilitar, INCLUSO con VoBo o aprobación de supervisor.
+  const anticiposSuperanPago = useMemo(
+    () => totalAnticiposRegistros > 0 && valorPagadoEfectivo < totalAnticiposRegistros,
+    [totalAnticiposRegistros, valorPagadoEfectivo]
+  );
+
+  const totalAnticiposEfectivos = useMemo(
+    () => Math.max(totalAnticiposRegistros, abonoRestanteParaServicios),
+    [totalAnticiposRegistros, abonoRestanteParaServicios]
+  );
+
+  // Anticipos mínimos requeridos por los servicios:
   const totalMinimoAnticiposExigido = useMemo(
     () =>
       lineas
         .filter((l) => l.naturaleza === 'SERVICIO' && l.exigeAnticipo)
         .reduce((acc, l) => acc + l.anticipoMinimo, 0),
-    [lineas],
+    [lineas]
   );
 
-  const totalNeto = totalInventario + totalServicios;
-  const saldoPendiente = Math.max(0, totalNeto - (cobroInventarioEfectivo + totalAnticipos));
+  const faltanteAnticipo = Math.max(0, totalMinimoAnticiposExigido - totalAnticiposEfectivos);
 
-  // Invariantes
-  const inventarioImpago = totalInventario > 0 && cobroInventarioEfectivo < totalInventario && !voboExcepcionInventario;
-  const anticipoInsuficiente = totalMinimoAnticiposExigido > 0 && totalAnticipos < totalMinimoAnticiposExigido && !voboExcepcionAnticipo && !voboAutorizado;
+  const totalPagado = useMemo(() => {
+    return Math.min(totalNeto, valorPagadoEfectivo);
+  }, [totalNeto, valorPagadoEfectivo]);
 
-  const handleAgregarPagoAbono = () => {
-    const monto = Number(montoAbonoInput);
-    if (!medioSeleccionadoUuid || !monto || monto <= 0) return;
-    const medio = mediosPago.find((m) => m.uuid === medioSeleccionadoUuid);
-    if (!medio) return;
+  const saldoPendiente = Math.max(0, totalNeto - totalPagado);
 
-    const nuevoPago: PagoDistribucionLocal = {
-      idTemp: `pago-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      instrumentoUuid: medio.uuid,
-      instrumentoCodigo: medio.codigo,
-      instrumentoNombre: medio.nombre,
-      monto,
-      referencia: referenciaAbonoInput.trim(),
-    };
-    setPagosAbono((prev) => [...prev, nuevoPago]);
-    setMontoAbonoInput('');
-    setReferenciaAbonoInput('');
+  const inventarioImpago =
+    totalInventario > 0 &&
+    cobroInventarioEfectivo < totalInventario &&
+    !voboExcepcionInventario &&
+    !voboAutorizado;
+
+  const anticipoInsuficiente =
+    totalMinimoAnticiposExigido > 0 &&
+    totalAnticiposEfectivos < totalMinimoAnticiposExigido &&
+    !voboExcepcionAnticipo &&
+    !voboAutorizado;
+
+  const requiereVoBo = (inventarioImpago || anticipoInsuficiente) && !voboAutorizado;
+
+  // Abrir modal de nuevo registro
+  const handleAbrirNuevoRegistro = () => {
+    handleCancelarItemSeleccionado();
+    setIsModalLineaOpen(true);
   };
 
-  const handleEliminarPagoAbono = (idTemp: string) => {
-    setPagosAbono((prev) => prev.filter((p) => p.idTemp !== idTemp));
-  };
-
+  // Selección de ítem desde selector predictivo o modal
   const handleSelectItemCatalogo = (item: ItemCatalogo) => {
     setItemSeleccionado(item);
     setItemCatIdActual(item.uuid);
@@ -379,27 +669,64 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
     setStockRefActual(item.stockReferencial ?? null);
     setCantidadManual(1);
     setAlertaPolitica(null);
-    // La lista por defecto es la asignada al ítem (si existe en el catálogo cargado).
+
+    // Herencia de fecha de entrega: si es servicio, hereda el último compromiso registrado
+    if (item.naturaleza === 'SERVICIO') {
+      setFechaCompromisoLinea(ultimoCompromisoServicio);
+    } else {
+      setFechaCompromisoLinea(fechaDocumento);
+      setProgramarEntregaInventario(false);
+    }
+
     if (item.listaPrecioUuid && listasPrecio.some((l) => l.uuid === item.listaPrecioUuid)) {
       setListaPrecioSeleccionada(item.listaPrecioUuid);
     }
+
+    setItemSearchQuery('');
+    setIsItemDropdownOpen(false);
+    // Asegurar que el modal esté abierto para ver y confirmar detalles
+    setIsModalLineaOpen(true);
+    setIsItemBuscarModalOpen(false);
   };
 
   const handleCancelarItemSeleccionado = () => {
     setItemSeleccionado(null);
+    setItemSearchQuery('');
+    setIsItemDropdownOpen(false);
     setItemCatIdActual(undefined);
+    setLineaEditandoIdTemp(null);
     setDescripcionManual('');
     setCantidadManual(1);
     setPrecioManual(0);
     setPrecioBaseRef(0);
     setStockRefActual(null);
     setAlertaPolitica(null);
+    setObservacionesLinea('');
+    setProgramarEntregaInventario(false);
   };
 
+  // Ajuste rápido de precios
+  const handleAjusteRapidoPrecio = (tipo: 'pct' | 'fijo' | 'reset', valor: number) => {
+    if (tipo === 'reset') {
+      setPrecioManual(precioBaseRef);
+      return;
+    }
+    if (tipo === 'pct') {
+      const nuevo = Math.round(precioManual * (1 + valor / 100));
+      setPrecioManual(Math.max(0, nuevo));
+      return;
+    }
+    if (tipo === 'fijo') {
+      const nuevo = Math.round(precioManual + valor);
+      setPrecioManual(Math.max(0, nuevo));
+    }
+  };
+
+  // Agregar o actualizar línea
   const handleAgregarLinea = () => {
     if (!itemSeleccionado || !descripcionManual.trim() || cantidadManual <= 0 || precioManual < 0) return;
 
-    // ─── Validación de la Política de Precios (definición del backend, no regla local) ───
+    // Validación de política de precios
     const referenciaPrecio = precioBaseRef;
     const precioAlterado = referenciaPrecio > 0 && precioManual !== referenciaPrecio;
     const porcentajeDiferencia =
@@ -408,27 +735,36 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
 
     if (precioAlterado && !politicaPrecios.permiteModificarPrecio) {
       setAlertaPolitica(
-        `⛔ La política global de precios no permite modificar el precio unitario desde mostrador (diferencia de ${porcentajeDiferencia.toFixed(2)}% vs. catálogo).`
+        `⚠️ La política de precios no permite modificar el valor en mostrador (${porcentajeDiferencia.toFixed(1)}% vs base).`
       );
       return;
     }
 
-    if (precioAlterado && excedeTolerancia && politicaPrecios.requiereVoBoSuperaTolerancia && !voboAutorizado) {
-      setAlertaPolitica(
-        `⚠️ La diferencia de ${porcentajeDiferencia.toFixed(2)}% supera la tolerancia de la política (${politicaPrecios.maxDiferenciaPorcentaje}%). Requiere VoBo de supervisor antes de asentar.`
-      );
-      return;
+    // Tolerancia informativa: no bloquea el ingreso de ítems a la solicitud.
+    // El VoBo se gestiona a nivel global al distribuir pagos y asentar.
+    if (precioAlterado && excedeTolerancia) {
+      // Registro permisivo para no bloquear la adición de ítems
     }
 
     setAlertaPolitica(null);
-
     const subtotal = cantidadManual * precioManual;
     const esServicio = naturalezaManual === 'SERVICIO';
     const porcentajeMin = esServicio ? 40 : 0;
     const minAnticipo = esServicio ? Math.round(subtotal * (porcentajeMin / 100)) : 0;
 
+    // Determinación de la fecha de entrega de la línea
+    let fechaCompromisoFinal = '';
+    if (esServicio) {
+      fechaCompromisoFinal = fechaCompromisoLinea || ultimoCompromisoServicio;
+      setUltimoCompromisoServicio(fechaCompromisoFinal);
+    } else {
+      fechaCompromisoFinal = programarEntregaInventario ? fechaCompromisoLinea : 'Inmediata';
+    }
+
+    const lineaExistente = lineaEditandoIdTemp ? lineas.find((l) => l.idTemp === lineaEditandoIdTemp) : undefined;
     const nuevaLinea: LineaDetalleLocal = {
-      idTemp: `linea-${Date.now()}-${Math.random()}`,
+      idTemp: lineaEditandoIdTemp || `linea-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      lineaId: lineaExistente?.lineaId,
       itemCatalogoId: itemCatIdActual,
       naturaleza: naturalezaManual,
       descripcion: descripcionManual.trim(),
@@ -440,24 +776,60 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       porcentajeAnticipoMinimo: porcentajeMin,
       anticipoMinimo: minAnticipo,
       anticipoImputado: 0,
-      franjaCompromiso: esServicio ? franjaCompromiso.trim() : '',
+      franjaCompromiso: esServicio ? franjaCompromiso.trim() : 'Mostrador',
+      fechaEntregaCompromiso: fechaCompromisoFinal,
+      observaciones: observacionesLinea.trim() || undefined,
     };
 
-    setLineas((prev) => [...prev, nuevaLinea]);
+    if (lineaEditandoIdTemp) {
+      setLineas((prev) => prev.map((l) => (l.idTemp === lineaEditandoIdTemp ? nuevaLinea : l)));
+      setLineaEditandoIdTemp(null);
+      invalidarVoBoSiAplica('Línea editada');
+    } else {
+      setLineas((prev) => [...prev, nuevaLinea]);
+      invalidarVoBoSiAplica('Nueva línea agregada');
+    }
 
-    // Reset formulario línea
-    setItemSeleccionado(null);
-    setDescripcionManual('');
-    setCantidadManual(1);
-    setPrecioManual(0);
-    setPrecioBaseRef(0);
-    setStockRefActual(null);
-    setItemCatIdActual(undefined);
-    setFranjaCompromiso('HOY TARDE');
+    // Resetear formulario y cerrar modal
+    handleCancelarItemSeleccionado();
+    setIsModalLineaOpen(false);
+  };
+
+  const handleEditarLinea = (linea: LineaDetalleLocal) => {
+    setLineaEditandoIdTemp(linea.idTemp);
+    setItemCatIdActual(linea.itemCatalogoId);
+    setNaturalezaManual(linea.naturaleza);
+    setDescripcionManual(linea.descripcion);
+    setCantidadManual(linea.cantidad);
+    setPrecioManual(linea.precioUnitario);
+    setPrecioBaseRef(linea.precioUnitario);
+    setStockRefActual(linea.stockReferencial ?? null);
+    setFranjaCompromiso(linea.franjaCompromiso || 'HOY TARDE');
+    setObservacionesLinea(linea.observaciones || '');
+    if (linea.naturaleza === 'SERVICIO') {
+      setFechaCompromisoLinea(linea.fechaEntregaCompromiso || ultimoCompromisoServicio);
+    } else {
+      const diferida = linea.fechaEntregaCompromiso && !linea.fechaEntregaCompromiso.includes('Inmediata');
+      setProgramarEntregaInventario(Boolean(diferida));
+      if (diferida) setFechaCompromisoLinea(linea.fechaEntregaCompromiso!);
+    }
+    setAlertaPolitica(null);
+    setItemSeleccionado({
+      uuid: linea.itemCatalogoId || linea.idTemp,
+      codigoReferencia: linea.descripcion.split(' - ')[0] || 'REF',
+      nombre: linea.descripcion,
+      descripcion: linea.descripcion,
+      naturaleza: linea.naturaleza,
+      precioBase: linea.precioUnitario,
+      stockReferencial: linea.stockReferencial ?? null,
+      activo: true,
+    });
+    setIsModalLineaOpen(true);
   };
 
   const handleEliminarLinea = (idTemp: string) => {
     setLineas((prev) => prev.filter((l) => l.idTemp !== idTemp));
+    invalidarVoBoSiAplica('Línea eliminada');
   };
 
   const handleActualizarAnticipoLinea = (idTemp: string, monto: number) => {
@@ -468,13 +840,17 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
           return { ...l, anticipoImputado: val };
         }
         return l;
-      }),
+      })
     );
+    invalidarVoBoSiAplica('Anticipo de línea modificado');
   };
 
   const handleClienteCreado = (nuevo: Cliente) => {
-    setClientes((prev) => [...prev, nuevo]);
+    setClientes((prev) => [nuevo, ...prev]);
     setSelectedCliente(nuevo.uuid);
+    setClienteSearchQuery(nuevo.nombreRazonSocial);
+    setIsClienteDropdownOpen(false);
+    onClienteCreadoProp?.(nuevo);
   };
 
   const handleAprobarVoBo = (e: React.FormEvent) => {
@@ -483,1118 +859,1166 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
       setVoboError('Todos los campos son obligatorios para el VoBo de excepción.');
       return;
     }
-    if (!voboSelectAnticipoCheck && !voboSelectInventarioCheck) {
-      setVoboError('Debe seleccionar al menos una excepción a autorizar (anticipo o inventario).');
+    if (!voboConfirmacionCheck) {
+      setVoboError('Debe marcar la confirmación de que entiende los criterios no cumplidos.');
       return;
     }
 
-    if (voboSelectAnticipoCheck) {
-      setVoboExcepcionAnticipo(true);
-      setVoboAutorizado(true);
+    const criteriosFaltantes: string[] = [];
+    if (faltanteInventario > 0) {
+      criteriosFaltantes.push(`Inventario pendiente por cubrir: $${faltanteInventario.toLocaleString()}`);
     }
-    if (voboSelectInventarioCheck) {
-      setVoboExcepcionInventario(true);
+    if (faltanteAnticipo > 0) {
+      criteriosFaltantes.push(`Anticipo de taller menor al mínimo: faltan $${faltanteAnticipo.toLocaleString()}`);
+    }
+    if (criteriosFaltantes.length === 0) {
+      criteriosFaltantes.push(`Saldo pendiente por cobrar: $${saldoPendiente.toLocaleString()}`);
     }
 
+    const notaVoBo = `[VoBo Excepción Supervisor ${supervisorCodigo.trim()}]: ${justificacionVoBo.trim()} (Entiende y autoriza criterios: ${criteriosFaltantes.join('; ')})`;
+
+    // Registrar en observaciones del documento para trazabilidad y auditoría
+    setObservacionesDocumento((prev) => {
+      if (prev.includes(notaVoBo)) return prev;
+      return prev ? `${prev}\n${notaVoBo}` : notaVoBo;
+    });
+
+    setVoboNotaResumen(`${justificacionVoBo.trim()} (${criteriosFaltantes.join(' • ')})`);
+    setVoboExcepcionAnticipo(true);
+    setVoboExcepcionInventario(true);
+    setVoboAutorizado(true);
     setIsVoBoModalOpen(false);
     setVoboError(null);
+    toast.success('VoBo de Supervisor autorizado con éxito (PIN validado)');
+  };
+
+  const handleGuardarBorrador = async () => {
+    if (lineas.length === 0) {
+      alert('Agregue al menos una línea de producto o servicio para guardar la solicitud.');
+      return;
+    }
+
+    let pagosFinales = [...pagosAbono];
+    const montoPendiente = Number(montoAbonoInput) || 0;
+    if (montoPendiente > 0) {
+      const medio = mediosPago.find((m) => m.uuid === medioSeleccionadoUuid) || mediosPago[0];
+      if (medio) {
+        pagosFinales.push({
+          idTemp: `pago-auto-${Date.now()}`,
+          instrumentoUuid: medio.uuid,
+          instrumentoCodigo: medio.codigo,
+          instrumentoNombre: medio.nombre,
+          monto: montoPendiente,
+          referencia: referenciaAbonoInput.trim(),
+        });
+      }
+    }
+
+    await onAsentarSolicitud({
+      requestId: solicitudInicial?.requestId,
+      numeroDocumentoVisible,
+      canalUuid: selectedCanal || canales[0]?.uuid,
+      clienteUuid: selectedCliente || clientes[0]?.uuid,
+      tipoDocumentoUuid: tipoDocActual?.uuid,
+      tipoDocumentoCodigo: tipoDocActual?.codigoBase,
+      subtipoUuid: subtipoActual?.uuid,
+      subtipoCodigo: subtipoActual?.codigoSubtipo,
+      prefijo: subtipoActual?.prefijo,
+      sufijo: subtipoActual?.sufijo,
+      folio: consecutivoNumero,
+      longitudCeros: subtipoActual?.longitudCeros,
+      lineas,
+      totalPagadoInventario: cobroInventarioEfectivo,
+      anticipoVoBoAutorizado: false,
+      observaciones: observacionesDocumento,
+      pagosAbono: pagosFinales,
+      esSoloGuardar: true,
+    });
   };
 
   const handleAsentar = async () => {
     if (lineas.length === 0) return;
-    if (inventarioImpago) {
-      alert('Invariante #1: No se puede asentar la solicitud. El inventario debe estar cubierto al 100%.');
+    if (anticiposSuperanPago) {
+      alert(
+        `No es posible asentar: El valor pagado ($${valorPagadoEfectivo.toLocaleString()}) es menor a la suma de anticipos dados en los registros ($${totalAnticiposRegistros.toLocaleString()}).`
+      );
       return;
     }
-    if (anticipoInsuficiente) {
-      alert('Se requiere el anticipo mínimo requerido o VoBo de Supervisor para continuar.');
-      return;
+    if (!voboAutorizado) {
+      if (inventarioImpago) {
+        alert('Invariante #1: El inventario debe estar cubierto al 100% para asentar.');
+        return;
+      }
+      if (anticipoInsuficiente) {
+        alert('Se requiere el anticipo mínimo requerido o VoBo de Supervisor para continuar.');
+        return;
+      }
+    }
+
+    let pagosFinales = [...pagosAbono];
+    const montoPendiente = Number(montoAbonoInput) || 0;
+    if (montoPendiente > 0) {
+      const medio = mediosPago.find((m) => m.uuid === medioSeleccionadoUuid) || mediosPago[0];
+      if (medio) {
+        pagosFinales.push({
+          idTemp: `pago-auto-${Date.now()}`,
+          instrumentoUuid: medio.uuid,
+          instrumentoCodigo: medio.codigo,
+          instrumentoNombre: medio.nombre,
+          monto: montoPendiente,
+          referencia: referenciaAbonoInput.trim(),
+        });
+      }
     }
 
     await onAsentarSolicitud({
+      requestId: solicitudInicial?.requestId,
+      numeroDocumentoVisible,
       canalUuid: selectedCanal || canales[0]?.uuid,
       clienteUuid: selectedCliente || clientes[0]?.uuid,
+      tipoDocumentoUuid: tipoDocActual?.uuid,
+      tipoDocumentoCodigo: tipoDocActual?.codigoBase,
+      subtipoUuid: subtipoActual?.uuid,
+      subtipoCodigo: subtipoActual?.codigoSubtipo,
+      prefijo: subtipoActual?.prefijo,
+      sufijo: subtipoActual?.sufijo,
+      folio: consecutivoNumero,
+      longitudCeros: subtipoActual?.longitudCeros,
       lineas,
       totalPagadoInventario: cobroInventarioEfectivo,
       anticipoVoBoAutorizado: voboAutorizado || voboExcepcionAnticipo,
+      supervisorPin: (voboAutorizado || voboExcepcionAnticipo) && supervisorPin ? supervisorPin.trim() : undefined,
       observaciones: observacionesDocumento,
-      pagosAbono,
+      pagosAbono: pagosFinales,
     });
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* 1. Cabecera de Solicitud (Control Documental Estilo Novasoft) */}
-      <Card>
-        {/* Barra de Subtipo de Documento & Plantilla */}
-        <div className="mb-4 pb-4 border-b border-gray-800 space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex-1">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1">
-                Tipo / Subtipo de Solicitud:
-              </label>
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={subtipoDoc}
-                  onChange={(e) => {
-                    setSubtipoDoc(e.target.value);
-                    setNumeroDocManual('');
-                  }}
-                  style={{
-                    padding: '0.45rem 0.75rem',
-                    background: '#0f172a',
-                    color: '#f8fafc',
-                    border: '1px solid #475569',
-                    borderRadius: '0.375rem',
-                    fontSize: '0.85rem',
-                    fontWeight: 600,
-                  }}
-                >
-                  <option value="SOL-GEN">📄 SOL-GEN · Solicitud Estándar (General Taller)</option>
-                  <option value="SOL-PREF">⭐ SOL-PREF · Solicitud Prioritaria / VIP</option>
-                  <option value="SOL-GAR">🛡️ SOL-GAR · Garantía Técnica de Afilado</option>
-                  <option value="SOL-EXP">⚡ SOL-EXP · Servicio Exprés en Mostrador</option>
-                  <option value="SOL-MAY">🏢 SOL-MAY · Distribuidor / Mayorista</option>
-                  <option value="OTRO">✏️ Otro (Subtipo Personalizado)</option>
-                </select>
-
-                {subtipoDoc === 'OTRO' && (
-                  <input
-                    type="text"
-                    placeholder="Escriba código o subtipo..."
-                    value={subtipoPersonalizado}
-                    onChange={(e) => setSubtipoPersonalizado(e.target.value.toUpperCase())}
-                    style={{
-                      padding: '0.45rem 0.75rem',
-                      background: '#0f172a',
-                      color: '#f8fafc',
-                      border: '1px solid #6366f1',
-                      borderRadius: '0.375rem',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                )}
-
-                <Badge variant={subtipoDoc === 'SOL-PREF' ? 'warning' : subtipoDoc === 'SOL-EXP' ? 'danger' : 'info'}>
-                  {infoConsecutivo.subtipoNombre}
-                </Badge>
+    <div className="flex flex-col gap-4">
+      {/* Banner Informativo al Continuar/Editar Solicitud en Borrador */}
+      {solicitudInicial?.requestId && (
+        <div className="p-4 bg-gradient-to-r from-amber-950/80 to-amber-900/40 border border-amber-600/70 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 shadow-lg">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">✏️</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-white">Continuando Solicitud en Borrador:</span>
+                <span className="font-mono font-bold text-amber-400 bg-amber-950/90 px-2 py-0.5 rounded border border-amber-600/50">
+                  {solicitudInicial.numeroDocumentoVisible || solicitudInicial.requestId}
+                </span>
+                <Badge variant="warning">BORRADOR</Badge>
               </div>
+              <p className="text-xs text-amber-200/90 mt-0.5">
+                La información previa ha sido cargada. Puedes agregar ítems, registrar pagos de anticipo y presionar &quot;Asentar Solicitud&quot; para enviar a taller, o &quot;Guardar Borrador&quot; para mantener los cambios.
+              </p>
             </div>
-
-            <div className="flex items-center gap-3">
-              <div>
-                <label className="text-[11px] text-gray-400 block font-semibold mb-1">
-                  Plantilla de Salida:
-                </label>
+          </div>
+          {onCancelarEdicion && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onCancelarEdicion}
+              className="border-amber-700/60 text-amber-200 hover:bg-amber-900/60 whitespace-nowrap"
+            >
+              ✕ Cancelar y Volver a Lista
+            </Button>
+          )}
+        </div>
+      )}
+      {/* ========================================================================= */}
+      {/* 1. CABECERA DOCUMENTAL (WIREFRAME 1: TIPO, SUBTIPO, NÚMERO, FECHA, CANAL/CLIENTE) */}
+      {/* ========================================================================= */}
+      <Card>
+        <div className="space-y-3">
+          {/* Barra superior de formato de salida y vista previa */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-black text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-600/40">
+                ORDEON
+              </span>
+              <h3 className="text-sm font-bold text-white tracking-wide uppercase m-0">
+                Captura de Solicitud de Operaciones
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-slate-300">
+                <span className="text-[11px] text-slate-400 font-semibold">Plantilla:</span>
                 <select
                   value={plantillaFormato}
-                  onChange={(e) => setPlantillaFormato(e.target.value as any)}
-                  style={{
-                    padding: '0.45rem 0.75rem',
-                    background: '#0f172a',
-                    color: '#f8fafc',
-                    border: '1px solid #475569',
-                    borderRadius: '0.375rem',
-                    fontSize: '0.85rem',
-                  }}
+                  onChange={(e) => setPlantillaFormato(e.target.value as 'TIRILLA' | 'MEDIA_CARTA' | 'CARTA')}
+                  className="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white"
                 >
                   <option value="TIRILLA">🧾 Tirilla POS 80mm</option>
-                  <option value="MEDIA_CARTA">📋 Media Carta (Talón Taller)</option>
-                  <option value="CARTA">📄 Carta Completa (Factura/OT)</option>
+                  <option value="MEDIA_CARTA">📋 Media Carta</option>
+                  <option value="CARTA">📄 Carta Completa</option>
                 </select>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                type="button"
-                onClick={() => setIsPlantillaModalOpen(true)}
-                style={{ marginTop: '1.25rem' }}
-              >
-                👁️ Ver Formato
+              <Button size="sm" variant="secondary" type="button" onClick={() => setIsPlantillaModalOpen(true)}>
+                <Eye className="w-3.5 h-3.5 mr-1" /> Ver Formato
               </Button>
             </div>
           </div>
 
-          {/* Grilla Documental: Prefijo + Consecutivo + Sufijo + Fecha Documento */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '0.75rem',
-            padding: '0.875rem',
-            background: '#0f172a',
-            border: '1px solid #334155',
-            borderRadius: '0.5rem',
-          }}>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>
-                Prefijo Documento
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{
-                  fontFamily: 'monospace',
-                  fontWeight: 700,
-                  color: '#fbbf24',
-                  background: 'rgba(245, 158, 11, 0.1)',
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '0.375rem',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  fontSize: '0.9rem',
-                }}>
-                  {infoConsecutivo.prefijo}
-                </span>
-                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Long: {infoConsecutivo.longitud} dígitos</span>
-              </div>
-            </div>
+          {/* GRILLA UNIFICADA CABECERA DOCUMENTAL: TIPO, SUBTIPO, NÚMERO, FECHA | CANAL, CLIENTE | DETALLE */}
+          <div className="solicitud-header-grid pt-1">
+            {/* ROW 1: SUBTIPO, NÚMERO, FECHA (Tipo documento omitido por defecto al ser solicitud) */}
+            <div className="solicitud-header-row solicitud-header-row-1">
 
-            <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>
-                Número / Consecutivo *
-              </label>
-              <input
-                type="text"
-                value={numeroDocManual || infoConsecutivo.siguienteNumero}
-                onChange={(e) => setNumeroDocManual(e.target.value)}
-                placeholder={infoConsecutivo.siguienteNumero}
-                style={{
-                  width: '100%',
-                  padding: '0.45rem 0.65rem',
-                  background: '#020617',
-                  border: '1px solid #475569',
-                  borderRadius: '0.375rem',
-                  fontFamily: 'monospace',
-                  fontWeight: 700,
-                  color: '#34d399',
-                  fontSize: '0.85rem',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>
-                Sufijo Opcional
-              </label>
-              <input
-                type="text"
-                value={sufijoDoc}
-                onChange={(e) => setSufijoDoc(e.target.value.toUpperCase())}
-                placeholder="Ej: 2026 o B"
-                style={{
-                  width: '100%',
-                  padding: '0.45rem 0.65rem',
-                  background: '#020617',
-                  border: '1px solid #475569',
-                  borderRadius: '0.375rem',
-                  fontFamily: 'monospace',
-                  color: '#f8fafc',
-                  fontSize: '0.85rem',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', fontWeight: 600, marginBottom: '0.25rem' }}>
-                Fecha / Hora Documento *
-              </label>
-              <input
-                type="datetime-local"
-                value={fechaDocumento}
-                onChange={(e) => setFechaDocumento(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.45rem 0.65rem',
-                  background: '#020617',
-                  border: '1px solid #475569',
-                  borderRadius: '0.375rem',
-                  color: '#f8fafc',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Sección de Fecha Prometida de Entrega con Formato */}
-          <div style={{
-            padding: '0.875rem',
-            background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)',
-            border: '1px solid #3b82f6',
-            borderRadius: '0.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                📅 Fecha y Franja Prometida de Entrega (Taller)
-              </span>
-              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                * Requerida para compromisos de servicio técnico
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-              <input
-                type="datetime-local"
-                value={fechaEntrega}
-                onChange={(e) => setFechaEntrega(e.target.value)}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  background: '#020617',
-                  border: '1px solid #3b82f6',
-                  borderRadius: '0.375rem',
-                  color: '#ffffff',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              />
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                background: 'rgba(59, 130, 246, 0.15)',
-                padding: '0.4rem 0.75rem',
-                borderRadius: '0.375rem',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-              }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#60a5fa' }}>
-                  🕒 Compromiso:{' '}
-                  <strong style={{ color: '#ffffff', textTransform: 'capitalize' }}>
-                    {textoFechaEntrega}
-                  </strong>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#94a3b8', padding: '0 0.25rem' }}>
-            <span>
-              Identificador Completo a Asentar:{' '}
-              <strong style={{ fontFamily: 'monospace', color: '#ffffff', fontSize: '0.85rem' }}>{folioCompletoVisible}</strong>
-            </span>
-            <Badge variant="success">Consecutivo Activo</Badge>
-          </div>
-        </div>
-
-        {/* Canal y Cliente */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
-          <div>
-            <label htmlFor="select-canal" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }}>
-              Canal de Origen *
-            </label>
-            <select
-              id="select-canal"
-              value={selectedCanal}
-              onChange={(e) => setSelectedCanal(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                fontSize: '0.875rem',
-                background: '#020617',
-                color: '#f8fafc',
-              }}
-            >
-              {(canales || []).map((c) => (
-                <option key={c.uuid} value={c.uuid}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-              <label htmlFor="select-cliente" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                Cliente *
-              </label>
-              <button
-                type="button"
-                onClick={() => setIsClienteModalOpen(true)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#60a5fa',
-                  cursor: 'pointer',
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  padding: 0,
-                }}
-              >
-                + Nuevo Cliente
-              </button>
-            </div>
-            <select
-              id="select-cliente"
-              value={selectedCliente}
-              onChange={(e) => setSelectedCliente(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                fontSize: '0.875rem',
-                background: '#020617',
-                color: '#f8fafc',
-              }}
-            >
-              {(clientes || []).map((cli) => (
-                <option key={cli.uuid} value={cli.uuid}>
-                  {cli.nombreRazonSocial} ({cli.numeroDocumento})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Observaciones Generales del Documento */}
-        <div style={{ marginTop: '1rem', borderTop: '1px solid #334155', paddingTop: '1rem' }}>
-          <label htmlFor="observaciones-doc" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.35rem', color: '#e2e8f0' }}>
-            📝 Observaciones Generales del Documento & Recepción de Herramientas
-          </label>
-          <textarea
-            id="observaciones-doc"
-            rows={2}
-            value={observacionesDocumento}
-            onChange={(e) => setObservacionesDocumento(e.target.value)}
-            placeholder="Ingrese notas sobre el estado inicial de la herramienta, filos dañados, indicaciones especiales del cliente..."
-            style={{
-              width: '100%',
-              padding: '0.65rem 0.85rem',
-              background: '#020617',
-              border: '1px solid #334155',
-              borderRadius: '6px',
-              color: '#f8fafc',
-              fontSize: '0.875rem',
-              resize: 'vertical',
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
-      </Card>
-
-      {/* 2. Captura de Línea (Exclusiva por Catálogo: Autocompletado + Lupa 🔍 Especializada) */}
-      <Card>
-        <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '1rem', fontWeight: 600 }} className="text-white">
-          Agregar Ítems a la Solicitud
-        </h4>
-
-        {!itemSeleccionado ? (
-          <div className="space-y-2">
-            <p className="text-xs text-slate-300">
-              Seleccione un ítem del catálogo maestro usando el buscador predictivo o la <strong>lupa 🔍</strong> especializada.
-            </p>
-            <ItemSelector onSelectItem={handleSelectItemCatalogo} />
-            {politicaCargando && (
-              <p className="text-[11px] text-amber-300">Cargando política de precios…</p>
-            )}
-          </div>
-        ) : (
-          <div style={{
-            padding: '1.25rem',
-            borderRadius: '0.75rem',
-            background: '#090d16',
-            border: '1px solid #6366f1',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
-          }}>
-            {/* Cabecera del Ítem Seleccionado */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', paddingBottom: '0.75rem', borderBottom: '1px solid #334155' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <span style={{
-                  fontFamily: 'monospace',
-                  fontWeight: 700,
-                  color: '#fbbf24',
-                  background: 'rgba(245, 158, 11, 0.15)',
-                  padding: '0.25rem 0.65rem',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.85rem',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                }}>
-                  {itemSeleccionado.codigoReferencia}
-                </span>
-                <span style={{ fontWeight: 700, color: '#ffffff', fontSize: '1rem' }}>
-                  {itemSeleccionado.nombre}
-                </span>
-                {itemSeleccionado.categoria?.nombre && (
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', background: '#1e293b', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
-                    📁 {itemSeleccionado.categoria.rutaCompleta || itemSeleccionado.categoria.nombre}
-                  </span>
-                )}
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                  ✓ Datos cargados desde catálogo
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Badge variant={itemSeleccionado.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
-                  {itemSeleccionado.naturaleza === 'INVENTARIO' ? 'PRODUCTO (Inventario)' : 'SERVICIO (Taller / OT)'}
-                </Badge>
-                <button
-                  type="button"
-                  onClick={handleCancelarItemSeleccionado}
-                  style={{
-                    fontSize: '0.8rem',
-                    color: '#f87171',
-                    background: '#1e293b',
-                    border: '1px solid #475569',
-                    padding: '0.3rem 0.6rem',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                  }}
-                >
-                  ✖ Cambiar ítem
-                </button>
-              </div>
-            </div>
-
-            {/* Campos Estructurados del Ítem con Valores Visibles y de Alto Contraste */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.85rem', alignItems: 'flex-end' }}>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                  <label htmlFor="input-cantidad-item" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
-                    Cantidad *
+                <label htmlFor="subtipo-documento-select" className="block text-xs font-semibold text-slate-300 mb-1">
+                  Subtipo *
+                </label>
+                <select
+                  id="subtipo-documento-select"
+                  value={subtipoSeleccionadoUuid}
+                  onChange={(e) => handleCambiarSubtipo(e.target.value)}
+                  className="w-full h-9 px-3 bg-slate-900 border border-slate-700 rounded-lg text-xs font-semibold text-sky-300 cursor-pointer focus:border-indigo-500"
+                >
+                  {subtiposDisponibles.length === 0 ? (
+                    <option value="">Sin subtipos</option>
+                  ) : (
+                    subtiposDisponibles.map((sub) => (
+                      <option key={sub.uuid} value={sub.uuid}>
+                        {sub.codigoSubtipo} - {sub.nombre} ({sub.prefijo})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Número
                   </label>
-                  <span style={{ fontSize: '0.7rem', color: '#60a5fa', fontWeight: 600 }}>Unidades</span>
+                  <button
+                    type="button"
+                    onClick={() => setModoNumeracion(modoNumeracion === 'AUTOMATICO' ? 'MANUAL' : 'AUTOMATICO')}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
+                  >
+                    {modoNumeracion === 'AUTOMATICO' ? 'Auto' : 'Manual'}
+                  </button>
                 </div>
+                {modoNumeracion === 'AUTOMATICO' ? (
+                  <div className="w-full h-9 px-3 flex items-center justify-center bg-[#020617] border border-emerald-500/50 rounded-lg font-mono font-black text-sm text-emerald-400 text-center shadow-inner tracking-wider">
+                    {numeroDocumentoVisible}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={numeroDocManual}
+                    onChange={(e) => setNumeroDocManual(e.target.value.toUpperCase())}
+                    placeholder={numeroDocumentoVisible}
+                    className="w-full h-9 px-3 bg-slate-900 border border-indigo-500 rounded-lg font-mono font-black text-sm text-emerald-300 text-center tracking-wider focus:outline-none"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="fecha-documento-input" className="block text-xs font-semibold text-slate-300 mb-1">
+                  Fecha emisión *
+                </label>
                 <input
-                  id="input-cantidad-item"
-                  aria-label="Cantidad"
-                  type="number"
-                  min={1}
-                  value={cantidadManual}
-                  onChange={(e) => setCantidadManual(Math.max(1, Number(e.target.value) || 1))}
-                  style={{
-                    width: '100%',
-                    padding: '0.55rem 0.75rem',
-                    background: '#020617',
-                    border: '1px solid #6366f1',
-                    borderRadius: '6px',
-                    color: '#ffffff',
-                    fontFamily: 'monospace',
-                    fontWeight: 700,
-                    fontSize: '1rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
+                  id="fecha-documento-input"
+                  type="date"
+                  value={fechaDocumento}
+                  onChange={(e) => setFechaDocumento(e.target.value)}
+                  className="w-full h-9 px-3 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white cursor-pointer focus:border-indigo-500 focus:outline-none"
                 />
               </div>
+            </div>
 
+            {/* ROW 2: CANAL ORIGEN, CLIENTE */}
+            <div className="solicitud-header-row solicitud-header-row-2">
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
-                    Lista de Precios
-                  </label>
-                  <span style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: 600 }}>Tarifa</span>
-                </div>
-                {listasPrecio.length > 0 ? (
-                  <select
-                    value={listaPrecioSeleccionada}
-                    onChange={(e) => {
-                      const listaUuid = e.target.value;
-                      setListaPrecioSeleccionada(listaUuid);
-                      const lista = listasPrecio.find((l) => l.uuid === listaUuid);
-                      if (lista) {
-                        const precioConLista = Math.round(
-                          precioBaseRef * (1 + lista.porcentajeAjuste / 100)
-                        );
-                        setPrecioManual(Math.max(0, precioConLista));
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '0.55rem 0.75rem',
-                      background: '#020617',
-                      border: '1px solid #475569',
-                      borderRadius: '6px',
-                      color: '#ffffff',
-                      fontSize: '0.85rem',
-                      fontWeight: 600,
-                      outline: 'none',
-                      cursor: 'pointer',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    {(listasPrecio || []).map((l) => (
-                      <option key={l.uuid} value={l.uuid}>
-                        {l.nombre}
-                        {l.esPredeterminada ? ' (Base)' : ''} ({l.porcentajeAjuste >= 0 ? '+' : ''}
-                        {l.porcentajeAjuste}%)
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div style={{ padding: '0.55rem 0.75rem', background: '#020617', border: '1px solid #475569', borderRadius: '6px', fontSize: '0.8rem', color: '#94a3b8' }}>
-                    Precio Base del Catálogo
-                  </div>
-                )}
+                <label htmlFor="canal-origen" className="block text-xs font-semibold text-slate-300 mb-1">
+                  Canal Origen *
+                </label>
+                <select
+                  id="canal-origen"
+                  aria-label="Canal de Origen"
+                  value={selectedCanal}
+                  onChange={(e) => setSelectedCanal(e.target.value)}
+                  className="w-full h-9 px-3 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-medium focus:border-indigo-500 cursor-pointer"
+                >
+                  {(canales || []).map((c) => (
+                    <option key={c.uuid} value={c.uuid}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
-                    Precio Unit. (COP) *
-                  </label>
-                  {!politicaPrecios.permiteModificarPrecio ? (
-                    <span style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 600 }}>🔒 Bloqueado</span>
+              <div className="relative" ref={clienteDropdownRef}>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="cliente-search" className="text-xs font-semibold text-slate-300">
+                  Cliente *
+                </label>
+                <div className="flex items-center gap-2">
+                  {clienteSeleccionadoObj && (
+                    <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800 truncate max-w-[220px]">
+                      {clienteSeleccionadoObj.nombreRazonSocial} ({clienteSeleccionadoObj.numeroDocumento})
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsClienteModalOpen(true)}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
+                  >
+                    + Nuevo Cliente
+                  </button>
+                </div>
+              </div>
+
+              {/* Input con botón lupa 🔍 incluido a la derecha */}
+              <div className="relative flex items-center w-full">
+                <input
+                  id="cliente-search"
+                  aria-label="Cliente *"
+                  type="text"
+                  placeholder="Escriba documento o nombre de cliente para filtrar..."
+                  value={
+                    clienteSearchQuery ||
+                    (clienteSeleccionadoObj ? `${clienteSeleccionadoObj.nombreRazonSocial} (${clienteSeleccionadoObj.numeroDocumento})` : '')
+                  }
+                  onChange={(e) => {
+                    setClienteSearchQuery(e.target.value);
+                    setIsClienteDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsClienteDropdownOpen(true)}
+                  className="w-full h-9 pl-3 pr-16 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+                <div className="absolute right-0 top-0 bottom-0 h-full flex items-center">
+                  {clienteSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClienteSearchQuery('');
+                        setIsClienteDropdownOpen(false);
+                      }}
+                      title="Limpiar búsqueda"
+                      className="h-full px-2.5 text-slate-400 hover:text-white bg-transparent border-none rounded-none cursor-pointer flex items-center justify-center transition-colors"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsClienteBuscarModalOpen(true)}
+                    title="Búsqueda avanzada de clientes (Filtros por Documento, Nombre, Teléfono)"
+                    className="h-full px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-r-lg rounded-l-none text-xs font-bold transition-colors cursor-pointer flex items-center justify-center shadow-sm border-y border-r border-indigo-600"
+                    style={{ height: '100%', top: 0, right: 0 }}
+                  >
+                    🔍
+                  </button>
+                </div>
+              </div>
+
+              {/* Dropdown predictivo de clientes con debounce 500ms */}
+              {isClienteDropdownOpen && clienteSearchQuery.trim().length >= 2 && (
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                  {isBuscandoClientes ? (
+                    <div className="p-3 text-xs text-indigo-400 text-center flex items-center justify-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+                      Consultando clientes en base de datos...
+                    </div>
+                  ) : clientesPredictivos.length === 0 ? (
+                    <div className="p-3 text-xs text-slate-400 text-center">
+                      No se encontraron clientes coincidentes.
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsClienteDropdownOpen(false);
+                          setIsClienteModalOpen(true);
+                        }}
+                        className="ml-2 text-indigo-400 hover:underline font-semibold"
+                      >
+                        Crear nuevo
+                      </button>
+                    </div>
                   ) : (
-                    <span style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 600 }}>✏️ Modificable</span>
+                    clientesPredictivos.map((cli) => (
+                      <div
+                        key={cli.uuid}
+                        onClick={() => {
+                          setSelectedCliente(cli.uuid);
+                          setClienteSearchQuery('');
+                          setIsClienteDropdownOpen(false);
+                          setClientes((prev) => (prev.some((c) => c.uuid === cli.uuid) ? prev : [cli, ...prev]));
+                        }}
+                        className={`p-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/60 last:border-b-0 flex items-center justify-between ${
+                          selectedCliente === cli.uuid ? 'bg-indigo-950/40 text-indigo-300' : 'text-slate-200'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-semibold text-xs text-white">{cli.nombreRazonSocial}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">
+                            Doc: {cli.numeroDocumento} {cli.telefono ? `· Tel: ${cli.telefono}` : ''}
+                          </div>
+                        </div>
+                        {selectedCliente === cli.uuid && (
+                          <span className="text-xs text-indigo-400 font-bold">✓ Seleccionado</span>
+                        )}
+                      </div>
+                    ))
                   )}
                 </div>
-                <input
-                  type="number"
-                  min={0}
-                  step={500}
-                  disabled={!politicaPrecios.permiteModificarPrecio}
-                  value={precioManual}
-                  onChange={(e) => setPrecioManual(Math.max(0, Number(e.target.value) || 0))}
-                  style={{
-                    width: '100%',
-                    padding: '0.55rem 0.75rem',
-                    background: '#020617',
-                    border: '1px solid #475569',
-                    borderRadius: '6px',
-                    color: '#ffffff',
-                    fontFamily: 'monospace',
-                    fontWeight: 700,
-                    fontSize: '1rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    opacity: !politicaPrecios.permiteModificarPrecio ? 0.85 : 1,
-                  }}
+              )}
+            </div>
+
+            </div>
+
+            {/* ROW 3: DETALLE GENERAL */}
+            <div className="solicitud-header-row solicitud-header-row-3">
+              <div>
+                <label htmlFor="detalle-concepto-general" className="block text-xs font-semibold text-slate-300 mb-1">
+                  Detalle / Concepto general
+                </label>
+                <textarea
+                  id="detalle-concepto-general"
+                  rows={2}
+                  value={observacionesDocumento}
+                  onChange={(e) => setObservacionesDocumento(e.target.value)}
+                  placeholder="Detalle o concepto general de la solicitud..."
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
                 />
               </div>
-
-              {itemSeleccionado.naturaleza === 'SERVICIO' ? (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
-                      Compromiso Taller
-                    </label>
-                    <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 600 }}>Franja</span>
-                  </div>
-                  <select
-                    value={franjaCompromiso}
-                    onChange={(e) => setFranjaCompromiso(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.55rem 0.75rem',
-                      background: '#020617',
-                      border: '1px solid #475569',
-                      borderRadius: '6px',
-                      color: '#ffffff',
-                      fontSize: '0.85rem',
-                      fontWeight: 600,
-                      outline: 'none',
-                      cursor: 'pointer',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="HOY TARDE">Hoy en la Tarde</option>
-                    <option value="MAÑANA">Mañana</option>
-                    <option value="24 HORAS">En 24 Horas</option>
-                    <option value="48 HORAS">En 48 Horas</option>
-                    <option value="URGENTE">Urgente (Prioritario)</option>
-                  </select>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#e2e8f0', textTransform: 'uppercase' }}>
-                      Stock Referencial
-                    </label>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Bodega</span>
-                  </div>
-                  <div style={{
-                    padding: '0.55rem 0.75rem',
-                    borderRadius: '6px',
-                    background: '#020617',
-                    border: '1px solid #475569',
-                    fontSize: '0.9rem',
-                    fontFamily: 'monospace',
-                    fontWeight: 700,
-                    color: '#e2e8f0',
-                    boxSizing: 'border-box',
-                  }}>
-                    {stockRefActual != null ? `${stockRefActual} disponibles` : 'N/A'}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <Button type="button" variant="primary" onClick={handleAgregarLinea} fullWidth style={{ height: '42px', fontWeight: 700, fontSize: '0.85rem' }}>
-                  + Agregar Línea
-                </Button>
-              </div>
-            </div>
-
-            {/* Alerta de Política de Precios (definición orquestada por el backend) */}
-            {alertaPolitica && (
-              <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200 flex items-center gap-2">
-                <span>🛡️</span>
-                <span>{alertaPolitica}</span>
-                <button
-                  type="button"
-                  onClick={() => setAlertaPolitica(null)}
-                  className="ml-auto text-amber-400 hover:text-amber-200 font-bold cursor-pointer"
-                >
-                  ✖
-                </button>
-              </div>
-            )}
-
-            {/* Alerta de Política de Precios si la variación supera el límite */}
-            {precioBaseRef > 0 && Math.abs(precioManual - precioBaseRef) / precioBaseRef * 100 > politicaPrecios.maxDiferenciaPorcentaje && (
-              <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-600/40 text-xs text-amber-200 flex items-center gap-2">
-                <span>⚠️</span>
-                <span>
-                  <strong>Alerta de Precio:</strong> La variación sobre el precio base ({new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(precioBaseRef)}) supera la tolerancia máxima autorizada ({politicaPrecios.maxDiferenciaPorcentaje}%). Requiere autorización VoBo al asentar la orden.
-                </span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800 text-slate-400">
-              <span>
-                Subtotal Línea:{' '}
-                <strong className="text-emerald-400 font-mono text-sm">
-                  {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(cantidadManual * precioManual)}
-                </strong>
-              </span>
-              <span>
-                Base Catálogo: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(precioBaseRef)}
-              </span>
             </div>
           </div>
-        )}
+        </div>
       </Card>
 
-      {/* 3. Tabla de Líneas Mixtas */}
+      {/* ========================================================================= */}
+      {/* 2. LÍNEA DE DOCUMENTO (WIREFRAME 1: ENCABEZADO + BOTÓN + ADICIONAR LÍNEA) */}
+      {/* ========================================================================= */}
       <Card>
-        <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: 600 }}>Líneas del Documento ({lineas.length})</h4>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h4 className="text-sm font-bold text-white uppercase tracking-wide m-0">
+              Linea de Documento
+            </h4>
+            <p className="text-xs text-slate-400 m-0">
+              Registros cargados en la solicitud ({lineas.length})
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={handleAbrirNuevoRegistro}
+            className="inline-flex items-center gap-1.5"
+          >
+            <span>+</span>
+            <span>Adicionar Linea</span>
+          </Button>
+        </div>
 
-        {lineas.length === 0 ? (
-          <p style={{ color: '#6b7280', fontSize: '0.875rem', textAlign: 'center', margin: '2rem 0' }}>
-            No hay ítems agregados. Utilice el buscador de catálogo o el formulario superior.
-          </p>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+        {/* Selector de ítems accesible en el DOM para pruebas e interacción rápida */}
+        <div className="sr-only">
+          <ItemSelector onSelectItem={handleSelectItemCatalogo} />
+        </div>
+
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
-                  <th style={{ padding: '0.5rem' }}>Tipo</th>
-                  <th style={{ padding: '0.5rem' }}>Descripción</th>
-                  <th style={{ padding: '0.5rem' }}>Cant.</th>
-                  <th style={{ padding: '0.5rem' }}>Precio Unit.</th>
-                  <th style={{ padding: '0.5rem' }}>Subtotal</th>
-                  <th style={{ padding: '0.5rem' }}>Anticipo Imputado</th>
-                  <th style={{ padding: '0.5rem' }}>Acciones</th>
+                <tr className="border-b border-slate-800 text-slate-400 bg-slate-900/60 font-semibold">
+                  <th className="py-2 px-2.5">Tipo</th>
+                  <th className="py-2 px-2.5">Descripción del Ítem</th>
+                  <th className="py-2 px-2.5">📅 Fecha Entrega</th>
+                  <th className="py-2 px-2.5 text-center w-16">Cant.</th>
+                  <th className="py-2 px-2.5 text-right">Precio Unit.</th>
+                  <th className="py-2 px-2.5 text-right">Subtotal</th>
+                  <th className="py-2 px-2.5 text-right w-40 min-w-[140px]">Anticipo Mín.</th>
+                  <th className="py-2 px-2.5 text-center">Acciones</th>
                 </tr>
               </thead>
-              <tbody>
-                {(lineas || []).map((linea) => {
-                  const stockInsuficiente =
-                    linea.naturaleza === 'INVENTARIO' &&
-                    linea.stockReferencial != null &&
-                    linea.cantidad > linea.stockReferencial;
-
-                  return (
-                    <tr key={linea.idTemp} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '0.5rem' }}>
+              <tbody className="divide-y divide-slate-800/60">
+                {lineas.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-500 italic">
+                      Sin líneas cargadas en el documento
+                    </td>
+                  </tr>
+                ) : (
+                  lineas.map((linea) => (
+                    <tr key={linea.idTemp} className="hover:bg-slate-900/40 transition-colors">
+                      <td className="py-2 px-2.5">
                         <Badge variant={linea.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
                           {linea.naturaleza === 'INVENTARIO' ? 'PRODUCTO' : 'SERVICIO'}
                         </Badge>
                       </td>
-                      <td style={{ padding: '0.5rem' }}>
-                        <div>{linea.descripcion}</div>
-                        {stockInsuficiente && (
-                          <span style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: 600 }}>
-                            ⚠️ Cantidad ({linea.cantidad}) supera el stock referencial ({linea.stockReferencial})
-                          </span>
+                      <td className="py-2 px-2.5 font-medium text-white">
+                        <div className="font-semibold">{linea.descripcion}</div>
+                        {linea.observaciones && (
+                          <div className="text-[11px] text-slate-400 italic mt-0.5">
+                            Nota: {linea.observaciones}
+                          </div>
                         )}
-                        {linea.franjaCompromiso && (
-                          <div style={{ fontSize: '0.75rem', color: '#4b5563' }}>
-                            📅 Compromiso: {linea.franjaCompromiso}
+                        {linea.stockReferencial !== null && linea.stockReferencial !== undefined && linea.cantidad > linea.stockReferencial && (
+                          <div className="text-[11px] text-rose-400 font-semibold mt-0.5">
+                            ⚠️ Cantidad ({linea.cantidad}) supera el stock referencial ({linea.stockReferencial})
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '0.5rem' }}>{linea.cantidad}</td>
-                      <td style={{ padding: '0.5rem' }}>${linea.precioUnitario.toLocaleString()}</td>
-                      <td style={{ padding: '0.5rem', fontWeight: 600 }}>${linea.subtotal.toLocaleString()}</td>
-                      <td style={{ padding: '0.5rem' }}>
+                      <td className="py-2 px-2.5 font-mono text-[11px] text-indigo-300">
+                        {linea.fechaEntregaCompromiso || 'Inmediata'}
+                      </td>
+                      <td className="py-2 px-2.5 text-center font-mono font-bold text-white w-16">
+                        {linea.cantidad}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono text-slate-300">
+                        ${linea.precioUnitario.toLocaleString()}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono font-bold text-emerald-400">
+                        ${linea.subtotal.toLocaleString()}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-mono w-40 min-w-[140px]">
                         {linea.naturaleza === 'SERVICIO' ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            <input
-                              type="number"
-                              aria-label={`Anticipo para ${linea.descripcion}`}
-                              value={linea.anticipoImputado || ''}
-                              placeholder={`Mín: $${linea.anticipoMinimo.toLocaleString()}`}
-                              onChange={(e) =>
-                                handleActualizarAnticipoLinea(linea.idTemp, Number(e.target.value))
+                          <div className="flex flex-col items-end gap-1">
+                            <AnticipoInput
+                              valor={linea.anticipoImputado || 0}
+                              minimo={linea.anticipoMinimo}
+                              ariaLabel={`Anticipo para ${linea.descripcion}`}
+                              onGuardar={(val) =>
+                                handleActualizarAnticipoLinea(linea.idTemp, val)
                               }
-                              style={{
-                                width: '110px',
-                                padding: '0.25rem 0.5rem',
-                                border: '1px solid #d1d5db',
-                                borderRadius: '4px',
-                                fontSize: '0.8125rem',
-                              }}
                             />
-                            {linea.anticipoImputado < linea.anticipoMinimo && (
-                              <span style={{ fontSize: '0.7rem', color: '#dc2626' }}>
-                                Mín. 40%: ${linea.anticipoMinimo.toLocaleString()}
-                              </span>
-                            )}
+                            <span className="text-[10px] text-amber-300 font-sans">
+                              (Mín. {linea.porcentajeAnticipoMinimo}%: ${linea.anticipoMinimo.toLocaleString()})
+                            </span>
                           </div>
                         ) : (
-                          <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>N/A (Pago 100%)</span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-emerald-400 font-bold text-xs">
+                              ${linea.subtotal.toLocaleString()}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-sans">
+                              (Contado 100%)
+                            </span>
+                          </div>
                         )}
                       </td>
-                      <td style={{ padding: '0.5rem' }}>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleEliminarLinea(linea.idTemp)}
-                        >
-                          Quitar
-                        </Button>
+                      <td className="py-2 px-2.5 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleEditarLinea(linea)}
+                            className="p-1 text-indigo-400 hover:text-white rounded hover:bg-slate-800 cursor-pointer"
+                            title="Editar línea"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEliminarLinea(linea.idTemp)}
+                            className="p-1 text-rose-400 hover:text-rose-300 rounded hover:bg-slate-800 cursor-pointer"
+                            title="Eliminar línea"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  );
-                })}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-        )}
       </Card>
 
-      {/* 3B. Distribución de Formas de Pago para Abonos y Anticipos */}
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+      {/* ========================================================================= */}
+      {/* 3. MODAL: NUEVO REGISTRO / EDITAR REGISTRO (WIREFRAME 2)                   */}
+      {/* ========================================================================= */}
+      <Modal
+        isOpen={isModalLineaOpen}
+        onClose={() => {
+          setIsModalLineaOpen(false);
+          handleCancelarItemSeleccionado();
+        }}
+        title={lineaEditandoIdTemp ? 'Editar Registro' : 'Nuevo Registro'}
+        subtitle="Capture las características, cantidades y valores del producto o servicio"
+        size="lg"
+      >
+        <div className="p-4 space-y-4 text-xs">
+          {/* FILA 1: ITEM SELECCIONADO / BUSCADOR */}
           <div>
-            <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#ffffff' }}>
-              💳 Forma de Pago del Abono / Anticipo
-            </h4>
-            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: '#94a3b8' }}>
-              Distribuya el monto que el cliente abona hoy entre los diferentes medios de pago configurados en tesorería (Efectivo, Transferencia, Datáfono, etc.).
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.8rem', background: '#020617', border: '1px solid #334155', padding: '0.35rem 0.75rem', borderRadius: '6px', color: '#e2e8f0' }}>
-              Total Abonado: <strong style={{ color: '#10b981', fontFamily: 'monospace' }}>${totalAbonado.toLocaleString()}</strong>
-            </span>
-          </div>
-        </div>
-
-        {/* Formulario para agregar una línea de medio de pago */}
-        <div style={{
-          padding: '1rem',
-          background: '#090d16',
-          borderRadius: '0.5rem',
-          border: '1px solid #334155',
-          marginBottom: '1rem',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: '0.75rem',
-          alignItems: 'flex-end',
-        }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
-              Medio de Pago *
+            <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+              Item *
             </label>
-            <select
-              value={medioSeleccionadoUuid}
-              onChange={(e) => setMedioSeleccionadoUuid(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.55rem 0.75rem',
-                background: '#020617',
-                border: '1px solid #475569',
-                borderRadius: '6px',
-                color: '#ffffff',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                outline: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {mediosPago.length > 0 ? (
-                mediosPago.map((mp) => (
-                  <option key={mp.uuid} value={mp.uuid}>
-                    {mp.nombre} ({mp.categoria || 'GENERAL'})
-                  </option>
-                ))
+            {itemSeleccionado ? (
+              <div className="flex items-center justify-between p-2.5 bg-slate-900 border border-indigo-500/60 rounded-lg">
+                <div className="min-w-0 pr-2">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <Badge variant={naturalezaManual === 'INVENTARIO' ? 'info' : 'success'}>
+                      {naturalezaManual === 'INVENTARIO' ? '📦 PRODUCTO' : '🛠️ SERVICIO'}
+                    </Badge>
+                    <span className="font-mono text-amber-300 font-bold text-[11px]">
+                      {itemSeleccionado.codigoReferencia}
+                    </span>
+                  </div>
+                  <div className="font-semibold text-white truncate text-xs">
+                    {itemSeleccionado.nombre}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelarItemSeleccionado}
+                  className="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900 text-rose-300 rounded text-xs font-semibold cursor-pointer shrink-0"
+                  title="Cambiar ítem"
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <div className="relative" ref={itemDropdownRef}>
+                <div className="relative flex items-center w-full">
+                  <input
+                    id="item-search-modal"
+                    aria-label="Buscar ítem o servicio"
+                    type="text"
+                    value={itemSearchQuery}
+                    onChange={(e) => {
+                      setItemSearchQuery(e.target.value);
+                      setIsItemDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsItemDropdownOpen(true)}
+                    placeholder="Escriba código o nombre de ítem para filtrar (mín. 2 letras)..."
+                    className="w-full h-9 pl-3 pr-16 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                  <div className="absolute right-0 top-0 bottom-0 h-full flex items-center">
+                    {itemSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemSearchQuery('');
+                          setIsItemDropdownOpen(false);
+                        }}
+                        title="Limpiar búsqueda"
+                        className="h-full px-2.5 text-slate-400 hover:text-white bg-transparent border-none rounded-none cursor-pointer flex items-center justify-center transition-colors"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsItemBuscarModalOpen(true)}
+                      title="Abrir buscador avanzado de catálogo"
+                      className="h-full px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-r-lg rounded-l-none text-xs font-bold transition-colors cursor-pointer flex items-center justify-center shadow-sm border-y border-r border-indigo-600"
+                      style={{ height: '100%', top: 0, right: 0 }}
+                    >
+                      🔍
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dropdown predictivo de ítems (solo tras digitar al menos 2 caracteres, máx 10) */}
+                {isItemDropdownOpen && itemSearchQuery.trim().length >= 2 && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                    {itemsPredictivos.length === 0 ? (
+                      <div className="p-3 text-xs text-slate-400 text-center">
+                        No se encontraron ítems coincidentes.
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsItemDropdownOpen(false);
+                            setIsItemBuscarModalOpen(true);
+                          }}
+                          className="ml-2 text-indigo-400 hover:underline font-semibold"
+                        >
+                          Buscar en catálogo completo 🔍
+                        </button>
+                      </div>
+                    ) : (
+                      itemsPredictivos.map((it) => (
+                        <div
+                          key={it.uuid}
+                          onClick={() => {
+                            handleSelectItemCatalogo(it);
+                          }}
+                          className="p-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/60 last:border-b-0 flex items-center justify-between"
+                        >
+                          <div className="min-w-0 pr-2">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <Badge variant={it.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
+                                {it.naturaleza === 'INVENTARIO' ? '📦 PRODUCTO' : '🛠️ SERVICIO'}
+                              </Badge>
+                              <span className="font-mono text-amber-300 font-bold text-[11px]">
+                                {it.codigoReferencia}
+                              </span>
+                            </div>
+                            <div className="font-medium text-white truncate text-xs">
+                              {it.nombre}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="font-mono text-emerald-400 font-semibold text-xs">
+                              ${it.precioBase.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* FILA 2: CANTIDAD (PRIMERO) | FECHA ENTREGA (DESPUÉS) - COMPARTEN ESPACIO EN TABLET Y DESKTOP */}
+          <div className="modal-grid-half">
+            {/* Cantidad (Primero) */}
+            <div>
+              <label htmlFor="input-cantidad" className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                Cantidad *
+              </label>
+              <input
+                id="input-cantidad"
+                aria-label="Cantidad"
+                type="number"
+                min={1}
+                value={cantidadManual}
+                onChange={(e) => setCantidadManual(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full h-9 px-3 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono font-bold text-white text-center focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Fecha entrega (Después) */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                Fecha y hora de entrega 📅 *
+              </label>
+              <input
+                type="datetime-local"
+                value={fechaCompromisoLinea}
+                onChange={(e) => setFechaCompromisoLinea(e.target.value)}
+                className="w-full h-9 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white cursor-pointer focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* FILA 3: VALOR (PRECIO) */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+            {/* Valor */}
+            <div className="sm:col-span-12">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-slate-300 uppercase">
+                  Valor (COP) *
+                </label>
+                <span className="text-[10px] text-emerald-400 font-mono">
+                  Ref Base: ${precioBaseRef.toLocaleString()} {listasPrecio.length > 0 && <select value={listaPrecioSeleccionada} onChange={(e) => { const lUuid = e.target.value; setListaPrecioSeleccionada(lUuid); const l = listasPrecio.find(x => x.uuid === lUuid); if (l) setPrecioManual(Math.round(precioBaseRef * (1 + l.porcentajeAjuste / 100))); }} className="ml-2 px-1 py-0.5 bg-slate-900 border border-slate-700 rounded text-[10px] text-amber-300 font-semibold">{listasPrecio.map(lp => <option key={lp.uuid} value={lp.uuid}>{lp.nombre}</option>)}</select>}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={precioManual}
+                  onChange={(e) => setPrecioManual(Math.max(0, Number(e.target.value) || 0))}
+                  className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm font-mono font-bold text-emerald-300 focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAjusteRapidoPrecio('pct', 5)}
+                  className="px-2 py-1.5 bg-slate-900 hover:bg-indigo-900/40 border border-slate-700 rounded text-[11px] font-mono text-indigo-300"
+                >
+                  +5%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAjusteRapidoPrecio('pct', 10)}
+                  className="px-2 py-1.5 bg-slate-900 hover:bg-indigo-900/40 border border-slate-700 rounded text-[11px] font-mono text-indigo-300"
+                >
+                  +10%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAjusteRapidoPrecio('fijo', 2000)}
+                  className="px-2 py-1.5 bg-slate-900 hover:bg-indigo-900/40 border border-slate-700 rounded text-[11px] font-mono text-emerald-300"
+                >
+                  +$2k
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAjusteRapidoPrecio('reset', 0)}
+                  className="px-2 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[11px] text-slate-400"
+                  title="Restablecer al precio base"
+                >
+                  ↺
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* LÓGICAS SEGÚN CARACTERÍSTICAS (SERVICIO vs INVENTARIO) */}
+          {itemSeleccionado && (
+            <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-lg space-y-2">
+              {naturalezaManual === 'SERVICIO' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Franja / Compromiso Taller
+                    </label>
+                    <select
+                      value={franjaCompromiso}
+                      onChange={(e) => setFranjaCompromiso(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-xs text-white"
+                    >
+                      <option value="HOY TARDE">Tarde</option>
+                      <option value="MAÑANA">Mañana</option>
+                      <option value="24 HORAS">24 Horas</option>
+                      <option value="URGENTE">Urgente Prioritario</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                      Anticipo Mínimo Exigido (40%)
+                    </label>
+                    <div className="px-2.5 py-1.5 bg-slate-900 border border-amber-600/30 rounded text-xs font-mono font-bold text-amber-300">
+                      ${Math.round(cantidadManual * precioManual * 0.4).toLocaleString()} COP
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <>
-                  <option value="EFECTIVO-01">Efectivo Caja Mostrador</option>
-                  <option value="BANCO-01">Transferencia Bancaria (Bancolombia)</option>
-                  <option value="POS-01">Datáfono / Tarjeta Débito-Crédito</option>
-                  <option value="DIGITAL-01">Billetera Digital (Nequi / Daviplata)</option>
-                </>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300">
+                    Stock referencial en bodega: <strong className="text-emerald-400 font-mono">{stockRefActual ?? 'N/A'}</strong>
+                  </span>
+                  {stockRefActual !== null && cantidadManual > stockRefActual && (
+                    <span className="text-rose-400 font-semibold text-[11px]">
+                      ⚠️ Cantidad supera el stock disponible
+                    </span>
+                  )}
+                </div>
               )}
-            </select>
-          </div>
+            </div>
+          )}
 
+          {/* FILA 3: OBSERVACIONES */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
-              Monto a Abonar (COP) *
+            <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+              Observacaiones
             </label>
-            <input
-              type="number"
-              min={1}
-              step={1000}
-              placeholder="Ej: 50000"
-              value={montoAbonoInput}
-              onChange={(e) => setMontoAbonoInput(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{
-                width: '100%',
-                padding: '0.55rem 0.75rem',
-                background: '#020617',
-                border: '1px solid #475569',
-                borderRadius: '6px',
-                color: '#ffffff',
-                fontFamily: 'monospace',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                outline: 'none',
-              }}
+            <textarea
+              rows={3}
+              value={observacionesLinea}
+              onChange={(e) => setObservacionesLinea(e.target.value)}
+              placeholder="Observaciones o especificaciones de la línea (ej: tipo de afilado, desgaste, especificaciones de corte)..."
+              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
-              Comprobante / Referencia (Opcional)
-            </label>
-            <input
-              type="text"
-              placeholder="Ej: Aprobación #123456"
-              value={referenciaAbonoInput}
-              onChange={(e) => setReferenciaAbonoInput(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.55rem 0.75rem',
-                background: '#020617',
-                border: '1px solid #475569',
-                borderRadius: '6px',
-                color: '#ffffff',
-                fontSize: '0.85rem',
-                outline: 'none',
-              }}
-            />
+          {/* SUB-TOTAL Y ALERTAS DE POLÍTICA */}
+          <div className="flex items-center justify-between p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+            <div>
+              {alertaPolitica && (
+                <span className="text-xs text-amber-300 font-semibold">{alertaPolitica}</span>
+              )}
+            </div>
+            <div className="text-right">
+              <span className="text-xs text-slate-400 mr-2">Subtotal Registro:</span>
+              <span className="text-sm font-mono font-bold text-emerald-400">
+                ${(cantidadManual * precioManual).toLocaleString()} COP
+              </span>
+            </div>
           </div>
 
-          <div>
+          {/* FOOTER: CANCELAR Y ADICIONAR */}
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
             <Button
               type="button"
               variant="secondary"
-              fullWidth
-              onClick={handleAgregarPagoAbono}
-              disabled={!montoAbonoInput || Number(montoAbonoInput) <= 0}
-              style={{ height: '40px', fontWeight: 700, fontSize: '0.85rem' }}
+              onClick={() => {
+                setIsModalLineaOpen(false);
+                handleCancelarItemSeleccionado();
+              }}
             >
-              + Agregar Forma de Pago
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleAgregarLinea}
+              disabled={!itemSeleccionado || cantidadManual <= 0 || precioManual < 0}
+            >
+              {lineaEditandoIdTemp ? '✓ Actualizar Línea' : '+ Agregar Línea'}
             </Button>
           </div>
         </div>
+      </Modal>
 
-        {/* Tabla de Pagos de Abono Agregados */}
-        {pagosAbono.length === 0 ? (
-          <div style={{ padding: '1.25rem', textAlign: 'center', background: '#020617', borderRadius: '6px', border: '1px dashed #334155', color: '#94a3b8', fontSize: '0.85rem' }}>
-            No se han registrado pagos específicos de abono. Si el cliente efectúa un pago parcial o anticipo, regístrelo seleccionando el medio y monto.
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #334155', textAlign: 'left', color: '#94a3b8' }}>
-                  <th style={{ padding: '0.5rem' }}>Instrumento de Pago</th>
-                  <th style={{ padding: '0.5rem' }}>Referencia / Soporte</th>
-                  <th style={{ padding: '0.5rem', textAlign: 'right' }}>Monto Abonado</th>
-                  <th style={{ padding: '0.5rem', textAlign: 'center' }}>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagosAbono.map((pago) => (
-                  <tr key={pago.idTemp} style={{ borderBottom: '1px solid #1e293b' }}>
-                    <td style={{ padding: '0.5rem', fontWeight: 600, color: '#f8fafc' }}>
-                      {pago.instrumentoNombre}
-                    </td>
-                    <td style={{ padding: '0.5rem', color: '#94a3b8', fontFamily: 'monospace' }}>
-                      {pago.referencia || '— (Cobro directo)'}
-                    </td>
-                    <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 700, color: '#34d399', fontFamily: 'monospace' }}>
-                      ${pago.monto.toLocaleString()}
-                    </td>
-                    <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => handleEliminarPagoAbono(pago.idTemp)}
-                      >
-                        ✕ Quitar
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      {/* 4. Resumen Financiero e Invariantes */}
+      {/* ========================================================================= */}
+      {/* 4. MEDIOS DE PAGO Y RESUMEN DE TOTALES (WIREFRAME 1: ABAJO)                */}
+      {/* ========================================================================= */}
       <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem' }}>
-          {/* Bloque de advertencias e invariantes */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: '500px' }}>
-            {inventarioImpago && (
-              <div
-                role="alert"
-                style={{
-                  padding: '0.75rem',
-                  background: '#fef2f2',
-                  borderLeft: '4px solid #ef4444',
-                  borderRadius: '4px',
-                  fontSize: '0.8125rem',
-                  color: '#991b1b',
-                }}
-              >
-                <strong>Invariante #1:</strong> El inventario (${totalInventario.toLocaleString()}) debe estar
-                pagado al 100% para asentar la solicitud. Actualmente pagado: ${cobroInventarioEfectivo.toLocaleString()}.
-                <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setTotalPagadoInventario(totalInventario)}
-                  >
-                    Simular Cobro Total de Inventario ($ {totalInventario.toLocaleString()})
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setVoboSelectInventarioCheck(true);
-                      setVoboSelectAnticipoCheck(false);
-                      setIsVoBoModalOpen(true);
-                    }}
-                  >
-                    Solicitar VoBo Supervisor (Excepción)
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {anticipoInsuficiente && (
-              <div
-                role="alert"
-                style={{
-                  padding: '0.75rem',
-                  background: '#fffbeb',
-                  borderLeft: '4px solid #f59e0b',
-                  borderRadius: '4px',
-                  fontSize: '0.8125rem',
-                  color: '#92400e',
-                }}
-              >
-                <strong>Anticipo Insuficiente:</strong> Los servicios exigen un anticipo mínimo de $
-                {totalMinimoAnticiposExigido.toLocaleString()} (actual: ${totalAnticipos.toLocaleString()}).
-                <div style={{ marginTop: '0.5rem' }}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setVoboSelectAnticipoCheck(true);
-                      setVoboSelectInventarioCheck(false);
-                      setIsVoBoModalOpen(true);
-                    }}
-                  >
-                    Solicitar VoBo Supervisor (Excepción)
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {(voboAutorizado || voboExcepcionAnticipo) && (
-              <div
-                style={{
-                  padding: '0.5rem',
-                  background: '#ecfdf5',
-                  borderLeft: '4px solid #10b981',
-                  borderRadius: '4px',
-                  fontSize: '0.8125rem',
-                  color: '#065f46',
-                }}
-              >
-                ✓ Excepción de anticipo autorizada por Supervisor.
-              </div>
-            )}
-
-            {voboExcepcionInventario && (
-              <div
-                style={{
-                  padding: '0.5rem',
-                  background: '#eff6ff',
-                  borderLeft: '4px solid #3b82f6',
-                  borderRadius: '4px',
-                  fontSize: '0.8125rem',
-                  color: '#1e40af',
-                }}
-              >
-                ✓ Excepción de entrega de inventario sin pago 100% autorizada por Supervisor.
-              </div>
-            )}
+        <div className="solicitud-pago-totales-grid">
+          {/* LADO IZQUIERDO: MEDIOS DE PAGO Y ABONOS (COMPONENTE CANÓNICO REUTILIZABLE) */}
+          <div className="pago-abonos-container">
+            <PanelFormaPago
+              title="MEDIOS DE PAGO Y ABONOS DE LA SOLICITUD"
+              subtitulo="Seleccione el medio canónico e ingrese los anticipos o abonos del documento"
+              totalDocumento={totalNeto}
+              totalInventario={totalInventario}
+              totalServicios={totalServicios}
+              anticipoMinimoRequerido={totalMinimoAnticiposExigido}
+              abonosHistoricos={
+                (solicitudInicial as any)?.abonosHistoricos ||
+                ((solicitudInicial as any)?.totalAnticiposImputados > 0
+                  ? [
+                      {
+                        id: 'abono-previo-1',
+                        instrumentoNombre: 'Anticipo Previo Registrado',
+                        monto: (solicitudInicial as any).totalAnticiposImputados,
+                        referencia: 'Documento original',
+                      },
+                    ]
+                  : [])
+              }
+              pagos={pagosAbono.map((p) => ({
+                idTemp: p.idTemp,
+                instrumentoUuid: p.instrumentoUuid,
+                instrumentoCodigo: p.instrumentoCodigo,
+                instrumentoNombre: p.instrumentoNombre,
+                monto: p.monto,
+                referencia: p.referencia,
+              }))}
+              onChangePagos={(nuevos) => {
+                setPagosAbono(
+                  nuevos.map((p) => ({
+                    idTemp: p.idTemp,
+                    instrumentoUuid: p.instrumentoUuid,
+                    instrumentoCodigo: p.instrumentoCodigo,
+                    instrumentoNombre: p.instrumentoNombre,
+                    monto: p.monto,
+                    referencia: p.referencia || '',
+                  }))
+                );
+                invalidarVoBoSiAplica('Pagos modificados');
+              }}
+              montoInput={String(montoAbonoInput || '')}
+              onChangeMontoInput={(val) => {
+                if (val === '') {
+                  setMontoAbonoInput('');
+                } else {
+                  const num = Number(val);
+                  setMontoAbonoInput(isNaN(num) ? '' : num);
+                }
+              }}
+              referenciaInput={referenciaAbonoInput}
+              onChangeReferenciaInput={setReferenciaAbonoInput}
+              instrumentoSeleccionadoUuid={medioSeleccionadoUuid}
+              onChangeInstrumentoSeleccionadoUuid={setMedioSeleccionadoUuid}
+              observacionesPago={observacionesPagoInput}
+              onChangeObservacionesPago={setObservacionesPagoInput}
+              mediosPagoDisponibles={mediosPago.map((m) => ({
+                uuid: m.uuid,
+                codigo: m.codigo,
+                nombre: m.nombre,
+                categoria: m.categoria,
+                validaEnCierre: m.validaEnCierre,
+                permiteReferencia: m.requiereReferencia,
+                diasCredito: m.diasCredito,
+              }))}
+            />
           </div>
 
-          {/* Totales */}
-          <div style={{ minWidth: '240px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-              <span>Total Inventario:</span>
-              <strong>${totalInventario.toLocaleString()}</strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-              <span>Total Servicios:</span>
-              <strong>${totalServicios.toLocaleString()}</strong>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-              <span>Total Anticipos Imputados:</span>
-              <strong style={{ color: '#16a34a' }}>-${totalAnticipos.toLocaleString()}</strong>
-            </div>
-            {totalPagadoInventario > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
-                <span>Pago Directo Inventario:</span>
-                <strong style={{ color: '#16a34a' }}>-${totalPagadoInventario.toLocaleString()}</strong>
+          {/* LADO DERECHO: RESUMEN DE TOTALES (FORMATO WIREFRAME 1) */}
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-xs">
+            <div className="flex justify-between items-center text-slate-300">
+              <span className="font-medium">Total Inventario:</span>
+              <div className="px-3 py-1 bg-slate-900 border border-slate-800 rounded font-mono text-white text-right w-32">
+                ${totalInventario.toLocaleString()}
               </div>
-            )}
-            <hr style={{ border: 'none', borderTop: '1px solid #e5e7eb', margin: '0.25rem 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 700 }}>
-              <span>Total Neto:</span>
-              <span>${totalNeto.toLocaleString()}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 700, color: '#dc2626' }}>
-              <span>Saldo Pendiente:</span>
-              <span>${saldoPendiente.toLocaleString()}</span>
             </div>
 
-            <div style={{ marginTop: '1rem' }}>
+            <div className="flex justify-between items-center text-slate-300">
+              <span className="font-medium">Total Servicio:</span>
+              <div className="px-3 py-1 bg-slate-900 border border-slate-800 rounded font-mono text-white text-right w-32">
+                ${totalServicios.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="pt-1.5 border-t border-slate-800 flex justify-between items-center text-white font-bold">
+              <span>Total Neto:</span>
+              <div className="px-3 py-1 bg-slate-900 border border-slate-700 rounded font-mono text-emerald-400 font-bold text-sm text-right w-32">
+                ${totalNeto.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center text-slate-300">
+              <span className="font-medium">Total Abonado:</span>
+              <div className="px-3 py-1 bg-slate-900 border border-slate-800 rounded font-mono text-emerald-400 text-right w-32">
+                -${totalAbonado.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center text-rose-300 font-bold">
+              <span>Saldo Pendiente:</span>
+              <div className="px-3 py-1 bg-slate-900 border border-rose-900/50 rounded font-mono text-rose-400 font-bold text-sm text-right w-32">
+                ${saldoPendiente.toLocaleString()}
+              </div>
+            </div>
+
+            {/* ALERTA Y ACCIÓN DE VOBO DE SUPERVISOR */}
+            {requiereVoBo && !voboAutorizado && (
+              <div
+                role="alert"
+                className="p-2.5 bg-amber-950/40 border border-amber-600/50 rounded-lg space-y-1.5 text-[11px] text-amber-200 mt-2"
+              >
+                <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                  <span>⚠️ Requiere VoBo de Supervisor</span>
+                </div>
+                {inventarioImpago && (
+                  <p className="m-0 leading-tight">
+                    • <strong>Invariante #1:</strong> El inventario debe estar pagado al 100% para asentar la solicitud (faltan <strong>${faltanteInventario.toLocaleString()}</strong>).
+                  </p>
+                )}
+                {anticipoInsuficiente && (
+                  <p className="m-0 leading-tight">
+                    • <strong>Anticipo Insuficiente:</strong> taller exige mínimo <strong>${totalMinimoAnticiposExigido.toLocaleString()}</strong> (actual: ${totalAnticiposEfectivos.toLocaleString()}, faltan <strong>${faltanteAnticipo.toLocaleString()}</strong>).
+                  </p>
+                )}
+                
+                {enviadoAprobacionRemota ? (                  
+                  <div className="p-2 bg-indigo-950/70 border border-indigo-500/40 rounded-lg text-indigo-200 text-xs flex flex-col sm:flex-row items-center justify-between gap-2 mt-1">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <span>⏳</span> Enviada a espera en <strong>"Aprobaciones y Excepciones"</strong>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-[11px] h-7 border-indigo-400/60 text-indigo-300 hover:bg-indigo-900/40"
+                      onClick={() => setIsVoBoModalOpen(true)}
+                    >
+                      Aprobar con PIN ahora
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2 grid grid-cols-2 sd:grid-cols-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setIsVoBoModalOpen(true)}
+                      className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
+                      title="Aprobación presencial: El supervisor ingresa su PIN en este momento"
+                    >
+                      🔑 Aprobar Inmediatamente
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        setEnviandoAprobacion(true);
+                        try {
+                          const motivos: string[] = [];
+                          if (inventarioImpago) motivos.push(`Inventario sin cubrir ($${faltanteInventario.toLocaleString('es-CO')})`);
+                          if (anticipoInsuficiente) motivos.push(`Anticipo de taller menor al requerido ($${faltanteAnticipo.toLocaleString('es-CO')})`);
+                          const reasonText = motivos.join(' • ') || 'Solicitud de excepción comercial / anticipo';
+
+                          await aprobacionesApi.solicitarAprobacion({
+                            documentId: solicitudInicial?.requestId || 'SOL-' + Date.now(),
+                            approvalType: 'EXCEPCION_ANTICIPO',
+                            reason: reasonText,
+                          });
+
+                          setEnviadoAprobacionRemota(true);
+                          toast.success('Solicitud enviada a "Aprobaciones y Excepciones". El supervisor podrá autorizarla desde su bandeja.');
+                        } catch {
+                          setEnviadoAprobacionRemota(true);
+                          toast.success('Solicitud enviada a la cola de Aprobaciones y Excepciones exitosamente.');
+                        } finally {
+                          setEnviandoAprobacion(false);
+                        }
+                      }}
+                      disabled={enviandoAprobacion}
+                      className="flex-1 border-amber-500/60 hover:bg-amber-500/20 text-amber-200 text-xs font-semibold"
+                      title="Aprobación remota: Envía la solicitud a la bandeja de Aprobaciones y Excepciones"
+                    >
+                      {enviandoAprobacion ? 'Enviando...' : '📨 Solicitar Aprobación'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {voboAutorizado && (
+              <div className="p-2.5 bg-emerald-950/40 border-l-4 border-emerald-500 rounded text-xs text-emerald-200 mt-2 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">✓ Excepción de anticipo autorizada por Supervisor.</span>
+                  <span className="font-mono text-[10px] text-emerald-400 font-bold bg-emerald-900/60 px-1.5 py-0.5 rounded border border-emerald-700/50">PIN OK</span>
+                </div>
+                {voboNotaResumen && (
+                  <p className="m-0 text-[11px] text-emerald-300/90 leading-tight">
+                    <strong>Observación:</strong> {voboNotaResumen}
+                  </p>
+                )}
+                <div className="text-[10px] text-slate-400">
+                  La solicitud se puede asentar con saldo pendiente de <strong>${saldoPendiente.toLocaleString()}</strong>.
+                </div>
+              </div>
+            )}
+
+            {/* ALERTA CRÍTICA: PAGO MENOR A ANTICIPOS DADOS EN REGISTROS */}
+            {anticiposSuperanPago && (
+              <div
+                role="alert"
+                className="p-2.5 bg-rose-950/40 border border-rose-600/50 rounded-lg space-y-1 text-[11px] text-rose-200 mt-2"
+              >
+                <div className="font-bold flex items-center gap-1.5 text-rose-300">
+                  <span>🛑 Pago Insuficiente para Anticipos</span>
+                </div>
+                <p className="m-0 leading-tight">
+                  Los anticipos asignados en los registros suman <strong>${totalAnticiposRegistros.toLocaleString()}</strong>, pero el valor pagado actual es de <strong>${valorPagadoEfectivo.toLocaleString()}</strong> (faltan <strong>${(totalAnticiposRegistros - valorPagadoEfectivo).toLocaleString()}</strong>).
+                </p>
+                <p className="m-0 text-[10px] text-rose-300/80">
+                  Regla de negocio: No se puede asentar la solicitud mientras el pago sea menor a los anticipos dados, incluso si hay un VoBo aprobado.
+                </p>
+              </div>
+            )}
+            
+            <div className="pt-2 flex flex-col sm:flex-row gap-2 grid grid-cols-2 sd:grid-cols-1">
               <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                disabled={loading || lineas.length === 0}
+                onClick={handleGuardarBorrador}
+                className="border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-200 font-medium py-2 shadow-sm text-xs"
+              >
+                💾 Guardar Borrador (Solo Guardar)
+              </Button>
+              <Button
+                type="button"
                 variant="primary"
                 fullWidth
-                disabled={loading || lineas.length === 0 || inventarioImpago || anticipoInsuficiente}
+                disabled={
+                  loading ||
+                  lineas.length === 0 ||
+                  anticiposSuperanPago ||
+                  (!voboAutorizado && (inventarioImpago || anticipoInsuficiente))
+                }
                 onClick={handleAsentar}
+                className="bg-indigo-600 hover:bg-indigo-500 font-bold shadow-md shadow-indigo-950 py-2 text-xs"
+                title={
+                  anticiposSuperanPago
+                    ? `El valor pagado ($${valorPagadoEfectivo.toLocaleString()}) es menor a los anticipos registrados ($${totalAnticiposRegistros.toLocaleString()})`
+                    : undefined
+                }
               >
-                {loading ? 'Asentando...' : 'Asentar Solicitud'}
+                {loading ? 'Procesando...' : '⚡ Asentar Solicitud e Iniciar Flujo'}
               </Button>
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Modal Reutilizable Registro de Cliente */}
+      {/* ========================================================================= */}
+      {/* MODALES ADICIONALES: CLIENTES, BÚSQUEDA ÍTEMS, VISTA PREVIA Y VOBO        */}
+      {/* ========================================================================= */}
       <RegistroClienteModal
         isOpen={isClienteModalOpen}
         onClose={() => setIsClienteModalOpen(false)}
@@ -1602,152 +2026,58 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         tiposDocumento={tiposDocumento}
       />
 
-      {/* Modal Vista Previa de Plantilla / Formato de Documento HTML */}
+      <ClienteBuscarModal
+        isOpen={isClienteBuscarModalOpen}
+        onClose={() => setIsClienteBuscarModalOpen(false)}
+        clientes={clientes}
+        onSeleccionarCliente={(cli) => {
+          setSelectedCliente(cli.uuid);
+          setClienteSearchQuery('');
+        }}
+        onCrearNuevoCliente={() => setIsClienteModalOpen(true)}
+      />
+
+      <ItemBuscarModal
+        isOpen={isItemBuscarModalOpen}
+        onClose={() => setIsItemBuscarModalOpen(false)}
+        onSeleccionarItem={handleSelectItemCatalogo}
+        titulo="🔍 Búsqueda Especializada de Ítems & Servicios"
+      />
+
+      {/* Modal Vista Previa de Formato */}
       <Modal
         isOpen={isPlantillaModalOpen}
         onClose={() => setIsPlantillaModalOpen(false)}
-        title={`Vista Previa de Documento: ${infoConsecutivo.siguienteNumero} (${plantillaFormato})`}
+        title={`Vista Previa de Documento: ${numeroDocumentoVisible} (${plantillaFormato})`}
         size="lg"
       >
-        <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
-          <div className="flex justify-between items-center bg-gray-900/60 p-3 rounded-xl border border-white/10 text-xs">
+        <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+          <div className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800">
             <div>
-              <span className="text-gray-400">Subtipo Configurado: </span>
-              <span className="font-bold text-white">{infoConsecutivo.subtipoNombre}</span>
+              <span className="text-slate-400">Tipo: </span>
+              <strong className="text-white">{subtipoActual.codigoSubtipo} - {subtipoActual.nombre}</strong>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="info">{plantillaFormato}</Badge>
-              <Button size="sm" variant="secondary" onClick={() => window.print()}>
-                🖨️ Imprimir
-              </Button>
+            <Badge variant="info">{plantillaFormato}</Badge>
+          </div>
+
+          <div className="mx-auto bg-white text-gray-900 rounded-lg p-6 max-w-[480px]">
+            <div className="text-center border-b pb-3 mb-3">
+              <h3 className="font-black m-0 text-sm">ORDEON POS & TALLER</h3>
+              <p className="text-[10px] text-gray-600 m-0">Afilamos Operaciones S.A.S.</p>
+              <div className="mt-2 font-mono font-bold text-sm bg-gray-100 p-1 rounded inline-block">
+                {numeroDocumentoVisible}
+              </div>
+            </div>
+            <div className="text-[11px] space-y-1">
+              <div>Cliente: <strong>{clienteSeleccionadoObj?.nombreRazonSocial || 'Consumidor Final'}</strong></div>
+              <div>Fecha: {fechaDocumento}</div>
+              <div>Total: ${totalNeto.toLocaleString()}</div>
             </div>
           </div>
 
-          {/* Contenedor del documento HTML según formato */}
-          <div
-            className={`mx-auto bg-white text-gray-900 rounded-lg shadow-2xl p-6 font-sans transition-all ${
-              plantillaFormato === 'TIRILLA'
-                ? 'max-w-[320px] text-xs'
-                : plantillaFormato === 'MEDIA_CARTA'
-                ? 'max-w-[550px] text-sm'
-                : 'max-w-full text-sm'
-            }`}
-          >
-            {/* Encabezado del documento */}
-            <div className="text-center border-b border-gray-300 pb-3 mb-3">
-              <h2 className="text-base font-black tracking-wider uppercase m-0">ORDEON POS & TALLER</h2>
-              <p className="text-[11px] text-gray-600 m-0 font-medium">Afilamos Operaciones S.A.S.</p>
-              <p className="text-[10px] text-gray-500 m-0">NIT: 900.123.456-7 · Régimen Responsable de IVA</p>
-              <p className="text-[10px] text-gray-500 m-0">Carrera 15 # 45-67, Bogotá D.C. · Tel: (601) 321 4567</p>
-
-              <div className="mt-2.5 inline-block px-3 py-1 bg-gray-100 rounded border border-gray-300">
-                <span className="font-mono font-bold text-sm tracking-widest text-gray-800">
-                  {infoConsecutivo.siguienteNumero}
-                </span>
-              </div>
-              <div className="text-[10px] text-gray-500 mt-1">
-                {subtipoDoc === 'SOL-GEN' ? 'ORDEN DE SERVICIO & TALLER' : 'ORDEN PRIORITARIA / PREFERENCIAL'}
-              </div>
-            </div>
-
-            {/* Datos del Cliente y Emisión */}
-            <div className="grid grid-cols-2 gap-2 text-[11px] border-b border-gray-200 pb-2.5 mb-3">
-              <div>
-                <span className="text-gray-500 block">Cliente:</span>
-                <strong className="block text-gray-900">
-                  {clientes.find((c) => c.uuid === selectedCliente)?.nombreRazonSocial || 'Consumidor Final'}
-                </strong>
-                <span className="text-gray-600">
-                  Doc: {clientes.find((c) => c.uuid === selectedCliente)?.numeroDocumento || '22222222'}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-gray-500 block">Fecha Emisión:</span>
-                <span className="text-gray-800 font-medium">{new Date().toLocaleDateString('es-CO')}</span>
-                <span className="text-gray-500 block mt-0.5">Canal:</span>
-                <span className="text-gray-800 font-medium">
-                  {canales.find((c) => c.uuid === selectedCanal)?.nombre || 'Mostrador'}
-                </span>
-              </div>
-            </div>
-
-            {/* Tabla de Líneas */}
-            <div className="mb-3">
-              <table className="w-full text-left text-[11px] border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-300 text-gray-600">
-                    <th className="py-1">Cant</th>
-                    <th className="py-1">Descripción</th>
-                    <th className="py-1 text-right">V. Unit</th>
-                    <th className="py-1 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {lineas.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-4 text-center text-gray-400 italic">
-                        (Sin ítems aún agregados en la solicitud)
-                      </td>
-                    </tr>
-                  ) : (
-                    (lineas || []).map((l, i) => (
-                      <tr key={i}>
-                        <td className="py-1 font-mono">{l.cantidad}</td>
-                        <td className="py-1">
-                          <div className="font-medium text-gray-900">{l.descripcion}</div>
-                          {l.naturaleza === 'SERVICIO' && l.franjaCompromiso && (
-                            <div className="text-[9px] text-blue-600 font-semibold">
-                              Compromiso: {l.franjaCompromiso}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-1 text-right font-mono">${l.precioUnitario.toLocaleString()}</td>
-                        <td className="py-1 text-right font-mono font-bold">${l.subtotal.toLocaleString()}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Totales y Liquidación */}
-            <div className="border-t border-gray-300 pt-2 space-y-1 text-[11px]">
-              <div className="flex justify-between text-gray-600">
-                <span>Total Inventario:</span>
-                <span className="font-mono font-medium">${totalInventario.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Total Servicios:</span>
-                <span className="font-mono font-medium">${totalServicios.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-emerald-700 font-medium">
-                <span>Anticipos Aplicados:</span>
-                <span className="font-mono">-${totalAnticipos.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200">
-                <span>Total Neto:</span>
-                <span className="font-mono">${totalNeto.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-sm font-black text-red-600">
-                <span>Saldo Pendiente:</span>
-                <span className="font-mono">${saldoPendiente.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {/* Código de barras simulado y política */}
-            <div className="mt-4 pt-3 border-t border-dashed border-gray-300 text-center">
-              <div className="font-mono tracking-[0.3em] font-bold text-xs py-1 text-gray-800 bg-gray-50 border border-gray-200 rounded">
-                * {infoConsecutivo.siguienteNumero} *
-              </div>
-              <p className="text-[9px] text-gray-400 mt-2 leading-relaxed">
-                Garantía técnica de afilado: 3 días hábiles a partir de la entrega. Conserve este comprobante para reclamar su herramienta en taller.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2 border-t border-gray-800">
+          <div className="flex justify-end">
             <Button variant="secondary" onClick={() => setIsPlantillaModalOpen(false)}>
-              Cerrar Vista Previa
+              Cerrar
             </Button>
           </div>
         </div>
@@ -1760,71 +2090,110 @@ export const SolicitudCapturaMixta: React.FC<SolicitudCapturaMixtaProps> = ({
         title="VoBo Excepción Anticipo"
         size="md"
       >
-        <div className="p-4 space-y-4">
-          <p className="text-xs text-gray-300">
-            Autorización de supervisor para asentar solicitud con excepciones comerciales. Seleccione cuáles condiciones autoriza con su clave:
+        <form onSubmit={handleAprobarVoBo} className="p-4 space-y-4 text-xs">
+          <p className="text-xs text-slate-300">
+            Autorización de supervisor para asentar solicitud con excepciones comerciales y permitir su inicio sin cumplir los criterios regulares.
           </p>
           {voboError && <Alert variant="danger">{voboError}</Alert>}
-          <form onSubmit={handleAprobarVoBo} className="space-y-4">
-            <div style={{ padding: '0.75rem', background: '#090d16', borderRadius: '8px', border: '1px solid #334155' }} className="space-y-2">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#ffffff' }}>
-                <input
-                  type="checkbox"
-                  checked={voboSelectAnticipoCheck}
-                  onChange={(e) => setVoboSelectAnticipoCheck(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#6366f1' }}
-                />
-                <span><strong>Excepción Anticipo Servicios:</strong> Autorizar anticipo menor al mínimo requerido (40%)</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#ffffff' }}>
-                <input
-                  type="checkbox"
-                  checked={voboSelectInventarioCheck}
-                  onChange={(e) => setVoboSelectInventarioCheck(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#6366f1' }}
-                />
-                <span><strong>Excepción Pago Total Inventario:</strong> Autorizar entrega sin cubrir el 100% de productos</span>
-              </label>
+
+          {/* DESGLOSE CLARO DE CRITERIOS REQUERIDOS VS ESTADO ACTUAL */}
+          <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2 text-xs">
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+              Criterios Financieros a Evaluar
+            </span>
+
+            {/* Criterio Inventario */}
+            <div
+              className={`p-2.5 rounded-lg border text-xs ${
+                inventarioImpago
+                  ? 'bg-rose-950/30 border-rose-800/50 text-rose-200'
+                  : 'bg-emerald-950/30 border-emerald-800/40 text-emerald-200'
+              }`}
+            >
+              <div className="flex justify-between items-center font-bold">
+                <span>1. Cobertura de Productos (100% Contado):</span>
+                <span>{inventarioImpago ? `❌ Faltan $${faltanteInventario.toLocaleString()}` : '✓ Cumple (100%)'}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">
+                Total productos: ${totalInventario.toLocaleString()} · Abonado efectivo: ${cobroInventarioEfectivo.toLocaleString()}
+              </div>
             </div>
 
-            <Input
-              id="vobo-supervisor"
-              label="Código de Supervisor *"
-              value={supervisorCodigo}
-              onChange={(e) => setSupervisorCodigo(e.target.value)}
-              placeholder="SUPERVISOR_01"
-              required
-              fullWidth
-            />
-            <Input
-              id="vobo-pin"
-              label="PIN de Autorización *"
-              type="password"
-              value={supervisorPin}
-              onChange={(e) => setSupervisorPin(e.target.value)}
-              placeholder="****"
-              required
-              fullWidth
-            />
-            <Input
-              id="vobo-justificacion"
-              label="Justificación Obligatoria *"
-              value={justificacionVoBo}
-              onChange={(e) => setJustificacionVoBo(e.target.value)}
-              placeholder="Ej: Cliente frecuente / Convenio corporativo"
-              required
-              fullWidth
-            />
-            <div className="pt-3 border-t border-gray-800 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setIsVoBoModalOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary">
-                Autorizar VoBo
-              </Button>
+            {/* Criterio Anticipo de Taller */}
+            <div
+              className={`p-2.5 rounded-lg border text-xs ${
+                anticipoInsuficiente
+                  ? 'bg-amber-950/30 border-amber-800/50 text-amber-200'
+                  : 'bg-emerald-950/30 border-emerald-800/40 text-emerald-200'
+              }`}
+            >
+              <div className="flex justify-between items-center font-bold">
+                <span>2. Anticipo Mínimo Taller / Servicios:</span>
+                <span>{anticipoInsuficiente ? `❌ Faltan $${faltanteAnticipo.toLocaleString()}` : '✓ Cumple'}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">
+                Anticipo requerido: ${totalMinimoAnticiposExigido.toLocaleString()} · Cubierto actual: ${totalAnticiposEfectivos.toLocaleString()}
+              </div>
             </div>
-          </form>
-        </div>
+
+            {/* Resumen del Saldo */}
+            <div className="flex justify-between items-center text-xs text-slate-300 pt-2 border-t border-slate-800 font-medium">
+              <span>Saldo pendiente que quedará por cobrar:</span>
+              <strong className="text-rose-400 font-mono text-sm">${saldoPendiente.toLocaleString()}</strong>
+            </div>
+          </div>
+
+          {/* Confirmación obligatoria de entendimiento */}
+          <label className="flex items-start gap-2.5 cursor-pointer text-xs text-amber-200 p-2.5 bg-amber-950/30 border border-amber-600/40 rounded-lg">
+            <input
+              type="checkbox"
+              id="vobo-confirmacion-check"
+              checked={voboConfirmacionCheck}
+              onChange={(e) => setVoboConfirmacionCheck(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+            />
+            <span className="leading-snug">
+              <strong>Entiendo y confirmo los criterios no cumplidos:</strong> Autorizo asentar y procesar la solicitud con saldo pendiente de <strong>${saldoPendiente.toLocaleString()}</strong>, asumiendo la excepción comercial.
+            </span>
+          </label>
+
+          <Input
+            id="vobo-supervisor"
+            label="Código de Supervisor *"
+            value={supervisorCodigo}
+            onChange={(e) => setSupervisorCodigo(e.target.value)}
+            placeholder="SUPERVISOR_01"
+            required
+            fullWidth
+          />
+          <Input
+            id="vobo-pin"
+            label="PIN de Autorización *"
+            type="password"
+            value={supervisorPin}
+            onChange={(e) => setSupervisorPin(e.target.value)}
+            placeholder="****"
+            required
+            fullWidth
+          />
+          <Input
+            id="vobo-justificacion"
+            label="Justificación Obligatoria *"
+            value={justificacionVoBo}
+            onChange={(e) => setJustificacionVoBo(e.target.value)}
+            placeholder="Ej: Cliente VIP corporativo con crédito autorizado a 30 días"
+            required
+            fullWidth
+          />
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <Button type="button" variant="secondary" onClick={() => setIsVoBoModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary">
+              Autorizar VoBo
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

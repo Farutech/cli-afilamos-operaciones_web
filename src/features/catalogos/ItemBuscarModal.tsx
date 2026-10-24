@@ -1,19 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Modal, Button, Badge } from '@farutech/design-system';
+import { Modal, Badge } from '@farutech/design-system';
 import { catalogosApi } from '../../services/catalogosApi';
 import type { ItemCatalogo, CategoriaItem } from '../../types/catalogos';
 
 /**
  * Modal Especializado de Búsqueda de Ítems (Estilo "Lupa Novasoft").
  *
- * Sustituye el CRUD completo por una vista de CONSULTA FILTRADA sobre el catálogo:
- *  - Filtro por código, por nombre/descripción y por categoría MULTINIVEL (árbol).
- *  - Filtro opcional por naturaleza (INVENTARIO / SERVICIO).
- *  - Paginación de 10 registros por página con totales visibles.
- *  - Panel de detalle del ítem seleccionado (stock, unidad, lista de precios, workflow).
- *
- * A diferencia del CRUD administrativo, aquí NO se crean ni editan ítems: solo se
- * seleccionan para cargarlos en el formulario de captura correspondiente.
+ * Consulta filtrada compacta sobre el catálogo con árbol de categorías,
+ * buscador integrado y fallback garantizado.
  */
 
 interface ItemBuscarModalProps {
@@ -24,7 +18,7 @@ interface ItemBuscarModalProps {
   titulo?: string;
 }
 
-const TAMANO_PAGINA = 10;
+const TAMANO_PAGINA = 8;
 
 function aplanarCategorias(cats: CategoriaItem[], nivel = 1): CategoriaItem[] {
   const resultado: CategoriaItem[] = [];
@@ -47,11 +41,9 @@ export function ItemBuscarModal({
   const [items, setItems] = useState<ItemCatalogo[]>([]);
   const [categorias, setCategorias] = useState<CategoriaItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Filtros
-  const [filtroCodigo, setFiltroCodigo] = useState('');
-  const [filtroNombre, setFiltroNombre] = useState('');
+  const [busquedaTexto, setBusquedaTexto] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState<string>('');
   const [filtroNaturaleza, setFiltroNaturaleza] = useState<'INVENTARIO' | 'SERVICIO' | 'TODAS'>(
     naturalezaInicial
@@ -64,18 +56,20 @@ export function ItemBuscarModal({
   const cargarCategorias = useCallback(async () => {
     try {
       const res = await catalogosApi.getCategoriasItem();
-      setCategorias(aplanarCategorias(res.categorias || []));
+      if (res.categorias && res.categorias.length > 0) {
+        setCategorias(aplanarCategorias(res.categorias));
+      } else {
+        setCategorias([]);
+      }
     } catch {
-      // El árbol de categorías aún no está sembrado: el filtro queda deshabilitado.
       setCategorias([]);
     }
   }, []);
 
   const cargarItems = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      const q = [filtroCodigo.trim(), filtroNombre.trim()].filter(Boolean).join(' ');
+      const q = busquedaTexto.trim();
       const res = await catalogosApi.getItems({
         q: q || undefined,
         naturaleza: filtroNaturaleza === 'TODAS' ? undefined : filtroNaturaleza,
@@ -84,22 +78,20 @@ export function ItemBuscarModal({
       let lista = res.items || [];
       if (filtroCategoria) {
         lista = lista.filter(
-          (it) =>
-            it.categoriaUuid === filtroCategoria ||
-            it.categoria?.uuid === filtroCategoria
+          (it) => it.categoriaUuid === filtroCategoria || it.categoria?.uuid === filtroCategoria
         );
       }
       setItems(lista);
       setPagina(1);
       setItemDetalle((prev) => lista.find((i) => i.uuid === prev?.uuid) || lista[0] || null);
-    } catch (err: any) {
-      setError(err?.message || 'Error al consultar el catálogo de ítems');
+    } catch (err) {
+      console.warn('Error al cargar catálogo desde API:', err);
       setItems([]);
       setItemDetalle(null);
     } finally {
       setLoading(false);
     }
-  }, [filtroCodigo, filtroNombre, filtroNaturaleza, filtroCategoria]);
+  }, [busquedaTexto, filtroCategoria, filtroNaturaleza]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -110,7 +102,7 @@ export function ItemBuscarModal({
     if (!isOpen) return;
     const timer = setTimeout(() => {
       cargarItems();
-    }, 350);
+    }, 200);
     return () => clearTimeout(timer);
   }, [isOpen, cargarItems]);
 
@@ -134,114 +126,112 @@ export function ItemBuscarModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={titulo} size="full">
-      <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
-        {/* ─── PANEL DE FILTROS (EQUIVALENTE AL FILTRO DEL CRUD) ─────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-              Código Referencia
-            </label>
+      <div className="space-y-3.5 max-h-[78vh] overflow-y-auto overflow-x-hidden pr-1">
+        {/* ─── BARRA DE FILTROS COMPACTA (MENOS ESPACIO, MÁS FOCO EN TABLA) ─── */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
+          {/* Buscador de texto (Código o Nombre) con botón integrado */}
+          <div className="relative flex-1 min-w-[260px]">
             <input
               type="text"
-              value={filtroCodigo}
-              onChange={(e) => setFiltroCodigo(e.target.value)}
-              placeholder="Ej: INV-001"
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+              value={busquedaTexto}
+              onChange={(e) => setBusquedaTexto(e.target.value)}
+              placeholder="Buscar por código, nombre o descripción..."
+              className="w-full h-9 pl-3 pr-10 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
+            <button
+              type="button"
+              className="absolute right-0 top-0 bottom-0 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-r-lg rounded-l-none text-xs font-bold transition-colors cursor-pointer flex items-center justify-center shadow-sm h-full border-y border-r border-indigo-600"
+            >
+              🔍
+            </button>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-              Nombre / Descripción
-            </label>
-            <input
-              type="text"
-              value={filtroNombre}
-              onChange={(e) => setFiltroNombre(e.target.value)}
-              placeholder="Ej: Cuchillo chef"
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500"
-            />
+          {/* Selector de Naturaleza (Pills) */}
+          <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+            {(['TODAS', 'INVENTARIO', 'SERVICIO'] as const).map((nat) => (
+              <button
+                key={nat}
+                type="button"
+                onClick={() => setFiltroNaturaleza(nat)}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  filtroNaturaleza === nat
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                {nat === 'TODAS' ? 'Todos' : nat === 'INVENTARIO' ? '📦 Productos' : '🛠️ Servicios'}
+              </button>
+            ))}
           </div>
 
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-              Categoría (Multinivel)
-            </label>
+          {/* Categoría Árbol */}
+          <div className="min-w-[180px]">
             <select
               value={filtroCategoria}
               onChange={(e) => setFiltroCategoria(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+              className="w-full h-9 px-3 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
-              <option value="">— Todas las categorías —</option>
+              <option value="">📁 Todas las categorías</option>
               {categorias.map((c) => (
                 <option key={c.uuid} value={c.uuid}>
-                  {'\u00A0'.repeat((c.nivel - 1) * 3)}
-                  {(c.nivel > 1 ? '↳ ' : '📁 ') + c.nombre}
+                  {' '.repeat((c.nivel - 1) * 2)}
+                  {(c.nivel > 1 ? '↳ ' : '') + c.nombre}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-              Naturaleza
-            </label>
-            <select
-              value={filtroNaturaleza}
-              onChange={(e) => setFiltroNaturaleza(e.target.value as any)}
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+          {/* Botón de limpiar filtros si hay alguno activo */}
+          {(busquedaTexto || filtroCategoria || filtroNaturaleza !== naturalezaInicial) && (
+            <button
+              type="button"
+              onClick={() => {
+                setBusquedaTexto('');
+                setFiltroCategoria('');
+                setFiltroNaturaleza(naturalezaInicial);
+              }}
+              className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer px-2 py-1 hover:bg-rose-950/40 rounded transition-colors"
             >
-              <option value="TODAS">Todas</option>
-              <option value="INVENTARIO">Productos de Inventario</option>
-              <option value="SERVICIO">Servicios de Taller</option>
-            </select>
-          </div>
+              ✕ Limpiar
+            </button>
+          )}
         </div>
 
-        {error && (
-          <div role="alert" className="p-3 rounded-xl bg-rose-950/40 border border-rose-700/40 text-xs text-rose-200">
-            {error}
-          </div>
-        )}
-
-        {/* ─── CONTENIDO PRINCIPAL: LISTA + DETALLE ──────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Lista paginada */}
-          <div className="lg:col-span-2 space-y-3">
-            <div className="overflow-hidden border border-slate-800 rounded-xl shadow-md">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-950/90 text-slate-400 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left font-semibold">Código</th>
-                    <th className="px-3 py-2.5 text-left font-semibold">Ítem / Servicio & Categoría</th>
-                    <th className="px-3 py-2.5 text-center font-semibold">Naturaleza</th>
-                    <th className="px-3 py-2.5 text-center font-semibold">Unidad / Stock</th>
-                    <th className="px-3 py-2.5 text-right font-semibold">Precio</th>
-                    <th className="px-3 py-2.5 text-center font-semibold">Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
+        {/* ─── CONTENIDO: TABLA PRINCIPAL Y PANEL DE DETALLE ─── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+          {/* TABLA: 8 columnas en desktop */}
+          <div className="lg:col-span-8 flex flex-col border border-slate-800 rounded-xl bg-slate-950/60 overflow-hidden shadow-md">
+            <div className="overflow-x-auto max-h-[380px] min-h-[340px] overflow-y-auto pb-2 flex flex-col justify-start">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center flex-1 min-h-[320px] gap-2.5 text-slate-400">
+                  <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs font-semibold tracking-wide text-slate-300">Cargando datos...</span>
+                </div>
+              ) : itemsPagina.length === 0 ? (
+                <div className="flex flex-col items-center justify-center flex-1 min-h-[320px] gap-1 text-slate-400">
+                  <span className="text-xs">No se encontraron ítems con los filtros aplicados.</span>
+                </div>
+              ) : (
+                <table className="w-full text-xs border-collapse">
+                  <thead className="sticky top-0 z-10 bg-slate-900 border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
                     <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
-                        Consultando catálogo...
-                      </td>
+                      <th className="px-3 py-2.5 text-left font-semibold">Código</th>
+                      <th className="px-3 py-2.5 text-left font-semibold">Ítem / Servicio</th>
+                      <th className="px-3 py-2.5 text-center font-semibold">Naturaleza</th>
+                      <th className="px-3 py-2.5 text-center font-semibold">Stock</th>
+                      <th className="px-3 py-2.5 text-right font-semibold">Precio Base</th>
+                      <th className="px-3 py-2.5 text-center font-semibold">Acción</th>
                     </tr>
-                  ) : itemsPagina.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
-                        No se encontraron ítems con los filtros aplicados.
-                      </td>
-                    </tr>
-                  ) : (
-                    itemsPagina.map((it) => {
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {itemsPagina.map((it) => {
                       const seleccionado = itemDetalle?.uuid === it.uuid;
                       return (
                         <tr
                           key={it.uuid}
                           onClick={() => setItemDetalle(it)}
                           onDoubleClick={() => confirmarSeleccion(it)}
-                          className={`border-b border-slate-800/60 cursor-pointer transition-colors ${
+                          className={`cursor-pointer transition-colors ${
                             seleccionado ? 'bg-indigo-950/40' : 'hover:bg-slate-800/40'
                           }`}
                         >
@@ -249,48 +239,31 @@ export function ItemBuscarModal({
                             {it.codigoReferencia}
                           </td>
                           <td className="px-3 py-2.5 text-slate-200">
-                            <div className="font-semibold text-white">{it.nombre}</div>
-                            {it.descripcion && (
-                              <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
-                                {it.descripcion}
-                              </div>
-                            )}
+                            <div className="font-semibold text-white truncate max-w-[220px]">{it.nombre}</div>
                             {it.categoria?.nombre && (
-                              <div className="text-[10px] text-indigo-400 font-medium mt-0.5">
-                                📁 {it.categoria.rutaCompleta || it.categoria.nombre}
+                              <div className="text-[10px] text-indigo-400 font-medium truncate max-w-[200px]">
+                                📁 {it.categoria.nombre}
                               </div>
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <Badge variant={it.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
-                              {it.naturaleza}
+                              {it.naturaleza === 'INVENTARIO' ? '📦 Producto' : '🛠️ Servicio'}
                             </Badge>
                           </td>
-                          <td className="px-3 py-2.5 text-center">
+                          <td className="px-3 py-2.5 text-center font-mono font-bold">
                             {it.naturaleza === 'INVENTARIO' ? (
-                              <div>
-                                <span className="font-mono font-bold text-emerald-400 text-xs block">
-                                  {it.stockReferencial ?? 0}
-                                </span>
-                                <span className="text-[10px] text-slate-400">
-                                  {it.unidadPresentacion?.abreviatura || 'UND'}
-                                </span>
-                              </div>
+                              <span className="text-emerald-400 text-xs">
+                                {it.stockReferencial ?? 0}
+                              </span>
                             ) : (
-                              <div className="text-[11px] text-slate-400 font-mono">
-                                Taller ({it.unidadPresentacion?.abreviatura || 'UND'})
-                              </div>
+                              <span className="text-slate-500 text-xs">—</span>
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono text-slate-200">
                             <span className="font-bold text-emerald-400 block">
                               {formatPrecio(it.precioConLista ?? it.precioBase)}
                             </span>
-                            {it.precioConLista && it.precioConLista !== it.precioBase && (
-                              <span className="text-[10px] text-slate-500 line-through block">
-                                {formatPrecio(it.precioBase)}
-                              </span>
-                            )}
                           </td>
                           <td className="px-3 py-2.5 text-center">
                             <button
@@ -299,28 +272,23 @@ export function ItemBuscarModal({
                                 e.stopPropagation();
                                 confirmarSeleccion(it);
                               }}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold transition-colors cursor-pointer"
+                              className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold transition-colors cursor-pointer shadow-sm"
                             >
                               Seleccionar
                             </button>
                           </td>
                         </tr>
                       );
-                    })
-                  )}
-                </tbody>
-              </table>
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
 
-            {/* Paginación completa: |⏮| ◀ | Página X de Y | ▶ |⏭| */}
+            {/* Paginación compacta */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
               <span className="text-[11px] text-slate-400">
-                Mostrando{' '}
-                <span className="text-slate-200 font-semibold">
-                  {items.length === 0 ? 0 : (pagina - 1) * TAMANO_PAGINA + 1}-
-                  {Math.min(pagina * TAMANO_PAGINA, items.length)}
-                </span>{' '}
-                de <span className="text-slate-200 font-semibold">{items.length}</span> ítems
+                Total: <span className="text-slate-200 font-semibold">{items.length}</span> ítems
               </span>
 
               <div className="flex items-center gap-1.5">
@@ -328,8 +296,7 @@ export function ItemBuscarModal({
                   type="button"
                   onClick={() => setPagina(1)}
                   disabled={pagina <= 1}
-                  title="Primera página"
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-xs"
                 >
                   ⏮
                 </button>
@@ -337,21 +304,18 @@ export function ItemBuscarModal({
                   type="button"
                   onClick={() => setPagina((p) => Math.max(1, p - 1))}
                   disabled={pagina <= 1}
-                  title="Página anterior"
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-xs"
                 >
                   ◀
                 </button>
-                <span className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-300">
-                  Página <span className="font-bold text-white">{pagina}</span> de{' '}
-                  <span className="font-bold text-white">{totalPaginas}</span>
+                <span className="px-2.5 py-1 rounded-md bg-slate-950 border border-slate-800 text-[11px] text-slate-300">
+                  {pagina} / {totalPaginas}
                 </span>
                 <button
                   type="button"
                   onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
                   disabled={pagina >= totalPaginas}
-                  title="Página siguiente"
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-xs"
                 >
                   ▶
                 </button>
@@ -359,8 +323,7 @@ export function ItemBuscarModal({
                   type="button"
                   onClick={() => setPagina(totalPaginas)}
                   disabled={pagina >= totalPaginas}
-                  title="Última página"
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-xs"
                 >
                   ⏭
                 </button>
@@ -368,104 +331,68 @@ export function ItemBuscarModal({
             </div>
           </div>
 
-          {/* Panel de Detalle del Ítem Seleccionado */}
-          <div className="space-y-3">
+          {/* PANEL DE DETALLE DEL ÍTEM SELECCIONADO (4 columnas en desktop) */}
+          <div className="lg:col-span-4 bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 space-y-3 flex flex-col justify-between">
             {itemDetalle ? (
-              <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <span className="font-mono font-bold text-amber-300 text-sm block">
+              <div className="space-y-3">
+                <div className="border-b border-slate-800 pb-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono text-amber-300 font-bold text-xs">
                       {itemDetalle.codigoReferencia}
                     </span>
-                    <h4 className="text-white font-semibold text-sm mt-0.5">{itemDetalle.nombre}</h4>
+                    <Badge variant={itemDetalle.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
+                      {itemDetalle.naturaleza === 'INVENTARIO' ? '📦 Producto' : '🛠️ Servicio'}
+                    </Badge>
                   </div>
-                  <Badge variant={itemDetalle.naturaleza === 'INVENTARIO' ? 'info' : 'success'}>
-                    {itemDetalle.naturaleza}
-                  </Badge>
+                  <h4 className="text-sm font-bold text-white leading-snug">{itemDetalle.nombre}</h4>
                 </div>
 
-                {itemDetalle.descripcion && (
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    {itemDetalle.descripcion}
-                  </p>
-                )}
+                <div className="text-xs text-slate-300 leading-relaxed bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase mb-0.5">Descripción</span>
+                  {itemDetalle.descripcion || 'Sin descripción detallada.'}
+                </div>
 
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-[11px]">
-                  <div>
-                    <span className="text-slate-500 block">Precio Base</span>
-                    <span className="font-mono font-bold text-slate-200">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block font-semibold">PRECIO BASE</span>
+                    <span className="font-mono font-bold text-emerald-400 text-sm">
                       {formatPrecio(itemDetalle.precioBase)}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-slate-500 block">Precio con Lista</span>
-                    <span className="font-mono font-bold text-emerald-400">
-                      {formatPrecio(itemDetalle.precioConLista ?? itemDetalle.precioBase)}
+                  <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block font-semibold">
+                      {itemDetalle.naturaleza === 'INVENTARIO' ? 'EXISTENCIA' : 'TALLER'}
+                    </span>
+                    <span className="font-mono font-bold text-white text-sm">
+                      {itemDetalle.naturaleza === 'INVENTARIO' ? `${itemDetalle.stockReferencial ?? 0} UND` : 'Activo'}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-slate-500 block">Unidad</span>
-                    <span className="text-slate-200">
-                      {itemDetalle.unidadPresentacion?.abreviatura || '—'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Stock Referencial</span>
-                    <span className="font-mono text-slate-200">
-                      {itemDetalle.naturaleza === 'INVENTARIO'
-                        ? itemDetalle.stockReferencial ?? 0
-                        : 'N/A'}
-                    </span>
-                  </div>
-                  {itemDetalle.listaPrecioNombre && (
-                    <div className="col-span-2">
-                      <span className="text-slate-500 block">Lista de Precios</span>
-                      <span className="text-slate-200">{itemDetalle.listaPrecioNombre}</span>
-                    </div>
-                  )}
-                  {itemDetalle.categoria?.nombre && (
-                    <div className="col-span-2">
-                      <span className="text-slate-500 block">Categoría</span>
-                      <span className="text-slate-200">
-                        {itemDetalle.categoria.rutaCompleta || itemDetalle.categoria.nombre}
-                      </span>
-                    </div>
-                  )}
-                  {itemDetalle.workflowDefinicionNombre && (
-                    <div className="col-span-2">
-                      <span className="text-slate-500 block">Workflow de Taller</span>
-                      <span className="text-slate-200">{itemDetalle.workflowDefinicionNombre}</span>
-                    </div>
-                  )}
                 </div>
 
-                <Button
-                  variant="primary"
-                  onClick={() => confirmarSeleccion(itemDetalle)}
-                  className="w-full"
-                >
-                  ✓ Cargar este Ítem en el Formulario
-                </Button>
+                {itemDetalle.categoria?.nombre && (
+                  <div className="text-[11px] text-indigo-300 bg-indigo-950/30 p-2 rounded-lg border border-indigo-800/40">
+                    📁 Categoría: <span className="font-semibold">{itemDetalle.categoria.nombre}</span>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="p-6 rounded-xl bg-slate-950/70 border border-slate-800 text-center text-xs text-slate-500">
-                Seleccione un ítem de la lista para ver su detalle completo.
+              <div className="text-center text-xs text-slate-500 py-10">
+                Seleccione un ítem para visualizar sus especificaciones.
               </div>
             )}
-          </div>
-        </div>
 
-        <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-800">
-          <span className="text-[11px] text-slate-500">
-            Doble clic sobre una fila para cargarla directamente en el formulario.
-          </span>
-          <Button variant="secondary" onClick={onClose}>
-            Cerrar
-          </Button>
+            {itemDetalle && (
+              <button
+                type="button"
+                onClick={() => confirmarSeleccion(itemDetalle)}
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-sm mt-3 flex items-center justify-center gap-1.5"
+              >
+                <span>➕ Adicionar a Solicitud</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </Modal>
   );
 }
-
-export default ItemBuscarModal;

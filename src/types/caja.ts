@@ -27,6 +27,13 @@ export interface TurnoDto {
   diferenciaTotal?: number | null;
   observacionVoBo?: string | null;
   movimientos: MovimientoDto[];
+  totalesPorMetodoPago?: {
+    metodoPagoId: string;
+    codigo: string;
+    nombre: string;
+    total: number;
+    cantidad: number;
+  }[];
 }
 
 export interface AperturaTurnoRequest {
@@ -53,6 +60,8 @@ export interface DeclararArqueoCiegoRequest {
   declaradoEfectivo: number;
   declaradoTarjeta: number;
   declaradoTransferencia: number;
+  cantidadTransaccionesTarjeta?: number;
+  cantidadTransaccionesTransferencia?: number;
 }
 
 export interface DeclaracionCierreResponse {
@@ -66,15 +75,19 @@ export interface ValoresDesgloseDto {
   tarjeta: number;
   transferencia: number;
   total: number;
+  cantidadTarjeta?: number;
+  cantidadTransferencia?: number;
 }
 
 export interface DetalleSupervisorCierreDto {
-  idTurno: number;
+  idTurno: number | string;
   codigoTurno: string;
   cajero: string;
   declarado: ValoresDesgloseDto;
   teorico: ValoresDesgloseDto;
   diferencia: number;
+  diferenciaCantidadTarjeta?: number;
+  diferenciaCantidadTransferencia?: number;
   estado: string;
 }
 

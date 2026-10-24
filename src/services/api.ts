@@ -1,40 +1,87 @@
-const getBaseUrl = (): string => {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL
+declare global {
+  interface Window {
+    __ENV__?: {
+      VITE_API_BASE_URL?: string
+      API_BASE_URL?: string
+    }
   }
-
-  if (typeof window !== 'undefined') {
-    const { protocol, hostname, port } = window.location
-
-    // Desarrollo local con puerto estándar de frontend
-    if (port === '3000' || port === '5173') {
-      return `${protocol}//${hostname}:5005/api/v1`
-    }
-
-    // Entornos dev, qa y producción sobre afilamoshermanos.com
-    if (hostname.includes('dev-ops') || hostname.includes('dev-api') || hostname.includes('.dev.') || hostname.startsWith('dev.')) {
-      if (hostname.includes('dev-ops')) {
-        return `${protocol}//dev-api.afilamoshermanos.com/api/v1`
-      }
-      return `${protocol}//api.ops.dev.afilamoshermanos.com/api/v1`
-    }
-    if (hostname.includes('qa-ops') || hostname.includes('qa-api') || hostname.includes('.qa.') || hostname.startsWith('qa.')) {
-      if (hostname.includes('qa-ops')) {
-        return `${protocol}//qa-api.afilamoshermanos.com/api/v1`
-      }
-      return `${protocol}//api.ops.qa.afilamoshermanos.com/api/v1`
-    }
-    if (hostname.includes('afilamoshermanos.com')) {
-      return `${protocol}//api-ops.afilamoshermanos.com/api/v1`
-    }
-
-  }
-
-  return 'https://api.ops.afilamoshermanos.com/api/v1'
 }
 
+const API_URLS = {
+  dev: 'https://api-ops.dev.afilamoshermanos.com/api/v1',
+  qa: 'https://api-ops.qa.afilamoshermanos.com/api/v1',
+  staging: 'https://api-ops.staging.afilamoshermanos.com/api/v1',
+  prod: 'https://api-ops.afilamoshermanos.com/api/v1',
+  local: '/api/v1',
+} as const
 
-const BASE_URL = getBaseUrl()
+type ApiEnvironment = keyof typeof API_URLS
+
+const normalizeEnvironment = (value?: string): ApiEnvironment | undefined => {
+  const environment = value?.trim().toLowerCase()
+  if (environment === 'development' || environment === 'dev') return 'dev'
+  if (environment === 'qa' || environment === 'quality') return 'qa'
+  if (environment === 'staging' || environment === 'stage' || environment === 'stg') return 'staging'
+  if (environment === 'production' || environment === 'prod') return 'prod'
+  if (environment === 'local') return 'local'
+  return undefined
+}
+
+const getBaseUrl = (): string => {
+  // 1. Prioridad: Inyección en tiempo de ejecución (ConfigMap, Secret o variable de entorno de pod/contenedor)
+  if (typeof window !== 'undefined') {
+    const runtimeUrl = window.__ENV__?.VITE_API_BASE_URL || window.__ENV__?.API_BASE_URL
+    if (runtimeUrl && runtimeUrl.trim() !== '') {
+      const clean = runtimeUrl.trim().replace(/\/$/, '')
+      return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`
+    }
+  }
+
+  // 2. Prioridad: Variable en tiempo de compilación (.env local de Vite)
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    const clean = envUrl.trim().replace(/\/$/, '')
+    return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`
+  }
+
+  // 3. Ambiente explícito del despliegue (VITE_APP_ENV), ideal para ConfigMaps por namespace.
+  const configuredEnvironment = normalizeEnvironment(import.meta.env.VITE_APP_ENV)
+  if (configuredEnvironment) {
+    return API_URLS[configuredEnvironment]
+  }
+
+  // 4. Detección zero-config por hostname del frontend
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `http://${hostname}:5005/api/v1`
+    }
+
+    if (hostname.includes('afilamoshermanos.local') || hostname.endsWith('.local')) {
+      const protocol = typeof window !== 'undefined' && window.location?.protocol ? window.location.protocol : 'https:'
+      return `${protocol}//api-ops.afilamoshermanos.local/api/v1`
+    }
+
+    if (hostname.includes('afilamoshermanos.com')) {
+      if (hostname.includes('.dev.') || hostname.includes('-dev') || hostname.startsWith('dev.') || hostname.includes('dev-')) {
+        return API_URLS.dev
+      }
+      if (hostname.includes('.qa.') || hostname.includes('-qa') || hostname.startsWith('qa.') || hostname.includes('qa-')) {
+        return API_URLS.qa
+      }
+      if (hostname.includes('.staging.') || hostname.includes('-staging') || hostname.startsWith('staging.') || hostname.includes('staging-') || hostname.includes('stg')) {
+        return API_URLS.staging
+      }
+      return API_URLS.prod
+    }
+  }
+
+  // 5. Fallback por defecto a DEV.
+  return API_URLS.dev
+}
+
+export { getBaseUrl }
 
 export async function apiClient<T>(
   endpoint: string, 
@@ -49,12 +96,23 @@ export async function apiClient<T>(
     headers.set('Authorization', `Bearer ${authToken}`)
   }
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  const baseUrl = getBaseUrl()
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const response = await fetch(`${baseUrl}${normalizedEndpoint}`, {
     ...options,
     headers,
+    signal: options.signal,
   })
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      // Solo invalidar y notificar expiración si la petición incluía credenciales de autenticación
+      if (authToken) {
+        localStorage.removeItem('ordeon_token');
+        localStorage.removeItem('ordeon_session');
+        window.dispatchEvent(new CustomEvent('ordeon:auth_expired'));
+      }
+    }
     let errorDetail = `Error ${response.status}: ${response.statusText}`
     try {
       const text = await response.text()

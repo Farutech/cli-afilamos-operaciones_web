@@ -1,18 +1,22 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
-// Configuracion de Vitest. Sin este fichero, `npm test` (vitest run) no
-// encuentra los tests de componentes porque falta el entorno DOM.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   test: {
     globals: true,
     environment: 'happy-dom',
-    // Los tests existentes importan describe/it/expect de 'vitest' de forma
-    // explicita y no usan los matchers de jest-dom, asi que no hace falta un
-    // setupFiles. Si se anaden matchers de @testing-library/jest-dom, crear
-    // src/setupTests.ts con la importacion y registrarlo aqui.
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    setupFiles: ['./src/setupTests.ts'],
+    include: ['tests/**/*.{test,spec}.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}'],
     // Un fallo de test debe tumbar el PR: es el gate, no un aviso.
     reporters: 'default',
   },

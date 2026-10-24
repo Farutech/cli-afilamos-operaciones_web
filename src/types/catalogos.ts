@@ -112,6 +112,7 @@ export interface SubtipoDocumento {
   nombre: string;
   descripcion: string;
   prefijo: string;
+  sufijo?: string;
   folioActual: number;
   formatoPlantilla: string;
   formatoPapel: string;
@@ -146,6 +147,12 @@ export interface MedioPagoInstrumento {
   requiereReferencia: boolean;
   activo: boolean;
   diasCredito?: number;
+  validaEnCierre?: boolean;
+  permiteEnCierre?: boolean;
+  isDefault?: boolean;
+  esPorDefecto?: boolean;
+  proveedor?: string;
+  parentId?: string;
 }
 
 export interface MedioPagoCategoria {
@@ -154,6 +161,13 @@ export interface MedioPagoCategoria {
   nombre: string;
   orden: number;
   activo: boolean;
+  icono?: string;
+  descripcion?: string;
+  /** Reglas aplicadas dinámicamente a todos los instrumentos hijos */
+  requiereReferencia: boolean;
+  validaEnCierre: boolean;
+  permiteCredito: boolean;
+  requiereProveedor?: boolean;
   instrumentos: MedioPagoInstrumento[];
 }
 
@@ -163,6 +177,7 @@ export interface Cliente {
   numeroDocumento: string;
   nombreRazonSocial: string;
   telefono: string;
+  email?: string;
   activo: boolean;
 }
 

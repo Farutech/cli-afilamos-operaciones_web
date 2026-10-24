@@ -21,7 +21,7 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   naturalezaFiltro,
   placeholder = 'Buscar por código o nombre (ej: INV-001, Cuchillo)...',
   habilitarModalBusqueda = true,
-  minimoCaracteres = 0,
+  minimoCaracteres = 3,
   tamanoListado = 10,
 }) => {
   const [query, setQuery] = useState('');
@@ -59,7 +59,7 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   // Búsqueda desplegable automática (debounce 250ms)
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (query.length >= minimoCaracteres) {
+      if (query.trim().length >= minimoCaracteres) {
         fetchItems(query);
       }
     }, 250);
@@ -104,8 +104,8 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
 
-      <div style={{ display: 'flex', alignItems: 'stretch', gap: '0.375rem' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
+      <div className="item-selector__toolbar">
+        <div className="item-selector__input-wrap">
           <input
             type="text"
             value={query}
@@ -119,64 +119,41 @@ export const ItemSelector: React.FC<ItemSelectorProps> = ({
             }}
             placeholder={placeholder}
             aria-label="Buscar ítem"
-            style={{
-              width: '100%',
-              padding: '0.625rem 0.875rem',
-              borderRadius: '0.5rem',
-              border: '1px solid #475569',
-              background: '#0f172a',
-              color: '#f8fafc',
-              fontSize: '0.9rem',
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
+            className="item-selector__input"
           />
-          {loading && (
-            <span
-              style={{
-                position: 'absolute',
-                right: '0.75rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                fontSize: '0.8rem',
-                color: '#94a3b8',
-              }}
-            >
-              Buscando...
-            </span>
-          )}
+          <div className="item-selector__actions">
+            {loading && (
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginRight: '6px' }}>Buscando...</span>
+            )}
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setIsOpen(false);
+                }}
+                className="item-selector__btn-clear"
+                title="Limpiar"
+              >
+                ✕
+              </button>
+            )}
+            {habilitarModalBusqueda && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsModalOpen(true);
+                }}
+                title="Búsqueda especializada con filtros (código, nombre, categoría, naturaleza)"
+                aria-label="Abrir búsqueda especializada de ítems"
+                className="item-selector__btn-search"
+              >
+                🔍
+              </button>
+            )}
+          </div>
         </div>
-
-        {/* Botón Lupa: abre el modal especializado con filtros y detalle del ítem */}
-        {habilitarModalBusqueda && (
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              setIsModalOpen(true);
-            }}
-            title="Búsqueda especializada con filtros (código, nombre, categoría, naturaleza)"
-            aria-label="Abrir búsqueda especializada de ítems"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.35rem',
-              padding: '0 0.85rem',
-              borderRadius: '0.375rem',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-primary, #4f46e5)',
-              color: '#fff',
-              fontSize: '0.85rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <span style={{ fontSize: '1rem' }}>🔍</span>
-            <span>Buscar</span>
-          </button>
-        )}
       </div>
 
       {isOpen && (

@@ -14,9 +14,11 @@ export const tallerApi = {
       const items: ItemTaller[] = [];
       const colList = Array.isArray(columns) ? columns : [];
 
-      for (const col of colList) {
+      for (let colIdx = 0; colIdx < colList.length; colIdx++) {
+        const col = colList[colIdx];
         for (const card of (col.cards || [])) {
           if (!etapaCodigo || col.stepCode === etapaCodigo || card.currentStepCode === etapaCodigo) {
+            const esFinal = card.isCompleted === true || col.isFinal === true;
             items.push({
               itemPublicId: card.workOrderItemId,
               itemCodigo: 'ITEM',
@@ -32,20 +34,22 @@ export const tallerApi = {
               workflowInstanciaPublicId: card.workOrderItemId,
               etapaActualCodigo: card.currentStepCode || col.stepCode,
               etapaActualNombre: card.currentStepName || col.stepName,
-              etapaActualOrden: col.sequenceOrder ?? 1,
+              etapaActualOrden: col.sequenceOrder ?? (colIdx + 1),
               permiteCancelacionDirecta: false,
-              esFinal: card.isCompleted ?? false,
-              transicionesPermitidas: [
-                {
-                  transicionPublicId: 'next',
-                  codigo: 'AVANZAR',
-                  nombre: 'Avanzar etapa',
-                  requiereAprobacion: false,
-                  etapaDestinoCodigo: 'SIGUIENTE',
-                  etapaDestinoNombre: 'Siguiente etapa',
-                  esDestinoFinal: false,
-                },
-              ],
+              esFinal,
+              transicionesPermitidas: esFinal
+                ? []
+                : [
+                    {
+                      transicionPublicId: 'next',
+                      codigo: 'AVANZAR',
+                      nombre: 'Avanzar etapa',
+                      requiereAprobacion: false,
+                      etapaDestinoCodigo: 'SIGUIENTE',
+                      etapaDestinoNombre: 'Siguiente etapa',
+                      esDestinoFinal: colIdx + 1 === colList.length - 1,
+                    },
+                  ],
               historial: [],
             });
           }

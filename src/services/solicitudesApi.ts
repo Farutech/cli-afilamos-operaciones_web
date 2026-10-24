@@ -8,10 +8,13 @@ import type {
   ItemOperacionDto,
 } from '../types/solicitudes';
 import type { Cliente } from '../types/catalogos';
+import { securePin } from './pinSecurity';
 
 function mapRequestDetails(res: any): SolicitudDetalleDto {
   const items: ItemOperacionDto[] = (res?.items || []).map((it: any) => ({
     publicId: it.id || it.publicId || String(it.lineNumber),
+    lineaId: it.id || it.publicId || undefined,
+    itemCatalogoId: it.itemId || it.itemCatalogoId || it.itemCatalogoPublicId || undefined,
     codigo: it.itemCode || it.codigo || 'SRV',
     naturaleza: (it.itemsTypeCode === 'SERVICE' || it.naturaleza === 'SERVICIO') ? 'SERVICIO' : 'INVENTARIO',
     descripcion: it.itemName || it.descripcion || it.technicalObservation || 'Item',
@@ -57,6 +60,19 @@ function mapRequestDetails(res: any): SolicitudDetalleDto {
 }
 
 export const solicitudesApi = {
+  async getSolicitudes(params?: { page?: number; pageSize?: number }, token?: string): Promise<{ items: SolicitudDetalleDto[]; total: number }> {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.pageSize) qs.set('pageSize', String(params.pageSize));
+    const endpoint = `/requests${qs.toString() ? `?${qs.toString()}` : ''}`;
+    const res = await api.get<any>(endpoint, token);
+    const rawItems = Array.isArray(res) ? res : (res?.items || []);
+    return {
+      items: rawItems.map(mapRequestDetails),
+      total: res?.total ?? rawItems.length,
+    };
+  },
+
   async crearSolicitud(data: CrearSolicitudRequest, token?: string): Promise<SolicitudDetalleDto> {
     const res = await api.post<any>('/requests', {
       customerId: data.clientePublicId,
@@ -78,6 +94,7 @@ export const solicitudesApi = {
       unitPrice: data.precioUnitario,
       promisedDeliveryAt: new Date(Date.now() + 86400000 * 2).toISOString(),
       technicalObservation: data.descripcion,
+      photoUrls: [],
     }, token);
     return mapRequestDetails(res);
   },
@@ -106,6 +123,7 @@ export const solicitudesApi = {
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
       initialPayments: payments,
+      supervisorPin: null,
     }, token);
     return mapRequestDetails(res);
   },
@@ -128,6 +146,7 @@ export const solicitudesApi = {
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
       initialPayments: payments,
+      supervisorPin: null,
     }, token);
     return mapRequestDetails(res);
   },
@@ -137,20 +156,30 @@ export const solicitudesApi = {
     data: AutorizarExcepcionRequest,
     token?: string,
   ): Promise<SolicitudDetalleDto> {
+    const encryptedPin = await securePin(data.supervisorPin);
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
-      supervisorPin: data.supervisorPin,
+      initialPayments: [],
+      supervisorPin: encryptedPin,
     }, token);
     return mapRequestDetails(res);
   },
 
   async asentarSolicitud(
     uuid: string,
-    _data: { usuarioAsientaId: number; usuarioAsientaCodigo: string },
+    data?: {
+      usuarioAsientaId?: number;
+      usuarioAsientaCodigo?: string;
+      initialPayments?: { paymentMethodId: string; amount: number; referenceNumber?: string }[];
+      supervisorPin?: string | null;
+    },
     token?: string,
   ): Promise<SolicitudDetalleDto> {
+    const encryptedPin = data?.supervisorPin ? await securePin(data.supervisorPin) : null;
     const res = await api.post<any>(`/requests/${uuid}/confirm`, {
       requestId: uuid,
+      initialPayments: data?.initialPayments || [],
+      supervisorPin: encryptedPin,
     }, token);
     return mapRequestDetails(res);
   },
@@ -163,6 +192,7 @@ export const solicitudesApi = {
       code: data.numeroDocumento,
       name: data.nombreRazonSocial,
       phone: data.telefono,
+      email: data.email,
     }, token);
     return {
       uuid: res.id,
@@ -176,6 +206,7 @@ export const solicitudesApi = {
       numeroDocumento: res.code,
       nombreRazonSocial: res.name,
       telefono: res.phone || '',
+      email: res.email || data.email || '',
       activo: true,
     };
   },
