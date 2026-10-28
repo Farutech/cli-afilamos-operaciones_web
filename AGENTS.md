@@ -5,7 +5,7 @@
 - Para SDD/MVP que cruce producto o componentes, sigue `../engineering-hub/.agents/skills/spec-driven-delivery/SKILL.md`.
 - No empieces implementación si el Hub no está incluido o accesible.
 - Para un cambio que cruce repos, sigue `../engineering-hub/.agents/skills/cross-repo-change/SKILL.md`.
-- Para UI, sigue `../engineering-hub/.agents/skills/frontend-change/SKILL.md` y la pauta local de Ordeon de este repo. La skill describe el método; los requisitos aprobados de Ordeon deciden comportamiento y presentación.
+- Para UI, sigue `../engineering-hub/.agents/skills/frontend-change/SKILL.md`, apóyate en `../engineering-hub/.agents/skills/design-taste-frontend/SKILL.md` para dirección visual/anti-slop y respeta siempre la pauta local de Ordeon (`.agents/rules/afilamos-frontend.md`). La skill describe el método; los requisitos aprobados de Ordeon deciden comportamiento y presentación.
 - Producto: ../cli-afilamos-operaciones/AGENTS.md y requisitos pertinentes.
 - Lee allí el contexto/plan y los requisitos/prototipos vigentes según la autoridad de `docs/README.md`; este repo es dueño de implementación web, no de redefinir el comportamiento del producto.
 - API: ../engineering-hub/contracts/afilamos-operaciones/api.openapi.yaml es draft; contrasta con la API real.
